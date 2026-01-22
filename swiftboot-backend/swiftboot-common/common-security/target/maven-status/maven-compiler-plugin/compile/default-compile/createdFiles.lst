@@ -1,0 +1,4 @@
+com\swiftboot\common\security\utils\SecurityUtils.class
+com\swiftboot\common\security\handler\StpInterfaceImpl.class
+com\swiftboot\common\security\config\SaTokenConfig.class
+com\swiftboot\common\security\domain\LoginUser.class

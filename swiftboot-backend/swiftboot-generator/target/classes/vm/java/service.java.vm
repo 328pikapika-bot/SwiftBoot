@@ -1,0 +1,37 @@
+package ${packageName}.service;
+
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.IService;
+import ${packageName}.domain.entity.${className};
+import com.swiftboot.common.core.domain.PageQuery;
+
+import java.util.List;
+
+/**
+ * ${functionName} Service
+ *
+ * @author ${author}
+ * @date ${datetime}
+ */
+public interface ${className}Service extends IService<${className}> {
+
+    /**
+     * 分页查询${functionName}列表
+     */
+    Page<${className}> select${className}Page(${className} ${classname}, PageQuery pageQuery);
+
+    /**
+     * 新增${functionName}
+     */
+    void insert${className}(${className} ${classname});
+
+    /**
+     * 修改${functionName}
+     */
+    void update${className}(${className} ${classname});
+
+    /**
+     * 删除${functionName}
+     */
+    void delete${className}ByIds(List<Long> ids);
+}

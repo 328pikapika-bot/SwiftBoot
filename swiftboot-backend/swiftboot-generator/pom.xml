@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>17</source>
+                    <target>17</target>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <parent>
+        <groupId>com.swiftboot</groupId>
+        <artifactId>swiftboot-backend</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>swiftboot-generator</artifactId>
+    <name>SwiftBoot Generator</name>
+    <description>代码生成器模块</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.swiftboot</groupId>
+            <artifactId>common-core</artifactId>
+        </dependency>
+
+        <!-- Velocity 模板引擎 -->
+        <dependency>
+            <groupId>org.apache.velocity</groupId>
+            <artifactId>velocity-engine-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-core</artifactId>
+            <version>1.37.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.swiftboot</groupId>
+            <artifactId>common-log</artifactId>
+        </dependency>
+    </dependencies>
+</project>

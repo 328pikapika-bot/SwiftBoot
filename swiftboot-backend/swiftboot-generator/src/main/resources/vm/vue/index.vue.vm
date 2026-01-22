@@ -1,0 +1,234 @@
+<template>
+  <div class="page-container">
+    <!-- 搜索区域 -->
+    <el-card shadow="never" class="search-card">
+      <el-form :model="queryParams" ref="queryRef" :inline="true">
+#foreach ($column in $columns)
+#if($column.isQuery == '1')
+#if($column.htmlType == 'input')
+        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
+          <el-input v-model="queryParams.${column.javaField}" placeholder="请输入${column.columnComment}" clearable />
+        </el-form-item>
+#elseif($column.htmlType == 'select')
+        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
+          <el-select v-model="queryParams.${column.javaField}" placeholder="请选择${column.columnComment}" clearable>
+            <el-option label="选项1" value="1" />
+          </el-select>
+        </el-form-item>
+#end
+#end
+#end
+        <el-form-item>
+          <el-button type="primary" @click="handleQuery">
+            <el-icon><Search /></el-icon>搜索
+          </el-button>
+          <el-button @click="handleReset">
+            <el-icon><Refresh /></el-icon>重置
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <!-- 操作区域 -->
+    <el-card shadow="never" class="table-card">
+      <template #header>
+        <div class="card-header">
+          <span>${functionName}列表</span>
+          <div>
+            <el-button type="primary" @click="handleAdd">
+              <el-icon><Plus /></el-icon>新增
+            </el-button>
+            <el-button type="danger" :disabled="!selectedIds.length" @click="handleBatchDelete">
+              <el-icon><Delete /></el-icon>删除
+            </el-button>
+          </div>
+        </div>
+      </template>
+
+      <!-- 表格 -->
+      <el-table v-loading="loading" :data="tableData" @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="55" />
+#foreach ($column in $columns)
+#if($column.isList == '1')
+        <el-table-column label="${column.columnComment}" prop="${column.javaField}" />
+#end
+#end
+        <el-table-column label="操作" width="180" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="handleEdit(row)">编辑</el-button>
+            <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 分页 -->
+      <el-pagination
+        v-model:current-page="queryParams.pageNum"
+        v-model:page-size="queryParams.pageSize"
+        :page-sizes="[10, 20, 50, 100]"
+        :total="total"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="handleQuery"
+        @current-change="handleQuery"
+      />
+    </el-card>
+
+    <!-- 新增/编辑弹窗 -->
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
+      <el-form :model="formData" :rules="rules" ref="formRef" label-width="100px">
+#foreach ($column in $columns)
+#if($column.isInsert == '1' || $column.isEdit == '1')
+#if($column.htmlType == 'input')
+        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
+          <el-input v-model="formData.${column.javaField}" placeholder="请输入${column.columnComment}" />
+        </el-form-item>
+#elseif($column.htmlType == 'textarea')
+        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
+          <el-input v-model="formData.${column.javaField}" type="textarea" placeholder="请输入${column.columnComment}" />
+        </el-form-item>
+#elseif($column.htmlType == 'select')
+        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
+          <el-select v-model="formData.${column.javaField}" placeholder="请选择${column.columnComment}">
+            <el-option label="选项1" value="1" />
+          </el-select>
+        </el-form-item>
+#elseif($column.htmlType == 'datetime')
+        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
+          <el-date-picker v-model="formData.${column.javaField}" type="datetime" placeholder="请选择${column.columnComment}" />
+        </el-form-item>
+#end
+#end
+#end
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleSubmit">确定</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search, Refresh, Plus, Delete } from '@element-plus/icons-vue'
+import { list${className}, get${className}, add${className}, update${className}, delete${className} } from '@/api/${businessName}'
+
+const loading = ref(false)
+const tableData = ref([])
+const total = ref(0)
+const selectedIds = ref<number[]>([])
+const dialogVisible = ref(false)
+const dialogTitle = ref('')
+const formRef = ref()
+const queryRef = ref()
+
+const queryParams = reactive({
+  pageNum: 1,
+  pageSize: 10,
+#foreach ($column in $columns)
+#if($column.isQuery == '1')
+  ${column.javaField}: undefined,
+#end
+#end
+})
+
+const formData = reactive({
+  id: undefined,
+#foreach ($column in $columns)
+#if($column.isInsert == '1' || $column.isEdit == '1')
+  ${column.javaField}: undefined,
+#end
+#end
+})
+
+const rules = {
+#foreach ($column in $columns)
+#if($column.isRequired == '1')
+  ${column.javaField}: [{ required: true, message: '${column.columnComment}不能为空', trigger: 'blur' }],
+#end
+#end
+}
+
+const getList = async () => {
+  loading.value = true
+  try {
+    const { data } = await list${className}(queryParams)
+    tableData.value = data.list
+    total.value = data.total
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleQuery = () => {
+  queryParams.pageNum = 1
+  getList()
+}
+
+const handleReset = () => {
+  queryRef.value?.resetFields()
+  handleQuery()
+}
+
+const handleSelectionChange = (selection: any[]) => {
+  selectedIds.value = selection.map(item => item.id)
+}
+
+const handleAdd = () => {
+  resetForm()
+  dialogTitle.value = '新增${functionName}'
+  dialogVisible.value = true
+}
+
+const handleEdit = async (row: any) => {
+  resetForm()
+  const { data } = await get${className}(row.id)
+  Object.assign(formData, data)
+  dialogTitle.value = '编辑${functionName}'
+  dialogVisible.value = true
+}
+
+const handleSubmit = async () => {
+  await formRef.value?.validate()
+  if (formData.id) {
+    await update${className}(formData)
+    ElMessage.success('修改成功')
+  } else {
+    await add${className}(formData)
+    ElMessage.success('新增成功')
+  }
+  dialogVisible.value = false
+  getList()
+}
+
+const handleDelete = (row: any) => {
+  ElMessageBox.confirm('确定删除该记录吗?', '提示', { type: 'warning' }).then(async () => {
+    await delete${className}(row.id)
+    ElMessage.success('删除成功')
+    getList()
+  })
+}
+
+const handleBatchDelete = () => {
+  ElMessageBox.confirm('确定删除选中记录吗?', '提示', { type: 'warning' }).then(async () => {
+    await delete${className}(selectedIds.value.join(','))
+    ElMessage.success('删除成功')
+    getList()
+  })
+}
+
+const resetForm = () => {
+  formData.id = undefined
+#foreach ($column in $columns)
+#if($column.isInsert == '1' || $column.isEdit == '1')
+  formData.${column.javaField} = undefined
+#end
+#end
+  formRef.value?.resetFields()
+}
+
+onMounted(() => {
+  getList()
+})
+</script>

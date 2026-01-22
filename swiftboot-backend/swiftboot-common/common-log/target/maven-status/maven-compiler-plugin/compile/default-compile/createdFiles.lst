@@ -1,0 +1,4 @@
+com\swiftboot\common\log\aspect\LogAspect.class
+com\swiftboot\common\log\annotation\Log.class
+com\swiftboot\common\log\enums\BusinessType.class
+com\swiftboot\common\log\event\OperLogEvent.class

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile default="true" name="Default" enabled="true" />
+      <profile name="Annotation profile for SwiftBoot Backend" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="false">
+          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.30/lombok-1.18.30.jar" />
+          <entry name="$MAVEN_REPOSITORY$/org/mapstruct/mapstruct-processor/1.5.5.Final/mapstruct-processor-1.5.5.Final.jar" />
+          <entry name="$MAVEN_REPOSITORY$/org/mapstruct/mapstruct/1.5.5.Final/mapstruct-1.5.5.Final.jar" />
+        </processorPath>
+        <module name="common-security" />
+        <module name="swiftboot-admin" />
+        <module name="swiftboot-generator" />
+        <module name="common-log" />
+        <module name="common-redis" />
+        <module name="common-core" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="common-core" target="17" />
+      <module name="common-log" target="17" />
+      <module name="common-redis" target="17" />
+      <module name="common-security" target="17" />
+      <module name="swiftboot-admin" target="17" />
+      <module name="swiftboot-backend" target="17" />
+      <module name="swiftboot-common" target="17" />
+      <module name="swiftboot-generator" target="17" />
+    </bytecodeTargetLevel>
+  </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="common-core" options="-parameters" />
+      <module name="common-log" options="-parameters" />
+      <module name="common-redis" options="-parameters" />
+      <module name="common-security" options="-parameters" />
+      <module name="swiftboot-admin" options="-parameters" />
+      <module name="swiftboot-generator" options="-parameters" />
+    </option>
+  </component>
+</project>

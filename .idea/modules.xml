@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/SwiftBoot.iml" filepath="$PROJECT_DIR$/.idea/SwiftBoot.iml" />
+      <module fileurl="file://$PROJECT_DIR$/swiftboot-backend/swiftboot-common/common-core/common-core.iml" filepath="$PROJECT_DIR$/swiftboot-backend/swiftboot-common/common-core/common-core.iml" />
+      <module fileurl="file://$PROJECT_DIR$/swiftboot-backend/swiftboot-common/common-log/common-log.iml" filepath="$PROJECT_DIR$/swiftboot-backend/swiftboot-common/common-log/common-log.iml" />
+      <module fileurl="file://$PROJECT_DIR$/swiftboot-backend/swiftboot-common/common-redis/common-redis.iml" filepath="$PROJECT_DIR$/swiftboot-backend/swiftboot-common/common-redis/common-redis.iml" />
+      <module fileurl="file://$PROJECT_DIR$/swiftboot-backend/swiftboot-common/common-security/common-security.iml" filepath="$PROJECT_DIR$/swiftboot-backend/swiftboot-common/common-security/common-security.iml" />
+      <module fileurl="file://$PROJECT_DIR$/swiftboot-backend/swiftboot-admin/swiftboot-admin.iml" filepath="$PROJECT_DIR$/swiftboot-backend/swiftboot-admin/swiftboot-admin.iml" />
+      <module fileurl="file://$PROJECT_DIR$/swiftboot-backend/swiftboot-backend.iml" filepath="$PROJECT_DIR$/swiftboot-backend/swiftboot-backend.iml" />
+      <module fileurl="file://$PROJECT_DIR$/swiftboot-backend/swiftboot-common/swiftboot-common.iml" filepath="$PROJECT_DIR$/swiftboot-backend/swiftboot-common/swiftboot-common.iml" />
+      <module fileurl="file://$PROJECT_DIR$/swiftboot-backend/swiftboot-generator/swiftboot-generator.iml" filepath="$PROJECT_DIR$/swiftboot-backend/swiftboot-generator/swiftboot-generator.iml" />
+    </modules>
+  </component>
+</project>

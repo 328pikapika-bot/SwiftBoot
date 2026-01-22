@@ -1,0 +1,56 @@
+package ${packageName}.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import ${packageName}.domain.entity.${className};
+import ${packageName}.mapper.${className}Mapper;
+import ${packageName}.service.${className}Service;
+import com.swiftboot.common.core.domain.PageQuery;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+/**
+ * ${functionName} Service 实现
+ *
+ * @author ${author}
+ * @date ${datetime}
+ */
+@Service
+@RequiredArgsConstructor
+public class ${className}ServiceImpl extends ServiceImpl<${className}Mapper, ${className}> implements ${className}Service {
+
+    @Override
+    public Page<${className}> select${className}Page(${className} ${classname}, PageQuery pageQuery) {
+        Page<${className}> page = new Page<>(pageQuery.getPageNum(), pageQuery.getPageSize());
+        LambdaQueryWrapper<${className}> wrapper = new LambdaQueryWrapper<>();
+#foreach ($column in $columns)
+#if($column.isQuery == '1')
+#if($column.queryType == 'LIKE')
+        wrapper.like(${classname}.get${column.javaField.substring(0,1).toUpperCase()}${column.javaField.substring(1)}() != null, ${className}::get${column.javaField.substring(0,1).toUpperCase()}${column.javaField.substring(1)}, ${classname}.get${column.javaField.substring(0,1).toUpperCase()}${column.javaField.substring(1)}());
+#else
+        wrapper.eq(${classname}.get${column.javaField.substring(0,1).toUpperCase()}${column.javaField.substring(1)}() != null, ${className}::get${column.javaField.substring(0,1).toUpperCase()}${column.javaField.substring(1)}, ${classname}.get${column.javaField.substring(0,1).toUpperCase()}${column.javaField.substring(1)}());
+#end
+#end
+#end
+        wrapper.orderByDesc(${className}::getCreateTime);
+        return page(page, wrapper);
+    }
+
+    @Override
+    public void insert${className}(${className} ${classname}) {
+        save(${classname});
+    }
+
+    @Override
+    public void update${className}(${className} ${classname}) {
+        updateById(${classname});
+    }
+
+    @Override
+    public void delete${className}ByIds(List<Long> ids) {
+        removeByIds(ids);
+    }
+}

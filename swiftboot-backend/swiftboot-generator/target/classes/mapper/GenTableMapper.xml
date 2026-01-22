@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.swiftboot.generator.mapper.GenTableMapper">
+
+    <select id="selectDbTableList" resultType="com.swiftboot.generator.domain.GenTable">
+        SELECT table_name AS tableName, table_comment AS tableComment, create_time AS createTime, update_time AS updateTime
+        FROM information_schema.tables
+        WHERE table_schema = (SELECT DATABASE())
+          AND table_name NOT LIKE 'gen_%'
+          AND table_name NOT IN (SELECT table_name FROM gen_table)
+        <if test="tableName != null and tableName != ''">
+            AND table_name LIKE CONCAT('%', #{tableName}, '%')
+        </if>
+        <if test="tableComment != null and tableComment != ''">
+            AND table_comment LIKE CONCAT('%', #{tableComment}, '%')
+        </if>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="selectDbTableByName" resultType="com.swiftboot.generator.domain.GenTable">
+        SELECT table_name AS tableName, table_comment AS tableComment, create_time AS createTime, update_time AS updateTime
+        FROM information_schema.tables
+        WHERE table_schema = (SELECT DATABASE())
+          AND table_name = #{tableName}
+    </select>
+
+    <select id="selectDbTableListByNames" resultType="com.swiftboot.generator.domain.GenTable">
+        SELECT table_name AS tableName, table_comment AS tableComment, create_time AS createTime, update_time AS updateTime
+        FROM information_schema.tables
+        WHERE table_schema = (SELECT DATABASE())
+          AND table_name IN
+        <foreach collection="tableNames" item="tableName" open="(" separator="," close=")">
+            #{tableName}
+        </foreach>
+    </select>
+
+</mapper>

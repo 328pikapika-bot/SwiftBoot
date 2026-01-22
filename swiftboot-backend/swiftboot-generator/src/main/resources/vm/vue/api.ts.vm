@@ -1,0 +1,54 @@
+import request from '@/utils/request'
+
+/**
+ * ${functionName}列表
+ */
+export function list${className}(query: any) {
+  return request({
+    url: '/${moduleName}/${businessName}/list',
+    method: 'get',
+    params: query
+  })
+}
+
+/**
+ * ${functionName}详情
+ */
+export function get${className}(id: number) {
+  return request({
+    url: '/${moduleName}/${businessName}/' + id,
+    method: 'get'
+  })
+}
+
+/**
+ * 新增${functionName}
+ */
+export function add${className}(data: any) {
+  return request({
+    url: '/${moduleName}/${businessName}',
+    method: 'post',
+    data
+  })
+}
+
+/**
+ * 修改${functionName}
+ */
+export function update${className}(data: any) {
+  return request({
+    url: '/${moduleName}/${businessName}',
+    method: 'put',
+    data
+  })
+}
+
+/**
+ * 删除${functionName}
+ */
+export function delete${className}(ids: string) {
+  return request({
+    url: '/${moduleName}/${businessName}/' + ids,
+    method: 'delete'
+  })
+}

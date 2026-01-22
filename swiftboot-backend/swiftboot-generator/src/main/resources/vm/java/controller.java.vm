@@ -1,0 +1,76 @@
+package ${packageName}.controller;
+
+import cn.dev33.satoken.annotation.SaCheckPermission;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import ${packageName}.domain.entity.${className};
+import ${packageName}.service.${className}Service;
+import com.swiftboot.common.core.domain.PageQuery;
+import com.swiftboot.common.core.result.PageResult;
+import com.swiftboot.common.core.result.R;
+import com.swiftboot.common.log.annotation.Log;
+import com.swiftboot.common.log.enums.BusinessType;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+/**
+ * ${functionName} 控制器
+ *
+ * @author ${author}
+ * @date ${datetime}
+ */
+@Tag(name = "${functionName}")
+@RestController
+@RequestMapping("/${moduleName}/${businessName}")
+@RequiredArgsConstructor
+public class ${className}Controller {
+
+    private final ${className}Service ${classname}Service;
+
+    @Operation(summary = "分页查询${functionName}列表")
+    @SaCheckPermission("${moduleName}:${businessName}:list")
+    @GetMapping("/list")
+    public R<PageResult<${className}>> list(${className} ${classname}, PageQuery pageQuery) {
+        Page<${className}> page = ${classname}Service.select${className}Page(${classname}, pageQuery);
+        return R.ok(PageResult.of(page.getRecords(), page.getTotal(), page.getCurrent(), page.getSize()));
+    }
+
+    @Operation(summary = "查询${functionName}详情")
+    @SaCheckPermission("${moduleName}:${businessName}:query")
+    @GetMapping("/{id}")
+    public R<${className}> getInfo(@PathVariable Long id) {
+        ${className} ${classname} = ${classname}Service.getById(id);
+        return R.ok(${classname});
+    }
+
+    @Operation(summary = "新增${functionName}")
+    @SaCheckPermission("${moduleName}:${businessName}:add")
+    @Log(title = "${functionName}", businessType = BusinessType.INSERT)
+    @PostMapping
+    public R<Void> add(@Valid @RequestBody ${className} ${classname}) {
+        ${classname}Service.insert${className}(${classname});
+        return R.ok();
+    }
+
+    @Operation(summary = "修改${functionName}")
+    @SaCheckPermission("${moduleName}:${businessName}:edit")
+    @Log(title = "${functionName}", businessType = BusinessType.UPDATE)
+    @PutMapping
+    public R<Void> edit(@Valid @RequestBody ${className} ${classname}) {
+        ${classname}Service.update${className}(${classname});
+        return R.ok();
+    }
+
+    @Operation(summary = "删除${functionName}")
+    @SaCheckPermission("${moduleName}:${businessName}:remove")
+    @Log(title = "${functionName}", businessType = BusinessType.DELETE)
+    @DeleteMapping("/{ids}")
+    public R<Void> remove(@PathVariable List<Long> ids) {
+        ${classname}Service.delete${className}ByIds(ids);
+        return R.ok();
+    }
+}

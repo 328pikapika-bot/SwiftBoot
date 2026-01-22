@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.swiftboot.admin.mapper.SysUserMapper">
+
+    <resultMap id="BaseResultMap" type="com.swiftboot.admin.domain.entity.SysUser">
+        <id column="id" property="id"/>
+        <result column="dept_id" property="deptId"/>
+        <result column="username" property="username"/>
+        <result column="password" property="password"/>
+        <result column="nickname" property="nickname"/>
+        <result column="email" property="email"/>
+        <result column="phone" property="phone"/>
+        <result column="gender" property="gender"/>
+        <result column="avatar" property="avatar"/>
+        <result column="status" property="status"/>
+        <result column="login_ip" property="loginIp"/>
+        <result column="login_date" property="loginDate"/>
+        <result column="create_by" property="createBy"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_by" property="updateBy"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="remark" property="remark"/>
+        <result column="deleted" property="deleted"/>
+        <result column="dept_name" property="deptName"/>
+    </resultMap>
+
+    <resultMap id="UserWithRolesResultMap" type="com.swiftboot.admin.domain.entity.SysUser" extends="BaseResultMap">
+        <collection property="roles" ofType="com.swiftboot.admin.domain.entity.SysRole">
+            <id column="role_id" property="id"/>
+            <result column="role_name" property="roleName"/>
+            <result column="role_key" property="roleKey"/>
+        </collection>
+    </resultMap>
+
+    <select id="selectByUsername" resultMap="BaseResultMap">
+        SELECT u.*, d.dept_name
+        FROM sys_user u
+        LEFT JOIN sys_dept d ON u.dept_id = d.id
+        WHERE u.username = #{username} AND u.deleted = 0
+    </select>
+
+    <select id="selectUserPage" resultMap="BaseResultMap">
+        SELECT u.*, d.dept_name
+        FROM sys_user u
+        LEFT JOIN sys_dept d ON u.dept_id = d.id
+        WHERE u.deleted = 0
+        <if test="user.username != null and user.username != ''">
+            AND u.username LIKE CONCAT('%', #{user.username}, '%')
+        </if>
+        <if test="user.nickname != null and user.nickname != ''">
+            AND u.nickname LIKE CONCAT('%', #{user.nickname}, '%')
+        </if>
+        <if test="user.phone != null and user.phone != ''">
+            AND u.phone LIKE CONCAT('%', #{user.phone}, '%')
+        </if>
+        <if test="user.status != null">
+            AND u.status = #{user.status}
+        </if>
+        <if test="user.deptId != null">
+            AND (u.dept_id = #{user.deptId} OR u.dept_id IN (
+                SELECT id FROM sys_dept WHERE FIND_IN_SET(#{user.deptId}, ancestors)
+            ))
+        </if>
+        ORDER BY u.create_time DESC
+    </select>
+
+    <select id="selectUserById" resultMap="UserWithRolesResultMap">
+        SELECT u.*, d.dept_name, r.id AS role_id, r.role_name, r.role_key
+        FROM sys_user u
+        LEFT JOIN sys_dept d ON u.dept_id = d.id
+        LEFT JOIN sys_user_role ur ON u.id = ur.user_id
+        LEFT JOIN sys_role r ON ur.role_id = r.id AND r.deleted = 0
+        WHERE u.id = #{userId} AND u.deleted = 0
+    </select>
+
+</mapper>

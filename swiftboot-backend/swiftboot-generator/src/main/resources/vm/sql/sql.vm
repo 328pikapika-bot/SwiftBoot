@@ -1,0 +1,23 @@
+-- ${functionName}菜单SQL
+-- 菜单ID: ${menuId}
+
+-- 1. 插入菜单
+INSERT INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, perms, icon, sort, visible, status, deleted, create_by, create_time, update_by, update_time, remark) 
+VALUES (${menuId}, 0, '${functionName}', 'C', '${businessName}', '${moduleName}/${businessName}/index', '${moduleName}:${businessName}:list', 'list', 10, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '${functionName}菜单');
+
+-- 2. 插入按钮权限
+-- 查询
+INSERT INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, perms, icon, sort, visible, status, deleted, create_by, create_time, update_by, update_time, remark)
+VALUES (${menuQueryId}, ${menuId}, '${functionName}查询', 'F', '', '', '${moduleName}:${businessName}:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+
+-- 新增
+INSERT INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, perms, icon, sort, visible, status, deleted, create_by, create_time, update_by, update_time, remark)
+VALUES (${menuAddId}, ${menuId}, '${functionName}新增', 'F', '', '', '${moduleName}:${businessName}:add', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+
+-- 修改
+INSERT INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, perms, icon, sort, visible, status, deleted, create_by, create_time, update_by, update_time, remark)
+VALUES (${menuEditId}, ${menuId}, '${functionName}修改', 'F', '', '', '${moduleName}:${businessName}:edit', '', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+
+-- 删除
+INSERT INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, perms, icon, sort, visible, status, deleted, create_by, create_time, update_by, update_time, remark)
+VALUES (${menuRemoveId}, ${menuId}, '${functionName}删除', 'F', '', '', '${moduleName}:${businessName}:remove', '', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
