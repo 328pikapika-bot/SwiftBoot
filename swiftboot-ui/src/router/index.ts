@@ -5,7 +5,9 @@ import { useUserStore } from '@/stores/user'
 
 NProgress.configure({ showSpinner: false })
 
-// 静态路由
+/**
+ * 基础路由（只放：登录、首页、404）
+ */
 const constantRoutes: RouteRecordRaw[] = [
   {
     path: '/login',
@@ -29,87 +31,6 @@ const constantRoutes: RouteRecordRaw[] = [
     ]
   },
   {
-    path: '/system',
-    name: 'System',
-    component: () => import('@/layout/index.vue'),
-    redirect: '/system/user',
-    meta: { title: '系统管理', icon: 'Setting' },
-    children: [
-      {
-        path: 'user',
-        name: 'User',
-        component: () => import('@/views/system/user/index.vue'),
-        meta: { title: '用户管理', icon: 'User' }
-      },
-      {
-        path: 'role',
-        name: 'Role',
-        component: () => import('@/views/system/role/index.vue'),
-        meta: { title: '角色管理', icon: 'UserFilled' }
-      },
-      {
-        path: 'menu',
-        name: 'Menu',
-        component: () => import('@/views/system/menu/index.vue'),
-        meta: { title: '菜单管理', icon: 'Menu' }
-      },
-      {
-        path: 'dept',
-        name: 'Dept',
-        component: () => import('@/views/system/dept/index.vue'),
-        meta: { title: '部门管理', icon: 'OfficeBuilding' }
-      },
-      {
-        path: 'dict',
-        name: 'Dict',
-        component: () => import('@/views/system/dict/index.vue'),
-        meta: { title: '字典管理', icon: 'Collection' }
-      }
-    ]
-  },
-  {
-    path: '/monitor',
-    name: 'Monitor',
-    component: () => import('@/layout/index.vue'),
-    redirect: '/monitor/operlog',
-    meta: { title: '系统监控', icon: 'Monitor' },
-    children: [
-      {
-        path: 'operlog',
-        name: 'OperLog',
-        component: () => import('@/views/monitor/operlog/index.vue'),
-        meta: { title: '操作日志', icon: 'Document' }
-      },
-      {
-        path: 'loginlog',
-        name: 'LoginLog',
-        component: () => import('@/views/monitor/loginlog/index.vue'),
-        meta: { title: '登录日志', icon: 'Tickets' }
-      }
-    ]
-  },
-  {
-    path: '/tool',
-    name: 'Tool',
-    component: () => import('@/layout/index.vue'),
-    redirect: '/tool/gen',
-    meta: { title: '系统工具', icon: 'Tools' },
-    children: [
-      {
-        path: 'gen',
-        name: 'Gen',
-        component: () => import('@/views/tool/gen/index.vue'),
-        meta: { title: '代码生成', icon: 'Document' }
-      },
-      {
-        path: 'icon',
-        name: 'Icon',
-        component: () => import('@/views/tool/icon/index.vue'),
-        meta: { title: '图标参考', icon: 'StarFilled' }
-      }
-    ]
-  },
-  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('@/views/error/404.vue'),
@@ -117,23 +38,41 @@ const constantRoutes: RouteRecordRaw[] = [
   }
 ]
 
+/**
+ * 自动加载 modules 下所有路由
+ */
+const modules = import.meta.glob('./modules/*.ts', { eager: true })
+
+const moduleRoutes: RouteRecordRaw[] = Object.values(modules).flatMap(
+  (module: any) => module.default
+)
+
+/**
+ * 合并路由
+ */
+const routes: RouteRecordRaw[] = [
+  ...constantRoutes,
+  ...moduleRoutes
+]
+
 const router = createRouter({
   history: createWebHistory(),
-  routes: constantRoutes,
+  routes,
   scrollBehavior: () => ({ top: 0 })
 })
 
-// 白名单
+/**
+ * 路由守卫
+ */
 const whiteList = ['/login']
 
-// 路由守卫
 router.beforeEach(async (to, from, next) => {
   NProgress.start()
   document.title = `${to.meta.title || ''} - SwiftBoot`
-  
+
   const userStore = useUserStore()
   const token = userStore.token
-  
+
   if (token) {
     if (to.path === '/login') {
       next({ path: '/' })
@@ -142,7 +81,7 @@ router.beforeEach(async (to, from, next) => {
         try {
           await userStore.getUserInfo()
           next({ ...to, replace: true })
-        } catch (error) {
+        } catch (e) {
           userStore.logout()
           next(`/login?redirect=${to.path}`)
         }
@@ -151,11 +90,9 @@ router.beforeEach(async (to, from, next) => {
       }
     }
   } else {
-    if (whiteList.includes(to.path)) {
-      next()
-    } else {
-      next(`/login?redirect=${to.path}`)
-    }
+    whiteList.includes(to.path)
+      ? next()
+      : next(`/login?redirect=${to.path}`)
   }
 })
 

@@ -88,6 +88,7 @@ public class VelocityUtils {
         templates.add("vm/xml/mapper.xml.vm");
         templates.add("vm/vue/index.vue.vm");
         templates.add("vm/vue/api.ts.vm");
+        templates.add("vm/vue/router.ts.vm");
         templates.add("vm/sql/sql.vm");
         return templates;
     }
@@ -117,6 +118,8 @@ public class VelocityUtils {
             return "vue/" + businessName + "/index.vue";
         } else if (template.contains("api.ts.vm")) {
             return "vue/api/" + businessName + ".ts";
+        } else if (template.contains("router.ts.vm")) {
+            return "vue/router/" + businessName + "-routes.ts";
         } else if (template.contains("sql.vm")) {
             return "sql/" + businessName + "_menu.sql";
         }

@@ -20,6 +20,7 @@
         <div class="card-header">
           <span>代码生成列表</span>
           <div>
+            <el-button type="info" @click="handleDownloadDoc"><el-icon><Download /></el-icon>下载文档说明</el-button>
             <el-button type="primary" @click="handleImport"><el-icon><Upload /></el-icon>导入</el-button>
             <el-button type="success" :disabled="!selectedIds.length" @click="handleBatchGenerate">
               <el-icon><Download /></el-icon>批量生成
@@ -40,7 +41,9 @@
             <el-button link type="primary" @click="handlePreview(row)">预览</el-button>
             <el-button link type="primary" @click="handleEdit(row)">编辑</el-button>
             <el-button link type="primary" @click="handleSync(row)">同步</el-button>
-            <el-button link type="success" @click="handleGenerate(row)">生成</el-button>
+            <el-button link type="success" @click="handleGenerate(row)">
+              {{ row.genType === '0' ? '下载' : (row.genPath && row.genPath.trim() ? '生成' : '下载') }}
+            </el-button>
             <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -86,6 +89,22 @@
           <pre class="code-preview">{{ code }}</pre>
         </el-tab-pane>
       </el-tabs>
+    </el-dialog>
+
+    <!-- 下载文档格式选择弹窗 -->
+    <el-dialog v-model="docFormatVisible" title="选择文档格式" width="400px">
+      <div style="text-align: center; padding: 20px;">
+        <el-radio-group v-model="selectedDocFormat">
+          <el-radio value="md" size="large">📄 Markdown (.md)</el-radio><br><br>
+          <el-radio value="doc" size="large">📝 Word文档 (.doc)</el-radio>
+        </el-radio-group>
+      </div>
+      <template #footer>
+        <el-button @click="docFormatVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleDocDownload" :disabled="!selectedDocFormat">
+          <el-icon><Download /></el-icon>下载文档
+        </el-button>
+      </template>
     </el-dialog>
 
     <!-- 编辑配置弹窗 -->
@@ -242,6 +261,10 @@ const previewVisible = ref(false)
 const previewData = ref<Record<string, string>>({})
 const previewActiveTab = ref('')
 
+// 文档下载相关
+const docFormatVisible = ref(false)
+const selectedDocFormat = ref('')
+
 // 编辑相关
 const editVisible = ref(false)
 const editActiveTab = ref('basic')
@@ -360,11 +383,61 @@ const handleSync = async (row: any) => {
 
 // 生成代码
 const handleGenerate = async (row: any) => {
-  window.location.href = `/api/tool/gen/download/${row.tableName}`
+  // 根据生成类型决定生成方式
+  if (row.genType === '0') {
+    // zip压缩包：直接下载
+    window.location.href = `/api/tool/gen/download/${row.tableName}`
+  } else if (row.genType === '1' && row.genPath && row.genPath.trim()) {
+    // 自定义路径：生成到指定目录
+    try {
+      await request({
+        url: `/tool/gen/generate/${row.tableName}`,
+        method: 'get'
+      })
+      ElMessage.success(`代码已生成到: ${row.genPath}`)
+    } catch (error) {
+      ElMessage.error('生成失败: ' + error.message)
+    }
+  } else {
+    // 默认情况：下载压缩包
+    window.location.href = `/api/tool/gen/download/${row.tableName}`
+  }
 }
 
-const handleBatchGenerate = () => {
-  window.location.href = `/api/tool/gen/batchDownload?tableNames=${selectedTableNames.value.join(',')}`
+const handleBatchGenerate = async () => {
+  // 检查选中的表是否都选择了zip压缩包生成
+  const zipTables = tableData.value.filter(table =>
+    selectedTableNames.value.includes(table.tableName) && table.genType === '0'
+  )
+
+  // 检查选中的表是否都选择了自定义路径且设置了路径
+  const customPathTables = tableData.value.filter(table =>
+    selectedTableNames.value.includes(table.tableName) &&
+    table.genType === '1' &&
+    table.genPath &&
+    table.genPath.trim()
+  )
+
+  if (zipTables.length === selectedTableNames.value.length) {
+    // 所有选中的表都选择了zip压缩包，批量下载
+    window.location.href = `/api/tool/gen/batchDownload?tableNames=${selectedTableNames.value.join(',')}`
+  } else if (customPathTables.length === selectedTableNames.value.length) {
+    // 所有选中的表都选择了自定义路径且设置了路径，批量生成到目录
+    try {
+      for (const tableName of selectedTableNames.value) {
+        await request({
+          url: `/tool/gen/generate/${tableName}`,
+          method: 'get'
+        })
+      }
+      ElMessage.success('批量生成完成')
+    } catch (error) {
+      ElMessage.error('批量生成失败: ' + error.message)
+    }
+  } else {
+    // 混合情况或其他情况，默认下载压缩包
+    window.location.href = `/api/tool/gen/batchDownload?tableNames=${selectedTableNames.value.join(',')}`
+  }
 }
 
 // 删除
@@ -375,6 +448,40 @@ const handleDelete = (row: any) => {
     getList()
   })
 }
+
+// 文档下载相关方法
+const handleDownloadDoc = () => {
+  selectedDocFormat.value = ''
+  docFormatVisible.value = true
+}
+
+const handleDocDownload = () => {
+  if (!selectedDocFormat.value) {
+    ElMessage.warning('请选择文档格式')
+    return
+  }
+
+  const fileMap: Record<string, string> = {
+    md: '/docs/SwiftBoot.md',
+    doc: '/docs/SwiftBoot.doc'
+  }
+
+  const fileNameMap: Record<string, string> = {
+    md: 'SwiftBoot-代码生成器使用指南.md',
+    doc: 'SwiftBoot-代码生成器使用指南.doc'
+  }
+
+  const link = document.createElement('a')
+  link.href = fileMap[selectedDocFormat.value]
+  link.download = fileNameMap[selectedDocFormat.value]
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+
+  docFormatVisible.value = false
+}
+
+
 
 onMounted(() => {
   getList()

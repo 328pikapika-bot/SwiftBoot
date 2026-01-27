@@ -18,10 +18,13 @@
         </div>
       </div>
       <div class="tips">
-        <el-tag type="info" effect="plain">
-          <el-icon><InfoFilled /></el-icon>
-          点击图标即可复制名称，用于菜单管理中的图标配置
-        </el-tag>
+        <div class="highlight-tip">
+          <el-icon class="tip-icon"><InfoFilled /></el-icon>
+          <div class="tip-content">
+            <div class="tip-title">操作提示</div>
+            <div class="tip-description">点击任意图标即可复制名称，用于菜单管理中的图标配置</div>
+          </div>
+        </div>
         <el-tag type="success" effect="plain">共 {{ filteredIcons.length }} 个图标</el-tag>
       </div>
     </el-card>
@@ -66,7 +69,7 @@ import {
   Edit, Delete, Search as SearchIcon, Refresh, RefreshLeft, RefreshRight,
   ZoomIn, ZoomOut, FullScreen, ScaleToOriginal,
   Upload, Download, Sort, SortUp, SortDown,
-  Copy, CopyDocument, Connection, Scissor,
+   CopyDocument, Connection, Scissor,
   // 提示
   Warning, WarningFilled, CircleCheck, CircleCheckFilled,
   CircleClose, CircleCloseFilled, CirclePlus, CirclePlusFilled,
@@ -81,6 +84,9 @@ import {
   Files, Collection, Reading, Tickets, Notebook, Memo, List,
   // 数据
   DataAnalysis, DataBoard, DataLine, Histogram, PieChart, TrendCharts,
+  // 其他物品
+  Present, Trophy, Medal, FirstAidKit, Cpu, MagicStick, Magnet,
+  Key, Unlock, PriceTag, Discount, Wallet, Money, CreditCard, Box, ShoppingBag, ShoppingCart, ShoppingCartFull,
   // 通讯
   Message, ChatDotRound, ChatLineRound, ChatDotSquare, ChatLineSquare, ChatSquare, ChatRound,
   Comment, Bell, BellFilled, Service, Headset, Phone, PhoneFilled,
@@ -93,10 +99,6 @@ import {
   // 食物
   Apple, Grape, Cherry, Pear, Orange, Coffee, CoffeeCup, Dessert, IceCream, Food, Burger,
   KnifeFork, Chicken, Bowl, Dish, DishDot, Sugar, Goblet, GobletFull, GobletSquare, GobletSquareFull,
-  // 其他物品
-  Present, Trophy, Medal, FirstAidKit, Cpu, Monitor, MagicStick, Magnet,
-  Key, Unlock, PriceTag, Discount, Wallet, Money, BankCard, Box, ShoppingBag, ShoppingCart, ShoppingCartFull,
-  Goods, GoodsFilled, ShoppingTrolley, SoldOut, Sell,
   // 工具
   Tools, Brush, Crop, MostlyCloudy as Mosaic, EditPen, Aim,
   Rank, Grid, Help, Operation, Opportunity, OfficeBuilding,
@@ -165,7 +167,6 @@ const iconList = shallowRef([
   { name: 'sort', component: Sort },
   { name: 'sort-up', component: SortUp },
   { name: 'sort-down', component: SortDown },
-  { name: 'copy', component: Copy },
   { name: 'copy-document', component: CopyDocument },
   { name: 'scissor', component: Scissor },
   
@@ -270,15 +271,15 @@ const iconList = shallowRef([
   { name: 'discount', component: Discount },
   { name: 'wallet', component: Wallet },
   { name: 'money', component: Money },
-  { name: 'bank-card', component: BankCard },
+  { name: 'credit-card', component: CreditCard },
   { name: 'box', component: Box },
   { name: 'shopping-bag', component: ShoppingBag },
   { name: 'shopping-cart', component: ShoppingCart },
   { name: 'shopping-cart-full', component: ShoppingCartFull },
-  { name: 'goods', component: Goods },
-  { name: 'goods-filled', component: GoodsFilled },
-  { name: 'sold-out', component: SoldOut },
-  { name: 'sell', component: Sell },
+  // { name: 'goods', component: Goods },
+  // { name: 'goods-filled', component: GoodsFilled },
+  // { name: 'sold-out', component: SoldOut },
+  // { name: 'sell', component: Sell },
   
   // 工具建筑
   { name: 'tools', component: Tools },
@@ -361,7 +362,6 @@ const copyIconName = async (name: string) => {
     input.value = name
     document.body.appendChild(input)
     input.select()
-    document.execCommand('copy')
     document.body.removeChild(input)
     ElMessage.success(`已复制: ${name}`)
   }
@@ -392,11 +392,88 @@ const copyIconName = async (name: string) => {
     .tips {
       display: flex;
       gap: 12px;
-      
+      align-items: flex-start;
+
+      .highlight-tip {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        background: linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%);
+        border: 2px solid #91d5ff;
+        border-radius: 12px;
+        padding: 16px;
+        flex: 1;
+        box-shadow: 0 4px 12px rgba(24, 144, 255, 0.15);
+        animation: pulse 2s infinite;
+        transition: all 0.3s ease;
+
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px rgba(24, 144, 255, 0.25);
+        }
+
+        .tip-icon {
+          font-size: 24px;
+          color: #1890ff;
+          flex-shrink: 0;
+          margin-top: 2px;
+        }
+
+        .tip-content {
+          .tip-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1890ff;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+
+            &::before {
+              content: '💡';
+              font-size: 16px;
+            }
+          }
+
+          .tip-description {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+            font-weight: 500;
+          }
+        }
+      }
+
       .el-tag {
         display: flex;
         align-items: center;
         gap: 4px;
+        flex-shrink: 0;
+        margin-top: 16px;
+      }
+    }
+
+    @keyframes pulse {
+      0% {
+        box-shadow: 0 4px 12px rgba(24, 144, 255, 0.15);
+      }
+      50% {
+        box-shadow: 0 6px 16px rgba(24, 144, 255, 0.25);
+      }
+      100% {
+        box-shadow: 0 4px 12px rgba(24, 144, 255, 0.15);
+      }
+    }
+
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+      }
+      40% {
+        transform: translateY(-3px);
+      }
+      60% {
+        transform: translateY(-1px);
       }
     }
   }
@@ -418,22 +495,49 @@ const copyIconName = async (name: string) => {
       cursor: pointer;
       transition: all 0.2s ease;
       border: 1px solid transparent;
-      
+      position: relative;
+
+      &::before {
+        content: '👆';
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        font-size: 14px;
+        background: #fff;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        opacity: 0;
+        transform: scale(0.8);
+        transition: all 0.3s ease;
+        pointer-events: none;
+      }
+
       &:hover {
         background: #ecf5ff;
         border-color: #409eff;
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
-        
+
+        &::before {
+          opacity: 1;
+          transform: scale(1);
+        }
+
         .icon-wrapper {
           color: #409eff;
+          animation: bounce 0.6s ease;
         }
-        
+
         .icon-name {
           color: #409eff;
         }
       }
-      
+
       &:active {
         transform: translateY(0);
       }

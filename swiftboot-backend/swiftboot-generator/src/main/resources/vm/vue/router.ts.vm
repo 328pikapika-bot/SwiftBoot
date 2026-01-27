@@ -1,0 +1,12 @@
+/**
+ * ${functionName} - 路由配置
+ *
+ * 此文件包含路由配置代码片段，请复制到 src/router/index.ts 的相应位置
+ */
+
+{
+  path: '${businessName}',
+  name: '${className}',
+  component: () => import('@/views/${genPath}/${businessName}/index.vue'),
+  meta: { title: '${functionName}', icon: 'Document' }
+}

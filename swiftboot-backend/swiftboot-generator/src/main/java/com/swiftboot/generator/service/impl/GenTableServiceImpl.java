@@ -163,7 +163,6 @@ public class GenTableServiceImpl extends ServiceImpl<GenTableMapper, GenTable> i
 
         List<String> templates = VelocityUtils.getTemplateList();
         for (String template : templates) {
-            if (!StrUtil.containsAny(template, "sql.vm")) {
                 StringWriter sw = new StringWriter();
                 Template tpl = Velocity.getTemplate(template, StandardCharsets.UTF_8.name());
                 tpl.merge(context, sw);
@@ -187,6 +186,31 @@ public class GenTableServiceImpl extends ServiceImpl<GenTableMapper, GenTable> i
                 }
             }
         }
+
+    /**
+     * 获取前端项目路径
+     */
+    private String getFrontendPath() {
+        // 从当前工作目录向上查找前端项目
+        String currentPath = System.getProperty("user.dir");
+        java.io.File currentDir = new java.io.File(currentPath);
+
+        // 向上查找 swiftboot-ui 目录
+        while (currentDir != null) {
+            java.io.File uiDir = new java.io.File(currentDir, "swiftboot-ui");
+            if (uiDir.exists() && uiDir.isDirectory()) {
+                return uiDir.getAbsolutePath();
+            }
+            currentDir = currentDir.getParentFile();
+        }
+
+        // 如果没找到，尝试相对路径
+        java.io.File relativeUiDir = new java.io.File(currentPath, "../swiftboot-ui");
+        if (relativeUiDir.exists() && relativeUiDir.isDirectory()) {
+            return relativeUiDir.getAbsolutePath();
+        }
+
+        return null;
     }
 
     @Override

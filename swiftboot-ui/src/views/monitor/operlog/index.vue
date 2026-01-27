@@ -76,29 +76,187 @@
     </el-card>
 
     <!-- 详情弹窗 -->
-    <el-dialog v-model="detailVisible" title="操作日志详情" width="700px">
-      <el-descriptions :column="2" border>
-        <el-descriptions-item label="模块名称">{{ detailData.title }}</el-descriptions-item>
-        <el-descriptions-item label="操作类型">{{ operTypeMap[detailData.businessType] }}</el-descriptions-item>
-        <el-descriptions-item label="请求方式">{{ detailData.requestMethod }}</el-descriptions-item>
-        <el-descriptions-item label="操作人员">{{ detailData.operName }}</el-descriptions-item>
-        <el-descriptions-item label="请求地址" :span="2">{{ detailData.operUrl }}</el-descriptions-item>
-        <el-descriptions-item label="操作方法" :span="2">{{ detailData.method }}</el-descriptions-item>
-        <el-descriptions-item label="请求参数" :span="2">
-          <div style="max-height: 200px; overflow: auto;">{{ detailData.operParam }}</div>
-        </el-descriptions-item>
-        <el-descriptions-item label="返回参数" :span="2">
-          <div style="max-height: 200px; overflow: auto;">{{ detailData.jsonResult }}</div>
-        </el-descriptions-item>
-        <el-descriptions-item label="操作状态">
-          <el-tag :type="detailData.status === 0 ? 'success' : 'danger'">{{ detailData.status === 0 ? '正常' : '异常' }}</el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="耗时">{{ detailData.costTime }}ms</el-descriptions-item>
-        <el-descriptions-item label="操作时间" :span="2">{{ detailData.operTime }}</el-descriptions-item>
-        <el-descriptions-item v-if="detailData.errorMsg" label="错误信息" :span="2">
-          <div style="color: #f56c6c;">{{ detailData.errorMsg }}</div>
-        </el-descriptions-item>
-      </el-descriptions>
+    <el-dialog
+      v-model="detailVisible"
+      title="操作日志详情"
+      width="30%"
+      :close-on-click-modal="false"
+      class="detail-dialog"
+    >
+      <div class="detail-content">
+        <!-- 基础信息 -->
+        <el-card class="info-card" shadow="never">
+          <template #header>
+            <div class="card-title">
+              <el-icon><InfoFilled /></el-icon>
+              <span>基础信息</span>
+            </div>
+          </template>
+          <el-row :gutter="20">
+            <el-col :span="5">
+              <div class="info-item">
+                <div class="label">模块名称</div>
+                <div class="value">{{ detailData.title || '-' }}</div>
+              </div>
+            </el-col>
+            <el-col :span="5">
+              <div class="info-item">
+                <div class="label">操作类型</div>
+                <div class="value">
+                  <el-tag>{{ operTypeMap[detailData.businessType] || '其他' }}</el-tag>
+                </div>
+              </div>
+            </el-col>
+            <el-col :span="5">
+              <div class="info-item">
+                <div class="label">请求方式</div>
+                <div class="value">
+                  <el-tag type="primary">{{ detailData.requestMethod || '-' }}</el-tag>
+                </div>
+              </div>
+            </el-col>
+            <el-col :span="5">
+            <div class="info-item">
+                <div class="label">操作状态</div>
+                <div class="value">
+                  <el-tag :type="detailData.status === 0 ? 'success' : 'danger'">
+                    {{ detailData.status === 0 ? '正常' : '异常' }}
+                  </el-tag>
+                </div>
+              </div>
+            </el-col>
+            <el-col :span="4">
+              <div class="info-item">
+                <div class="label">耗时</div>
+                <div class="value">
+                  <span class="cost-time">{{ detailData.costTime || 0 }}</span> ms
+                </div>
+              </div>
+            </el-col>
+            <el-col :span="12">
+              <div class="info-item">
+                <div class="label">主机地址</div>
+                <div class="value">{{ detailData.operIp || '-' }}</div>
+              </div>
+            </el-col>
+            <el-col :span="12">
+              <div class="info-item">
+                <div class="label">操作时间</div>
+                <div class="value">{{ detailData.operTime || '-' }}</div>
+              </div>
+            </el-col>
+            <el-col :span="12">
+              <div class="info-item">
+                <div class="label">操作人员</div>
+                <div class="value">{{ detailData.operName || '-' }}</div>
+              </div>
+            </el-col>
+            <el-col :span="12">
+              <div class="info-item">
+                <div class="label">日志ID</div>
+                <div class="value">{{ detailData.id || '-' }}</div>
+              </div>
+            </el-col>
+          </el-row>
+        </el-card>
+
+        <!-- 详细信息 -->
+        <el-tabs v-model="activeTab" class="detail-tabs">
+          <!-- 请求信息 -->
+          <el-tab-pane label="请求信息" name="request">
+            <div class="tab-content">
+              <div class="param-group">
+                <div class="param-header">
+                  <el-icon><Link /></el-icon>
+                  <span>请求地址</span>
+                  <el-button text type="primary" @click="copyText(detailData.operUrl)">
+                    <el-icon><CopyDocument /></el-icon>
+                    复制
+                  </el-button>
+                </div>
+                <div class="param-value url-value">{{ detailData.operUrl || '-' }}</div>
+              </div>
+
+              <div class="param-group">
+                <div class="param-header">
+                  <el-icon><Setting /></el-icon>
+                  <span>操作方法</span>
+                  <el-button text type="primary" @click="copyText(detailData.method)">
+                    <el-icon><CopyDocument /></el-icon>
+                    复制
+                  </el-button>
+                </div>
+                <div class="param-value method-value">{{ detailData.method || '-' }}</div>
+              </div>
+
+              <div class="param-group" v-if="detailData.operParam">
+                <div class="param-header">
+                  <el-icon><DocumentAdd /></el-icon>
+                  <span>请求参数</span>
+                  <el-button text type="primary" @click="copyText(detailData.operParam)">
+                    <el-icon><CopyDocument /></el-icon>
+                    复制
+                  </el-button>
+                </div>
+                <div class="param-value json-value">
+                  <pre>{{ formatJson(detailData.operParam) }}</pre>
+                </div>
+              </div>
+            </div>
+          </el-tab-pane>
+
+          <!-- 响应信息 -->
+          <el-tab-pane label="响应信息" name="response">
+            <div class="tab-content">
+              <div class="param-group" v-if="detailData.jsonResult">
+                <div class="param-header">
+                  <el-icon><DocumentChecked /></el-icon>
+                  <span>返回参数</span>
+                  <el-button text type="primary" @click="copyText(detailData.jsonResult)">
+                    <el-icon><CopyDocument /></el-icon>
+                    复制
+                  </el-button>
+                </div>
+                <div class="param-value json-value">
+                  <pre>{{ formatJson(detailData.jsonResult) }}</pre>
+                </div>
+              </div>
+
+              <div class="param-group" v-else>
+                <div class="empty-state">
+                  <el-icon size="48" class="empty-icon"><DocumentRemove /></el-icon>
+                  <p>无返回数据</p>
+                </div>
+              </div>
+            </div>
+          </el-tab-pane>
+
+          <!-- 错误信息 -->
+          <el-tab-pane label="错误信息" name="error" v-if="detailData.errorMsg">
+            <div class="tab-content">
+              <div class="param-group">
+                <div class="param-header">
+                  <el-icon class="error-icon"><WarningFilled /></el-icon>
+                  <span>错误详情</span>
+                  <el-button text type="danger" @click="copyText(detailData.errorMsg)">
+                    <el-icon><CopyDocument /></el-icon>
+                    复制
+                  </el-button>
+                </div>
+                <div class="param-value error-value">
+                  <pre>{{ detailData.errorMsg }}</pre>
+                </div>
+              </div>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="detailVisible = false">关闭</el-button>
+        </div>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -106,6 +264,10 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  InfoFilled, Link, Setting, DocumentAdd, DocumentChecked, DocumentRemove,
+  WarningFilled, CopyDocument
+} from '@element-plus/icons-vue'
 import request from '@/utils/request'
 
 const operTypeMap: Record<number, string> = {
@@ -124,6 +286,7 @@ const total = ref(0)
 const selectedIds = ref<number[]>([])
 const detailVisible = ref(false)
 const detailData = ref<any>({})
+const activeTab = ref('request')
 
 const queryParams = reactive({
   pageNum: 1,
@@ -181,7 +344,268 @@ const handleClean = () => {
   })
 }
 
+// 复制文本到剪贴板
+const copyText = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制到剪贴板')
+  } catch {
+    // 降级方案
+    const input = document.createElement('input')
+    input.value = text
+    document.body.appendChild(input)
+    input.select()
+    document.execCommand('copy')
+    document.body.removeChild(input)
+    ElMessage.success('已复制到剪贴板')
+  }
+}
+
+// 格式化JSON字符串
+const formatJson = (jsonStr: string) => {
+  if (!jsonStr) return ''
+  try {
+    const parsed = JSON.parse(jsonStr)
+    return JSON.stringify(parsed, null, 2)
+  } catch {
+    return jsonStr
+  }
+}
+
 onMounted(() => {
   getList()
 })
 </script>
+
+<style lang="scss" scoped>
+.page-container {
+  padding: 20px;
+}
+
+// 详情弹窗样式
+.detail-dialog {
+  :deep(.el-dialog) {
+    margin-top: 5vh !important;
+    max-height: 90vh;
+  }
+
+  :deep(.el-dialog__body) {
+    padding: 20px;
+  }
+
+  .detail-content {
+    .info-card {
+      margin-bottom: 20px;
+
+      .card-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        color: #303133;
+
+        .el-icon {
+          color: #409eff;
+        }
+      }
+
+      .info-item {
+        margin-bottom: 16px;
+
+        .label {
+          font-size: 12px;
+          color: #909399;
+          margin-bottom: 4px;
+          font-weight: 500;
+        }
+
+        .value {
+          font-size: 14px;
+          color: #303133;
+          font-weight: 500;
+
+          .cost-time {
+            color: #e6a23c;
+            font-weight: 600;
+          }
+
+          .el-tag {
+            font-size: 12px;
+          }
+        }
+      }
+    }
+
+    .detail-tabs {
+      :deep(.el-tabs__header) {
+        margin: 0 0 20px;
+      }
+
+      :deep(.el-tabs__nav-wrap::after) {
+        display: none;
+      }
+
+      .tab-content {
+        .param-group {
+          margin-bottom: 24px;
+
+          .param-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding: 12px 16px;
+            background: #f5f7fa;
+            border-radius: 8px;
+            border-left: 4px solid #409eff;
+
+            .el-icon {
+              color: #409eff;
+              font-size: 16px;
+            }
+
+            span {
+              font-weight: 600;
+              color: #303133;
+            }
+
+            .el-button {
+              margin-left: auto;
+              font-size: 12px;
+            }
+
+            .error-icon {
+              color: #f56c6c;
+            }
+          }
+
+          .param-value {
+            &.url-value {
+              font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+              font-size: 13px;
+              color: #409eff;
+              word-break: break-all;
+              background: #f0f9ff;
+              padding: 12px;
+              border-radius: 6px;
+              border: 1px solid #e6f7ff;
+            }
+
+            &.method-value {
+              font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+              font-size: 13px;
+              color: #67c23a;
+              background: #f0f9ff;
+              padding: 12px;
+              border-radius: 6px;
+              border: 1px solid #e6f7ff;
+            }
+
+            &.json-value {
+              max-height: 400px;
+              overflow: auto;
+              background: #f6f8fa;
+              border: 1px solid #e1e4e8;
+              border-radius: 6px;
+
+              pre {
+                margin: 0;
+                padding: 16px;
+                font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                font-size: 12px;
+                line-height: 1.5;
+                color: #24292e;
+                white-space: pre-wrap;
+                word-break: break-all;
+              }
+            }
+
+            &.error-value {
+              background: #fef0f0;
+              border: 1px solid #fab1a0;
+              border-radius: 6px;
+
+              pre {
+                margin: 0;
+                padding: 16px;
+                font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                font-size: 12px;
+                line-height: 1.5;
+                color: #f56c6c;
+                white-space: pre-wrap;
+                word-break: break-all;
+              }
+            }
+          }
+
+          .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #909399;
+
+            .empty-icon {
+              color: #c0c4cc;
+              margin-bottom: 12px;
+            }
+
+            p {
+              margin: 0;
+              font-size: 14px;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  .dialog-footer {
+    text-align: center;
+  }
+}
+
+// 响应式设计
+@media (max-width: 768px) {
+  .detail-dialog {
+    :deep(.el-dialog) {
+      width: 95% !important;
+      margin-top: 2vh !important;
+    }
+
+    .info-card .el-row .el-col {
+      margin-bottom: 12px;
+
+      &:nth-child(2n) {
+        padding-left: 10px;
+      }
+
+      &:nth-child(2n+1) {
+        padding-right: 10px;
+      }
+    }
+  }
+}
+
+// 滚动条样式
+.param-value.json-value::-webkit-scrollbar,
+.param-value.error-value::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.param-value.json-value::-webkit-scrollbar-track,
+.param-value.error-value::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.param-value.json-value::-webkit-scrollbar-thumb,
+.param-value.error-value::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.param-value.json-value::-webkit-scrollbar-thumb:hover,
+.param-value.error-value::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+</style>

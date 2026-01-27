@@ -317,6 +317,7 @@ INSERT INTO `sys_menu` VALUES (201, 2, '登录日志', 'C', 'loginlog', 'monitor
 -- 系统工具
 INSERT INTO `sys_menu` VALUES (3, 0, '系统工具', 'M', 'tool', NULL, NULL, 'tool', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '系统工具目录');
 INSERT INTO `sys_menu` VALUES (300, 3, '代码生成', 'C', 'gen', 'tool/gen/index', 'tool:gen:list', 'code', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '代码生成菜单');
+INSERT INTO `sys_menu` VALUES (301, 3, '图标参考', 'C', 'icon', 'tool/icon/index', 'tool:icon:list', 'star-filled', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '图标参考菜单');
 
 -- 用户管理按钮
 INSERT INTO `sys_menu` VALUES (1001, 100, '用户查询', 'F', '', '', 'system:user:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
@@ -364,6 +365,9 @@ INSERT INTO `sys_menu` VALUES (3003, 300, '生成删除', 'F', '', '', 'tool:gen
 INSERT INTO `sys_menu` VALUES (3004, 300, '导入代码', 'F', '', '', 'tool:gen:import', '', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 INSERT INTO `sys_menu` VALUES (3005, 300, '预览代码', 'F', '', '', 'tool:gen:preview', '', 5, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 INSERT INTO `sys_menu` VALUES (3006, 300, '生成代码', 'F', '', '', 'tool:gen:code', '', 6, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+
+-- 图标参考按钮
+INSERT INTO `sys_menu` VALUES (3011, 301, '图标查询', 'F', '', '', 'tool:icon:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 
 -- 用户-角色关联
 INSERT INTO `sys_user_role` VALUES (1, 1);

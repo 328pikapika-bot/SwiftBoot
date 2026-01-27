@@ -1,9 +1,0 @@
-com\swiftboot\generator\mapper\GenTableMapper.class
-com\swiftboot\generator\util\GenUtils.class
-com\swiftboot\generator\service\impl\GenTableServiceImpl.class
-com\swiftboot\generator\domain\GenTable.class
-com\swiftboot\generator\controller\GenController.class
-com\swiftboot\generator\domain\GenTableColumn.class
-com\swiftboot\generator\util\VelocityUtils.class
-com\swiftboot\generator\service\GenTableService.class
-com\swiftboot\generator\mapper\GenTableColumnMapper.class
