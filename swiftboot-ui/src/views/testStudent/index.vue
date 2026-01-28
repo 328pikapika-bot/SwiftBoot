@@ -3,30 +3,22 @@
     <!-- 搜索区域 -->
     <el-card shadow="never" class="search-card">
       <el-form :model="queryParams" ref="queryRef" :inline="true">
-#foreach ($column in $columns)
-#if($column.isQuery == '1')
-#if($column.htmlType == 'input')
-        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
-          <el-input v-model="queryParams.${column.javaField}" placeholder="请输入${column.columnComment}" clearable />
+        <el-form-item label="学生名称" prop="studentName">
+          <el-input v-model="queryParams.studentName" placeholder="请输入学生名称" clearable />
         </el-form-item>
-#elseif($column.htmlType == 'select')
-        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
-          <el-select v-model="queryParams.${column.javaField}" placeholder="请选择${column.columnComment}" clearable>
-#if($column.dictType && $column.dictType != '')
+        <el-form-item label="年龄" prop="age">
+          <el-input v-model="queryParams.age" placeholder="请输入年龄" clearable />
+        </el-form-item>
+        <el-form-item label="性别" prop="sex">
+          <el-select v-model="queryParams.sex" placeholder="请选择性别" clearable>
             <el-option
-              v-for="dict in ${column.dictType}"
+              v-for="dict in sys_user_gender"
               :key="dict.value"
               :label="dict.label"
               :value="dict.value"
             />
-#else
-            <el-option label="请选择" value="" />
-#end
           </el-select>
         </el-form-item>
-#end
-#end
-#end
         <el-form-item>
           <el-button type="primary" @click="handleQuery">
             <el-icon><Search /></el-icon>搜索
@@ -42,7 +34,7 @@
     <el-card shadow="never" class="table-card">
       <template #header>
         <div class="card-header">
-          <span>${functionName}列表</span>
+          <span>测试学生表列表</span>
           <div>
             <el-button type="primary" @click="handleAdd">
               <el-icon><Plus /></el-icon>新增
@@ -57,19 +49,14 @@
       <!-- 表格 -->
       <el-table v-loading="loading" :data="tableData" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="55" />
-#foreach ($column in $columns)
-#if($column.isList == '1')
-#if($column.dictType && $column.dictType != "")
-        <el-table-column label="${column.columnComment}" prop="${column.javaField}">
+        <el-table-column label="学生名称" prop="studentName" />
+        <el-table-column label="年龄" prop="age" />
+        <el-table-column label="性别" prop="sex">
           <template #default="{ row }">
-            <dict-tag :options="${column.dictType}" :value="row.${column.javaField}" />
+            <dict-tag :options="sys_user_gender" :value="row.sex" />
           </template>
         </el-table-column>
-#else
-        <el-table-column label="${column.columnComment}" prop="${column.javaField}" />
-#end
-#end
-#end
+        <el-table-column label="生日" prop="birthday" />
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="handleEdit(row)">编辑</el-button>
@@ -93,71 +80,58 @@
     <!-- 新增/编辑弹窗 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
       <el-form :model="formData" :rules="rules" ref="formRef" label-width="100px">
-#foreach ($column in $columns)
-#if($column.isInsert == '1' || $column.isEdit == '1')
-#if($column.htmlType == 'input')
-        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
-          <el-input v-model="formData.${column.javaField}" placeholder="请输入${column.columnComment}" />
+        <el-form-item label="学生ID" prop="id">
+          <el-input v-model="formData.id" placeholder="请输入学生ID" />
         </el-form-item>
-#elseif($column.htmlType == 'textarea')
-        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
-          <el-input v-model="formData.${column.javaField}" type="textarea" placeholder="请输入${column.columnComment}" />
+        <el-form-item label="学生名称" prop="studentName">
+          <el-input v-model="formData.studentName" placeholder="请输入学生名称" />
         </el-form-item>
-#elseif($column.htmlType == 'select')
-        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
-          <el-select v-model="formData.${column.javaField}" placeholder="请选择${column.columnComment}">
-#if($column.dictType && $column.dictType != '')
+        <el-form-item label="年龄" prop="age">
+          <el-input v-model="formData.age" placeholder="请输入年龄" />
+        </el-form-item>
+        <el-form-item label="性别" prop="sex">
+          <el-select v-model="formData.sex" placeholder="请选择性别">
             <el-option
-              v-for="dict in ${column.dictType}"
+              v-for="dict in sys_user_gender"
               :key="dict.value"
               :label="dict.label"
               :value="dict.value"
             />
-#else
-            <el-option label="请选择" value="" />
-#end
           </el-select>
         </el-form-item>
-#elseif($column.htmlType == 'radio')
-        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
-          <el-radio-group v-model="formData.${column.javaField}">
-#if($column.dictType && $column.dictType != '')
-            <el-radio
-              v-for="dict in ${column.dictType}"
-              :key="dict.value"
-              :value="dict.value"
-            >{{dict.label}}</el-radio>
-#else
-            <el-radio value="1">请选择</el-radio>
-#end
-          </el-radio-group>
-        </el-form-item>
-#elseif($column.htmlType == 'checkbox')
-        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
-          <el-checkbox-group v-model="formData.${column.javaField}">
-#if($column.dictType && $column.dictType != '')
-            <el-checkbox
-              v-for="dict in ${column.dictType}"
-              :key="dict.value"
-              :value="dict.value"
-            >{{dict.label}}</el-checkbox>
-#else
-            <el-checkbox value="1">请选择</el-checkbox>
-#end
-          </el-checkbox-group>
-        </el-form-item>
-#elseif($column.htmlType == 'datetime')
-        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
+        <el-form-item label="生日" prop="birthday">
           <el-date-picker
-            v-model="formData.${column.javaField}"
+            v-model="formData.birthday"
             type="datetime"
             value-format="YYYY-MM-DD HH:mm:ss"
-            placeholder="请选择${column.columnComment}"
+            placeholder="请选择生日"
           />
         </el-form-item>
-#end
-#end
-#end
+        <el-form-item label="删除标志（0存在 1删除）" prop="deleted">
+          <el-input v-model="formData.deleted" placeholder="请输入删除标志（0存在 1删除）" />
+        </el-form-item>
+        <el-form-item label="创建者" prop="createBy">
+          <el-input v-model="formData.createBy" placeholder="请输入创建者" />
+        </el-form-item>
+        <el-form-item label="创建时间" prop="createTime">
+          <el-date-picker
+            v-model="formData.createTime"
+            type="datetime"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            placeholder="请选择创建时间"
+          />
+        </el-form-item>
+        <el-form-item label="更新者" prop="updateBy">
+          <el-input v-model="formData.updateBy" placeholder="请输入更新者" />
+        </el-form-item>
+        <el-form-item label="更新时间" prop="updateTime">
+          <el-date-picker
+            v-model="formData.updateTime"
+            type="datetime"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            placeholder="请选择更新时间"
+          />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -171,18 +145,10 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Plus, Delete } from '@element-plus/icons-vue'
-import { list${className}, get${className}, add${className}, update${className}, delete${className} } from '@/api/${businessName}'
-#set($hasDict = false)
-#foreach($column in $columns)
-#if($column.dictType && $column.dictType != "")
-#set($hasDict = true)
-#end
-#end
-#if($hasDict)
+import { listTestStudent, getTestStudent, addTestStudent, updateTestStudent, deleteTestStudent } from '@/api/testStudent'
 import { useDict } from '@/hooks/useDict'
 
-const { #foreach($column in $columns)#if($column.dictType && $column.dictType != "")${column.dictType}, #end#end } = useDict(#foreach($column in $columns)#if($column.dictType && $column.dictType != "")'${column.dictType}', #end#end)
-#end
+const { sys_user_gender,  } = useDict('sys_user_gender', )
 
 const loading = ref(false)
 const tableData = ref([])
@@ -196,34 +162,33 @@ const queryRef = ref()
 const queryParams = reactive({
   pageNum: 1,
   pageSize: 10,
-#foreach ($column in $columns)
-#if($column.isQuery == '1')
-  ${column.javaField}: undefined,
-#end
-#end
+  studentName: undefined,
+  age: undefined,
+  sex: undefined,
+  birthday: undefined,
 })
 
 const formData = reactive({
   id: undefined,
-#foreach ($column in $columns)
-#if($column.isInsert == '1' || $column.isEdit == '1')
-  ${column.javaField}: undefined,
-#end
-#end
+  id: undefined,
+  studentName: undefined,
+  age: undefined,
+  sex: undefined,
+  birthday: undefined,
+  deleted: undefined,
+  createBy: undefined,
+  createTime: undefined,
+  updateBy: undefined,
+  updateTime: undefined,
 })
 
 const rules = {
-#foreach ($column in $columns)
-#if($column.isRequired == '1')
-  ${column.javaField}: [{ required: true, message: '${column.columnComment}不能为空', trigger: 'blur' }],
-#end
-#end
 }
 
 const getList = async () => {
   loading.value = true
   try {
-    const { data } = await list${className}(queryParams)
+    const { data } = await listTestStudent(queryParams)
     tableData.value = data.list
     total.value = data.total
   } finally {
@@ -247,25 +212,25 @@ const handleSelectionChange = (selection: any[]) => {
 
 const handleAdd = () => {
   resetForm()
-  dialogTitle.value = '新增${functionName}'
+  dialogTitle.value = '新增测试学生表'
   dialogVisible.value = true
 }
 
 const handleEdit = async (row: any) => {
   resetForm()
-  const { data } = await get${className}(row.id)
+  const { data } = await getTestStudent(row.id)
   Object.assign(formData, data)
-  dialogTitle.value = '编辑${functionName}'
+  dialogTitle.value = '编辑测试学生表'
   dialogVisible.value = true
 }
 
 const handleSubmit = async () => {
   await formRef.value?.validate()
   if (formData.id) {
-    await update${className}(formData)
+    await updateTestStudent(formData)
     ElMessage.success('修改成功')
   } else {
-    await add${className}(formData)
+    await addTestStudent(formData)
     ElMessage.success('新增成功')
   }
   dialogVisible.value = false
@@ -274,7 +239,7 @@ const handleSubmit = async () => {
 
 const handleDelete = (row: any) => {
   ElMessageBox.confirm('确定删除该记录吗?', '提示', { type: 'warning' }).then(async () => {
-    await delete${className}(row.id)
+    await deleteTestStudent(row.id)
     ElMessage.success('删除成功')
     getList()
   })
@@ -282,7 +247,7 @@ const handleDelete = (row: any) => {
 
 const handleBatchDelete = () => {
   ElMessageBox.confirm('确定删除选中记录吗?', '提示', { type: 'warning' }).then(async () => {
-    await delete${className}(selectedIds.value.join(','))
+    await deleteTestStudent(selectedIds.value.join(','))
     ElMessage.success('删除成功')
     getList()
   })
@@ -290,11 +255,16 @@ const handleBatchDelete = () => {
 
 const resetForm = () => {
   formData.id = undefined
-#foreach ($column in $columns)
-#if($column.isInsert == '1' || $column.isEdit == '1')
-  formData.${column.javaField} = undefined
-#end
-#end
+  formData.id = undefined
+  formData.studentName = undefined
+  formData.age = undefined
+  formData.sex = undefined
+  formData.birthday = undefined
+  formData.deleted = undefined
+  formData.createBy = undefined
+  formData.createTime = undefined
+  formData.updateBy = undefined
+  formData.updateTime = undefined
   formRef.value?.resetFields()
 }
 

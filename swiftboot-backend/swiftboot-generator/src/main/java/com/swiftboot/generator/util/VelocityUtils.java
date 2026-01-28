@@ -2,6 +2,7 @@ package com.swiftboot.generator.util;
 
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.swiftboot.generator.domain.GenTable;
 import com.swiftboot.generator.domain.GenTableColumn;
@@ -50,6 +51,14 @@ public class VelocityUtils {
         context.put("columns", table.getColumns());
         context.put("pkColumn", table.getPkColumn());
 
+        // JSON工具
+        context.put("json", new Object() {
+            public List<Object> parseArray(String str) {
+                if (StrUtil.isBlank(str)) return new ArrayList<>();
+                return JSONUtil.parseArray(str);
+            }
+        });
+
         // 生成菜单SQL所需的雪花ID（使用MyBatis-Plus的IdWorker）
         context.put("menuId", IdWorker.getId());
         context.put("menuQueryId", IdWorker.getId());
@@ -64,10 +73,13 @@ public class VelocityUtils {
                 importList.add("java.math.BigDecimal");
             } else if ("LocalDateTime".equals(column.getJavaType()) && !importList.contains("java.time.LocalDateTime")) {
                 importList.add("java.time.LocalDateTime");
+                importList.add("com.fasterxml.jackson.annotation.JsonFormat");
             } else if ("LocalDate".equals(column.getJavaType()) && !importList.contains("java.time.LocalDate")) {
                 importList.add("java.time.LocalDate");
+                importList.add("com.fasterxml.jackson.annotation.JsonFormat");
             } else if ("LocalTime".equals(column.getJavaType()) && !importList.contains("java.time.LocalTime")) {
                 importList.add("java.time.LocalTime");
+                importList.add("com.fasterxml.jackson.annotation.JsonFormat");
             }
         }
         context.put("importList", importList);

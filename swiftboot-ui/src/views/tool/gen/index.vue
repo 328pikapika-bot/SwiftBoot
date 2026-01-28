@@ -217,6 +217,17 @@
                 </el-select>
               </template>
             </el-table-column>
+            <el-table-column label="配置" width="60" align="center">
+              <template #default="{ row }">
+                <el-button 
+                  v-if="['select', 'radio', 'checkbox'].includes(row.htmlType)"
+                  type="primary" 
+                  link 
+                  icon="Setting" 
+                  @click="handleDictConfig(row)"
+                />
+              </template>
+            </el-table-column>
           </el-table>
         </el-tab-pane>
       </el-tabs>
@@ -225,6 +236,35 @@
         <el-button type="primary" @click="handleEditSubmit">保存</el-button>
       </template>
     </el-drawer>
+
+    <!-- 字典配置弹窗 -->
+    <el-dialog v-model="dictVisible" title="选择字典" width="500px" append-to-body>
+      <el-form :model="currentDictRow" label-width="80px">
+        <el-form-item label="字典类型">
+          <el-select 
+            v-model="currentDictRow.dictType" 
+            clearable 
+            filterable 
+            placeholder="请选择字典类型" 
+            style="width: 100%"
+          >
+            <el-option
+              v-for="dict in dictOptions"
+              :key="dict.dictType"
+              :label="dict.dictName"
+              :value="dict.dictType"
+            >
+              <span style="float: left">{{ dict.dictName }}</span>
+              <span style="float: right; color: #8492a6; font-size: 13px">{{ dict.dictType }}</span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dictVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleDictSubmit">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -232,6 +272,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
+import { Search, Refresh, Plus, Delete, Download, Upload, Setting } from '@element-plus/icons-vue'
+
+import { listType } from '@/api/system/dict/type'
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -268,6 +311,8 @@ const selectedDocFormat = ref('')
 // 编辑相关
 const editVisible = ref(false)
 const editActiveTab = ref('basic')
+const dictOptions = ref<any[]>([])
+
 const editFormData = reactive({
   id: undefined as number | undefined,
   tableName: '',
@@ -364,6 +409,10 @@ const getTabLabel = (name: string) => {
 const handleEdit = async (row: any) => {
   const res = await request({ url: '/tool/gen/' + row.id, method: 'get' })
   Object.assign(editFormData, res.data)
+  // 获取字典列表
+  listType({ pageNum: 1, pageSize: 100 }).then(response => {
+    dictOptions.value = response.data.list
+  })
   editActiveTab.value = 'basic'
   editVisible.value = true
 }
@@ -483,9 +532,22 @@ const handleDocDownload = () => {
 
 
 
+// 字典配置相关
+const dictVisible = ref(false)
+const currentDictRow = ref<any>({})
+
+const handleDictConfig = (row: any) => {
+  currentDictRow.value = row
+  dictVisible.value = true
+}
+
+const handleDictSubmit = () => {
+  dictVisible.value = false
+}
+
 onMounted(() => {
-  getList()
-})
+    getList()
+  })
 </script>
 
 <style lang="scss" scoped>

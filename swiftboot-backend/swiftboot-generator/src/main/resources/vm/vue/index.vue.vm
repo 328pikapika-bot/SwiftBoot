@@ -12,7 +12,16 @@
 #elseif($column.htmlType == 'select')
         <el-form-item label="${column.columnComment}" prop="${column.javaField}">
           <el-select v-model="queryParams.${column.javaField}" placeholder="请选择${column.columnComment}" clearable>
-            <el-option label="选项1" value="1" />
+#if($column.dictType && $column.dictType != '')
+            <el-option
+              v-for="dict in ${column.dictType}"
+              :key="dict.value"
+              :label="dict.label"
+              :value="dict.value"
+            />
+#else
+            <el-option label="请选择" value="" />
+#end
           </el-select>
         </el-form-item>
 #end
@@ -50,7 +59,15 @@
         <el-table-column type="selection" width="55" />
 #foreach ($column in $columns)
 #if($column.isList == '1')
+#if($column.dictType && $column.dictType != "")
+        <el-table-column label="${column.columnComment}" prop="${column.javaField}">
+          <template #default="{ row }">
+            <dict-tag :options="${column.dictType}" :value="row.${column.javaField}" />
+          </template>
+        </el-table-column>
+#else
         <el-table-column label="${column.columnComment}" prop="${column.javaField}" />
+#end
 #end
 #end
         <el-table-column label="操作" width="180" fixed="right">
@@ -89,12 +106,54 @@
 #elseif($column.htmlType == 'select')
         <el-form-item label="${column.columnComment}" prop="${column.javaField}">
           <el-select v-model="formData.${column.javaField}" placeholder="请选择${column.columnComment}">
-            <el-option label="选项1" value="1" />
+#if($column.dictType && $column.dictType != '')
+            <el-option
+              v-for="dict in ${column.dictType}"
+              :key="dict.value"
+              :label="dict.label"
+              :value="dict.value"
+            />
+#else
+            <el-option label="请选择" value="" />
+#end
           </el-select>
+        </el-form-item>
+#elseif($column.htmlType == 'radio')
+        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
+          <el-radio-group v-model="formData.${column.javaField}">
+#if($column.dictType && $column.dictType != '')
+            <el-radio
+              v-for="dict in ${column.dictType}"
+              :key="dict.value"
+              :value="dict.value"
+            >{{dict.label}}</el-radio>
+#else
+            <el-radio value="1">请选择</el-radio>
+#end
+          </el-radio-group>
+        </el-form-item>
+#elseif($column.htmlType == 'checkbox')
+        <el-form-item label="${column.columnComment}" prop="${column.javaField}">
+          <el-checkbox-group v-model="formData.${column.javaField}">
+#if($column.dictType && $column.dictType != '')
+            <el-checkbox
+              v-for="dict in ${column.dictType}"
+              :key="dict.value"
+              :value="dict.value"
+            >{{dict.label}}</el-checkbox>
+#else
+            <el-checkbox value="1">请选择</el-checkbox>
+#end
+          </el-checkbox-group>
         </el-form-item>
 #elseif($column.htmlType == 'datetime')
         <el-form-item label="${column.columnComment}" prop="${column.javaField}">
-          <el-date-picker v-model="formData.${column.javaField}" type="datetime" placeholder="请选择${column.columnComment}" />
+          <el-date-picker
+            v-model="formData.${column.javaField}"
+            type="datetime"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            placeholder="请选择${column.columnComment}"
+          />
         </el-form-item>
 #end
 #end
@@ -113,6 +172,17 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Plus, Delete } from '@element-plus/icons-vue'
 import { list${className}, get${className}, add${className}, update${className}, delete${className} } from '@/api/${businessName}'
+#set($hasDict = false)
+#foreach($column in $columns)
+#if($column.dictType && $column.dictType != "")
+#set($hasDict = true)
+#end
+#end
+#if($hasDict)
+import { useDict } from '@/hooks/useDict'
+
+const { #foreach($column in $columns)#if($column.dictType && $column.dictType != "")${column.dictType}, #end#end } = useDict(#foreach($column in $columns)#if($column.dictType && $column.dictType != "")'${column.dictType}', #end#end)
+#end
 
 const loading = ref(false)
 const tableData = ref([])

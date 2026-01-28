@@ -18,7 +18,7 @@ import java.net.InetAddress;
 @EnableAsync
 @SpringBootApplication
 @ComponentScan(basePackages = {"com.swiftboot"})
-@MapperScan({"com.swiftboot.admin.mapper", "com.swiftboot.generator.mapper", "com.swiftboot.test.mapper"})
+@MapperScan("com.swiftboot.**.mapper")
 public class SwiftBootAdminApplication {
 
     public static void main(String[] args) throws Exception {

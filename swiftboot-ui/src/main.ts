@@ -10,7 +10,12 @@ import App from './App.vue'
 import router from './router'
 import './styles/index.scss'
 
+import DictTag from '@/components/DictTag/index.vue'
+
 const app = createApp(App)
+
+// 注册全局组件
+app.component('DictTag', DictTag)
 
 // 注册 Element Plus 图标
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {

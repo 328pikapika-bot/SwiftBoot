@@ -1,12 +1,27 @@
-/**
- * ${functionName} - 路由配置
- *
- * 此文件包含路由配置代码片段，请复制到 src/router/index.ts 的相应位置
- */
+import { RouteRecordRaw } from 'vue-router'
 
-{
-  path: '${businessName}',
-  name: '${className}',
-  component: () => import('@/views/${genPath}/${businessName}/index.vue'),
-  meta: { title: '${functionName}', icon: 'Document' }
-}
+const ${businessName}Routes: RouteRecordRaw[] = [
+  {
+    path: '/${businessName}',
+    name: '${className}',
+    component: () => import('@/layout/index.vue'),
+    redirect: '/${businessName}/index',
+    meta: {
+      title: '${functionName}',
+      icon: 'Folder'
+    },
+    children: [
+      {
+        path: 'index',
+        name: '${className}Index',
+        component: () => import('@/views/${businessName}/index.vue'),
+        meta: {
+          title: '${functionName}首页',
+          icon: 'Document'
+        }
+      }
+    ]
+  }
+]
+
+export default ${businessName}Routes
