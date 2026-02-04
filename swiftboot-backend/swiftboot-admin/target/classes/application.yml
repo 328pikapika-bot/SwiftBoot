@@ -64,3 +64,15 @@ storage:
   local:
     path: ./upload
     domain: http://localhost:8080/files
+
+# AI 配置
+ai:
+  provider: deepseek
+  deepseek:
+    api-url: https://api.deepseek.com/chat/completions
+    api-key: sk-007917fab0564b83a47cabd191bdcda1
+    model: deepseek-chat
+  gemini:
+    api-url: https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent
+    api-key: AIzaSyDKfe2NKsAYqpnwI4MYUm5x9_6KuB1l2MQ
+    model: gemini-3-flash-preview

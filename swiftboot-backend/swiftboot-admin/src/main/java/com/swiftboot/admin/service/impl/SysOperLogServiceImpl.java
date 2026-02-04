@@ -49,6 +49,11 @@ public class SysOperLogServiceImpl extends ServiceImpl<SysOperLogMapper, SysOper
         save(operLog);
     }
 
+    @Override
+    public List<String> selectOperLogModuleList() {
+        return baseMapper.selectOperLogModuleList();
+    }
+
     /**
      * 异步监听操作日志事件
      */

@@ -8,8 +8,8 @@
     <artifactId>swiftboot-backend</artifactId>
     <version>1.0.0</version>
     <packaging>pom</packaging>
-    <name>SwiftBoot Backend</name>
-    <description>SwiftBoot 轻量级后台管理框架 - JDK 17</description>
+    <name>SwiftBoot现代化轻量级框架</name>
+    <description>SwiftBoot 现代化轻量级框架 - JDK 17</description>
 
     <parent>
         <groupId>org.springframework.boot</groupId>

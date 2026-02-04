@@ -399,6 +399,7 @@ const getTabLabel = (name: string) => {
     'vm/java/controller.java.vm': 'Controller',
     'vm/xml/mapper.xml.vm': 'Mapper.xml',
     'vm/vue/index.vue.vm': 'Vue',
+    'vm/vue/router.ts.vm': 'router',
     'vm/vue/api.ts.vm': 'API',
     'vm/sql/sql.vm': 'SQL'
   }

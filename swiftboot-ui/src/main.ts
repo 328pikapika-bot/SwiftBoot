@@ -8,6 +8,7 @@ import 'virtual:uno.css'
 
 import App from './App.vue'
 import router from './router'
+import i18n from './locales'
 import './styles/index.scss'
 
 import DictTag from '@/components/DictTag/index.vue'
@@ -24,6 +25,7 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 
 app.use(createPinia())
 app.use(router)
-app.use(ElementPlus, { locale: zhCn })
+app.use(i18n)
+app.use(ElementPlus) // Remove static locale here, handle in App.vue
 
 app.mount('#app')

@@ -74,7 +74,8 @@ devDoc/
 *.md
 *.doc
 *.txt
-release.bat
+release_gitee.bat
+release_github.bat
 ###################################################
 # git公钥：C:\Users\12994\.ssh\id_ed25519.pub
 ###################################################

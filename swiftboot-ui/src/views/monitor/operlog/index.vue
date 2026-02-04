@@ -3,7 +3,9 @@
     <el-card shadow="never" class="search-card">
       <el-form :model="queryParams" :inline="true">
         <el-form-item label="模块名称">
-          <el-input v-model="queryParams.title" placeholder="请输入模块名称" clearable />
+          <el-select v-model="queryParams.title" placeholder="请选择模块名称" clearable filterable style="width: 180px">
+            <el-option v-for="item in moduleOptions" :key="item" :label="item" :value="item" />
+          </el-select>
         </el-form-item>
         <el-form-item label="操作人员">
           <el-input v-model="queryParams.operName" placeholder="请输入操作人员" clearable />
@@ -287,6 +289,7 @@ const selectedIds = ref<number[]>([])
 const detailVisible = ref(false)
 const detailData = ref<any>({})
 const activeTab = ref('request')
+const moduleOptions = ref<string[]>([])
 
 const queryParams = reactive({
   pageNum: 1,
@@ -305,6 +308,11 @@ const getList = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const getModuleList = async () => {
+  const res = await request({ url: '/monitor/operlog/module/list', method: 'get' })
+  moduleOptions.value = res.data
 }
 
 const handleQuery = () => {
@@ -374,6 +382,7 @@ const formatJson = (jsonStr: string) => {
 
 onMounted(() => {
   getList()
+  getModuleList()
 })
 </script>
 

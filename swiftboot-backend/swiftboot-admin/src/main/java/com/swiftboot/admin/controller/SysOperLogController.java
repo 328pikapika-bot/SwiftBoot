@@ -52,4 +52,11 @@ public class SysOperLogController {
         operLogService.cleanOperLog();
         return R.ok();
     }
+
+    @Operation(summary = "获取操作模块列表")
+    @SaCheckPermission("monitor:operlog:list")
+    @GetMapping("/module/list")
+    public R<List<String>> moduleList() {
+        return R.ok(operLogService.selectOperLogModuleList());
+    }
 }

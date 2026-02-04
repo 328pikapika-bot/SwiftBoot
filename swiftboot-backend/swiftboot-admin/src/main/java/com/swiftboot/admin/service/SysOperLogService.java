@@ -31,4 +31,9 @@ public interface SysOperLogService extends IService<SysOperLog> {
      * 保存操作日志
      */
     void saveOperLog(SysOperLog operLog);
+
+    /**
+     * 获取操作模块列表
+     */
+    List<String> selectOperLogModuleList();
 }
