@@ -1,80 +1,81 @@
 @echo off
-title SwiftBoot GitHub 发布脚本（镜像仓库 - 可选 Tag）
+chcp 65001 > nul
+title SwiftBoot GitHub Release Script
 color 0E
 
 echo ================================
-echo SwiftBoot 发布脚本（GitHub）
+echo SwiftBoot Release Script (GitHub)
 echo ================================
 
-:: 获取当前分支
+:: Get current branch
 for /f "tokens=*" %%i in ('git branch --show-current') do set BRANCH=%%i
 
 if /I not "%BRANCH%"=="main" (
-    echo 当前分支是 %BRANCH%，不是 main 分支！
-    echo 自动切换到 main 分支...
+    echo Current branch is %BRANCH%, not main!
+    echo Automatically switching to main branch...
     git checkout main
     if errorlevel 1 (
-        echo 切换分支失败，请手动检查！
+        echo Failed to switch branch, please check manually!
         pause
         exit /b
     )
-    echo 正在从 GitHub 拉取最新代码...
+    echo Pulling latest code from GitHub...
     git pull github main
 ) else (
-    echo 当前分支是 main
-    echo 正在从 GitHub 拉取最新代码...
+    echo Current branch is main
+    echo Pulling latest code from GitHub...
     git pull github main
 )
 
 echo.
 
-:: 输入提交描述（可留空使用默认）
-set /p COMMIT_MSG=请输入提交描述（可留空使用默认）：
-if "%COMMIT_MSG%"=="" set COMMIT_MSG=[Auto Commit] SwiftBoot 发布
+:: Input commit message
+set /p COMMIT_MSG=Input release_notes: 
+if "%COMMIT_MSG%"=="" set COMMIT_MSG=[Auto Commit] SwiftBoot Release
 
 echo.
-echo 正在提交代码...
+echo Committing changes...
 git add .
 git commit -m "%COMMIT_MSG%"
 if errorlevel 1 (
-    echo 没有变更可提交，跳过 commit
+    echo No changes to commit, skipping commit.
 ) else (
-    echo 提交完成
+    echo Commit successful.
 )
 
 echo.
-echo 正在推送 main 分支到 GitHub...
+echo Pushing main branch to GitHub...
 git push github main
 if errorlevel 1 (
-    echo 推送 main 分支失败！
+    echo Failed to push main branch!
     pause
     exit /b
 )
 
 echo.
-:: 输入版本号（可选）
-set /p TAG_NAME=请输入版本号（可留空则不打 Tag）：
+:: Input version tag (Optional)
+set /p TAG_NAME=Input tag (Press Enter to skip): 
 
 if not "%TAG_NAME%"=="" (
-    echo 正在创建 Tag：%TAG_NAME%
+    echo Creating Tag: %TAG_NAME%
     git tag -a %TAG_NAME% -m "%COMMIT_MSG%"
 
-    echo 正在推送 Tag 到 GitHub...
+    echo Pushing Tag to GitHub...
     git push github %TAG_NAME%
     if errorlevel 1 (
-        echo 推送 Tag 失败！
+        echo Failed to push Tag!
         pause
         exit /b
     )
-    echo Tag 推送完成！
+    echo Tag push successful!
 ) else (
-    echo 没有输入版本号，跳过打 Tag
+    echo No tag input, skipping tagging.
 )
 
 echo.
 echo ================================
-echo 发布完成！
-echo 提交描述: %COMMIT_MSG%
-if not "%TAG_NAME%"=="" echo 版本号: %TAG_NAME%
+echo Release Completed!
+echo Commit Message: %COMMIT_MSG%
+if not "%TAG_NAME%"=="" echo Version Tag: %TAG_NAME%
 echo ================================
 pause
