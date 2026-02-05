@@ -78,30 +78,22 @@
             <div class="ai-logo-text-small">AI</div>
           </div>
           <div class="message-content-wrapper">
-            <div class="message-bubble">
-              <div v-if="msg.role === 'assistant'" class="markdown-body" v-html="renderMarkdown(msg.content)"></div>
+            <div class="message-bubble" :class="{ loading: msg.role === 'assistant' && !msg.content && loading }">
+              <div v-if="msg.role === 'assistant' && !msg.content && loading" class="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div v-else-if="msg.role === 'assistant'" class="markdown-body" v-html="renderMarkdown(msg.content)"></div>
               <div v-else>{{ msg.content }}</div>
             </div>
-            <!-- 复制按钮 (仅 AI 消息显示) -->
-            <div v-if="msg.role === 'assistant'" class="message-actions">
+            <!-- 复制按钮 (仅 AI 消息显示且内容不为空时) -->
+            <div v-if="msg.role === 'assistant' && msg.content" class="message-actions">
               <el-tooltip content="复制内容" placement="top" :show-after="500">
                 <div class="action-btn" @click="copyContent(msg.content)">
                   <el-icon><CopyDocument /></el-icon> 复制全文
                 </div>
               </el-tooltip>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="loading" class="message-row assistant">
-          <div class="message-avatar">
-            <div class="ai-logo-text-small">AI</div>
-          </div>
-          <div class="message-bubble loading">
-            <div class="typing-indicator">
-              <span></span>
-              <span></span>
-              <span></span>
             </div>
           </div>
         </div>
@@ -156,6 +148,7 @@ import { ref, reactive, computed, nextTick, onUnmounted } from 'vue'
 import { Minus, Position, CopyDocument, Close, Delete } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { sendAiChat } from '@/api/index'
+import { useUserStore } from '@/stores/user'
 import MarkdownIt from 'markdown-it'
 import 'github-markdown-css/github-markdown.css'
 
@@ -172,6 +165,36 @@ const inputContent = ref('')
 const messages = ref<{ role: 'user' | 'assistant', content: string }[]>([])
 const containerRef = ref<HTMLElement | null>(null)
 const messagesRef = ref<HTMLElement | null>(null)
+
+// 持久化存储 Key
+const STORAGE_KEY = 'swiftboot_ai_chat_history'
+
+// 加载历史记录
+const loadHistory = () => {
+  try {
+    const history = localStorage.getItem(STORAGE_KEY)
+    if (history) {
+      messages.value = JSON.parse(history)
+      scrollToBottom()
+    }
+  } catch (e) {
+    console.error('Failed to load chat history:', e)
+  }
+}
+
+// 保存历史记录
+const saveHistory = () => {
+  try {
+    // 仅保存最近 50 条记录，避免 LocalStorage 爆满
+    const recentMessages = messages.value.slice(-50)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(recentMessages))
+  } catch (e) {
+    console.error('Failed to save chat history:', e)
+  }
+}
+
+// 初始化时加载
+loadHistory()
 
 // 窗口尺寸和位置
 const windowState = reactive({
@@ -210,6 +233,7 @@ const containerStyle = computed(() => {
 // 方法
 const clearHistory = () => {
   messages.value = []
+  localStorage.removeItem(STORAGE_KEY)
 }
 
 const toggleMinimize = () => {
@@ -257,6 +281,50 @@ const handleEnterKey = (e: KeyboardEvent) => {
   sendMessage()
 }
 
+const streamAiChat = async (content: string, onChunk: (chunk: string) => void) => {
+  const userStore = useUserStore()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
+  if (userStore.token) {
+    headers['Authorization'] = userStore.token
+  }
+  const response = await fetch('/api/system/ai/chat/stream', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ content })
+  })
+  if (!response.ok || !response.body) {
+    throw new Error('stream_failed')
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let buffer = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || !trimmed.startsWith('data:')) continue
+      const data = trimmed.slice(5).trim()
+      if (!data) continue
+      if (data === '[DONE]') return
+      try {
+        const json = JSON.parse(data)
+        if (json.content) {
+          onChunk(json.content)
+        }
+      } catch (e) {
+        // 兼容旧格式或纯文本
+        onChunk(data)
+      }
+    }
+  }
+}
+
 const sendMessage = async () => {
   const content = inputContent.value.trim()
   if (!content || loading.value) return
@@ -267,19 +335,72 @@ const sendMessage = async () => {
   scrollToBottom()
 
   try {
-    const res: any = await sendAiChat(content)
-    if (res.code === 200) {
-      messages.value.push({ role: 'assistant', content: res.data })
-    } else {
-      // 接口返回错误，直接在对话框显示，不弹窗
-      messages.value.push({ role: 'assistant', content: `服务暂时不可用，请稍后重试。（${res.msg || '未知错误'}）` })
+    const assistantMessage = reactive({ role: 'assistant', content: '' })
+    messages.value.push(assistantMessage as any)
+    
+    // 平滑打字机效果相关变量
+    let pendingText = ''
+    let isTyping = false
+    let isStreamFinished = false
+    
+    // 启动打字机循环
+    const typeLoop = () => {
+      if (pendingText.length > 0) {
+        // 动态调整打字速度：缓冲区越长，打字越快，避免积压太多
+        const speed = pendingText.length > 50 ? 5 : pendingText.length > 20 ? 2 : 1
+        const chunk = pendingText.slice(0, speed)
+        pendingText = pendingText.slice(speed)
+        assistantMessage.content += chunk
+        scrollToBottom()
+      }
+      
+      if (isStreamFinished && pendingText.length === 0) {
+        isTyping = false
+        loading.value = false
+        return
+      }
+      
+      requestAnimationFrame(typeLoop)
+    }
+
+    try {
+      await streamAiChat(content, (chunk) => {
+        pendingText += chunk
+        if (!isTyping) {
+          isTyping = true
+          typeLoop()
+        }
+      })
+      isStreamFinished = true
+      
+      if (!assistantMessage.content && !pendingText) {
+        assistantMessage.content = '服务暂时不可用，请稍后重试。'
+        loading.value = false
+      }
+      // 对话结束，保存历史
+      saveHistory()
+    } catch (streamError) {
+      // 如果流式失败，降级为非流式
+      isStreamFinished = true // 停止打字机等待
+      const res: any = await sendAiChat(content)
+      if (res.code === 200) {
+        assistantMessage.content = res.data
+      } else {
+        assistantMessage.content = `服务暂时不可用，请稍后重试。（${res.msg || '未知错误'}）`
+      }
+      loading.value = false
+      // 对话结束，保存历史
+      saveHistory()
     }
   } catch (error) {
     // 网络异常，直接在对话框显示
     messages.value.push({ role: 'assistant', content: '网络连接超时或中断，请检查网络后重试。' })
-  } finally {
     loading.value = false
-    scrollToBottom()
+    // 异常也保存，防止丢失用户输入
+    saveHistory()
+  } finally {
+    // loading 状态在 typeLoop 结束时处理，或者异常时处理
+    // 此处不做统一处理，因为流式需要在打字完成后才算结束
   }
 }
 
@@ -901,213 +1022,196 @@ $bg-input: #f8fafc;
   }
 
   .send-btn {
-    width: 40px;
-    height: 40px;
-    min-height: 40px;
-    border: none;
-    background: rgba(148, 163, 184, 0.2);
-    color: $color-text-secondary;
-    transition: all 0.2s;
-    
-    &.is-active {
-      background: linear-gradient(135deg, #4f46e5 0%, #0ea5e9 100%);
-      color: #fff;
-      box-shadow: 0 10px 24px rgba(79, 70, 229, 0.35);
+      width: 40px;
+      height: 40px;
+      min-height: 40px;
+      border: none;
+      background: rgba(148, 163, 184, 0.2);
+      color: #94a3b8;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
       
-      &:hover {
-        background: linear-gradient(135deg, #6366f1 0%, #38bdf8 100%);
+      &:not(:disabled) {
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+        
+        &.is-active {
+          background: linear-gradient(135deg, #4f46e5 0%, #0ea5e9 100%);
+          color: #ffffff;
+        }
+      }
+      
+      &:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
       }
     }
   }
-}
-
-.resize-indicator {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  padding: 4px 8px;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  font-size: 12px;
-  z-index: 11;
-}
-
-.resize-handle {
-  position: absolute;
-  z-index: 20; /* 提高层级，确保易于点击 */
-  background: transparent; /* 完全透明，去除方框视觉 */
-}
-
-/* 移除 hover 显示背景的逻辑，仅保留光标变化 */
-/* .ai-expanded:hover .resize-handle, */
-/* .ai-assistant-container.is-resizing .resize-handle { */
-/*   opacity: 1; */
-/* } */
-
-.resize-handle.corner {
-  width: 16px; /* 增大点击区域 */
-  height: 16px;
-}
-
-.resize-handle.edge {
-  background: transparent;
-}
-
-.resize-handle.corner.top-left {
-  top: 0;
-  left: 0;
-  cursor: nwse-resize;
-}
-
-.resize-handle.corner.top-right {
-  top: 0;
-  right: 0;
-  cursor: nesw-resize;
-}
-
-.resize-handle.corner.bottom-left {
-  bottom: 0;
-  left: 0;
-  cursor: nesw-resize;
-}
-
-.resize-handle.corner.bottom-right {
-  bottom: 0;
-  right: 0;
-  cursor: nwse-resize;
-}
-
-.resize-handle.edge.top {
-  top: 0;
-  left: 12px;
-  right: 12px;
-  height: 6px;
-  cursor: ns-resize;
-}
-
-.resize-handle.edge.right {
-  top: 12px;
-  right: 0;
-  bottom: 12px;
-  width: 6px;
-  cursor: ew-resize;
-}
-
-.resize-handle.edge.bottom {
-  bottom: 0;
-  left: 12px;
-  right: 12px;
-  height: 6px;
-  cursor: ns-resize;
-}
-
-.resize-handle.edge.left {
-  top: 12px;
-  left: 0;
-  bottom: 12px;
-  width: 6px;
-  cursor: ew-resize;
-}
 
 .typing-indicator {
   display: flex;
+  align-items: center;
   gap: 6px;
+  padding: 4px;
   
   span {
-    width: 8px;
-    height: 8px;
-    background: $color-primary;
+    width: 6px;
+    height: 6px;
+    background: #4f46e5;
     border-radius: 50%;
-    animation: bounce 1.4s infinite ease-in-out both;
+    animation: typing 1.4s infinite ease-in-out both;
     
     &:nth-child(1) { animation-delay: -0.32s; }
     &:nth-child(2) { animation-delay: -0.16s; }
   }
 }
 
-@keyframes bounce {
+@keyframes typing {
   0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
   40% { transform: scale(1); opacity: 1; }
 }
 
-/* Markdown 样式微调 - 浅色模式适配 */
-:deep(.markdown-body) {
+/* 调整 Markdown 样式 */
+.markdown-body {
   background: transparent !important;
-  font-size: 14px;
-  color: $color-text-main;
+  font-family: inherit !important;
+  font-size: 15px !important;
+  line-height: 1.7 !important;
+  color: #334155 !important;
   
   p {
-    color: inherit;
-    line-height: 1.6;
     margin-bottom: 12px;
+    &:last-child { margin-bottom: 0; }
   }
   
   pre {
-      background: #F5F7FA;
-      border: 1px solid #E4E7ED;
-      border-radius: 8px;
-      overflow-x: auto;
-      max-width: 100%;
-      margin: 12px 0;
-      white-space: pre-wrap; /* 允许换行 */
-      word-wrap: break-word; /* 允许长单词换行 */
-    }
-  
-  code {
-    background: rgba(58, 123, 255, 0.1);
-    color: $color-primary;
-    border-radius: 4px;
-    padding: 2px 4px;
-    font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
-    font-size: 85%;
-  }
-
-  pre code {
-    background: transparent;
-    padding: 0;
-    color: inherit;
-    font-size: 100%;
-  }
-  
-  img {
-    max-width: 100%;
-    border-radius: 8px;
-    margin: 8px 0;
-  }
-
-  table {
-    display: block;
-    width: 100%;
-    overflow-x: auto;
-    border-collapse: collapse;
-    margin: 12px 0;
+    background: #1e293b !important;
+    border-radius: 12px !important;
+    border: 1px solid #334155;
+    margin: 16px 0 !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     
-    th, td {
-      border: 1px solid #EBEEF5;
-      padding: 8px 12px;
-    }
-    
-    th {
-      background: #F5F7FA;
-      font-weight: 600;
+    code {
+      color: #e2e8f0 !important;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+      font-size: 13px !important;
     }
   }
   
-  a {
-    color: $color-primary;
-    text-decoration: none;
-    border-bottom: 1px solid $color-primary;
-    
-    &:hover {
-      opacity: 0.8;
-    }
+  code {
+    background: rgba(99, 102, 241, 0.1) !important;
+    color: #4f46e5 !important;
+    padding: 2px 6px !important;
+    border-radius: 6px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 0.9em !important;
   }
   
   ul, ol {
-    padding-left: 20px;
-    margin-bottom: 12px;
+    padding-left: 24px !important;
+    margin-bottom: 12px !important;
+    
+    li {
+      margin-bottom: 6px !important;
+      &::marker { color: #64748b; }
+    }
+  }
+  
+  h1, h2, h3, h4 {
+    color: #0f172a !important;
+    font-weight: 700 !important;
+    margin-top: 24px !important;
+    margin-bottom: 16px !important;
+    padding-bottom: 8px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    
+    &:first-child { margin-top: 0 !important; }
+  }
+  
+  blockquote {
+    border-left: 4px solid #4f46e5 !important;
+    background: #f8fafc !important;
+    padding: 12px 16px !important;
+    color: #475569 !important;
+    border-radius: 0 8px 8px 0 !important;
+    margin: 16px 0 !important;
+  }
+  
+  a {
+    color: #0ea5e9 !important;
+    text-decoration: none !important;
+    border-bottom: 1px dashed #0ea5e9;
+    
+    &:hover {
+      color: #0284c7 !important;
+      border-bottom-style: solid;
+    }
+  }
+  
+  table {
+    display: block;
+    width: 100%;
+    overflow: auto;
+    margin: 16px 0;
+    border-spacing: 0;
+    border-collapse: collapse;
+    
+    th {
+      font-weight: 600;
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+    
+    td, th {
+      padding: 8px 16px;
+      border: 1px solid #e2e8f0;
+    }
+    
+    tr:nth-child(2n) {
+      background: #f8fafc;
+    }
+  }
+}
+
+.resize-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(15, 23, 42, 0.8);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  pointer-events: none;
+  z-index: 10001;
+  backdrop-filter: blur(4px);
+}
+
+.resize-handle {
+  position: absolute;
+  z-index: 10000;
+  
+  &.edge {
+    &.top { top: -4px; left: 0; right: 0; height: 10px; cursor: ns-resize; }
+    &.bottom { bottom: -4px; left: 0; right: 0; height: 10px; cursor: ns-resize; }
+    &.left { left: -4px; top: 0; bottom: 0; width: 10px; cursor: ew-resize; }
+    &.right { right: -4px; top: 0; bottom: 0; width: 10px; cursor: ew-resize; }
+  }
+  
+  &.corner {
+    width: 16px;
+    height: 16px;
+    
+    &.top-left { top: -6px; left: -6px; cursor: nwse-resize; }
+    &.top-right { top: -6px; right: -6px; cursor: nesw-resize; }
+    &.bottom-left { bottom: -6px; left: -6px; cursor: nesw-resize; }
+    &.bottom-right { bottom: -6px; right: -6px; cursor: nwse-resize; }
   }
 }
 </style>

@@ -30,6 +30,7 @@ if /I not "%BRANCH%"=="main" (
 echo.
 
 :: Input commit message
+set COMMIT_MSG=
 set /p COMMIT_MSG=Input release_notes: 
 if "%COMMIT_MSG%"=="" set COMMIT_MSG=[Auto Commit] SwiftBoot Release
 
@@ -54,6 +55,7 @@ if errorlevel 1 (
 
 echo.
 :: Input version tag (Optional)
+set TAG_NAME=
 set /p TAG_NAME=Input tag (Press Enter to skip): 
 
 if not "%TAG_NAME%"=="" (
