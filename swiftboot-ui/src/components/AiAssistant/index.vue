@@ -117,12 +117,24 @@
                   class="send-btn" 
                   :class="{ 'is-active': inputContent.trim() }"
                   @click="sendMessage" 
-                  :loading="loading" 
-                  :disabled="!inputContent.trim()"
+                  :loading="false" 
+                  :disabled="!inputContent.trim() || loading"
                   circle
                 >
                   <el-icon><Position /></el-icon>
                 </el-button>
+             </el-tooltip>
+             <el-tooltip content="停止回答" placement="top">
+               <el-button 
+                 v-if="loading"
+                 class="stop-btn" 
+                 type="danger" 
+                 plain 
+                 @click="stopStreaming" 
+                 circle
+               >
+                 <el-icon><Close /></el-icon>
+               </el-button>
              </el-tooltip>
           </div>
         </div>
@@ -144,13 +156,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, nextTick, onUnmounted } from 'vue'
+import { ref, reactive, computed, nextTick, onUnmounted, watch } from 'vue'
 import { Minus, Position, CopyDocument, Close, Delete } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { sendAiChat } from '@/api/index'
 import { useUserStore } from '@/stores/user'
 import MarkdownIt from 'markdown-it'
 import 'github-markdown-css/github-markdown.css'
+import request from '@/utils/request'
 
 const md = new MarkdownIt({
   html: true,
@@ -161,37 +174,43 @@ const md = new MarkdownIt({
 // 状态
 const isMinimized = ref(true)
 const loading = ref(false)
+const currentStream = ref<{ abort: () => void } | null>(null)
 const inputContent = ref('')
 const messages = ref<{ role: 'user' | 'assistant', content: string }[]>([])
 const containerRef = ref<HTMLElement | null>(null)
 const messagesRef = ref<HTMLElement | null>(null)
 
-// 持久化存储 Key
-const STORAGE_KEY = 'swiftboot_ai_chat_history'
+const userStore = useUserStore()
 
-// 加载历史记录
-const loadHistory = () => {
+// 加载历史记录 (从后端 Redis 获取)
+const loadHistory = async () => {
+  if (!userStore.token) {
+      messages.value = []
+      return
+  }
   try {
-    const history = localStorage.getItem(STORAGE_KEY)
-    if (history) {
-      messages.value = JSON.parse(history)
-      scrollToBottom()
+    const res: any = await request.get('/system/ai/history')
+    if (res.code === 200 && res.data) {
+        messages.value = res.data
+        scrollToBottom()
+    } else {
+        messages.value = []
     }
   } catch (e) {
     console.error('Failed to load chat history:', e)
+    messages.value = []
   }
 }
 
-// 保存历史记录
+// 保存历史记录 (已移至后端 Redis，前端无需存储)
 const saveHistory = () => {
-  try {
-    // 仅保存最近 50 条记录，避免 LocalStorage 爆满
-    const recentMessages = messages.value.slice(-50)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(recentMessages))
-  } catch (e) {
-    console.error('Failed to save chat history:', e)
-  }
+  // No-op
 }
+
+// 监听用户ID变化，重新加载历史
+watch(() => userStore.userInfo?.id, () => {
+    loadHistory()
+})
 
 // 初始化时加载
 loadHistory()
@@ -231,9 +250,9 @@ const containerStyle = computed(() => {
 })
 
 // 方法
-const clearHistory = () => {
+const clearHistory = async () => {
+  // TODO: 调用后端接口清除 Redis 历史 (当前仅清空前端显示)
   messages.value = []
-  localStorage.removeItem(STORAGE_KEY)
 }
 
 const toggleMinimize = () => {
@@ -281,7 +300,7 @@ const handleEnterKey = (e: KeyboardEvent) => {
   sendMessage()
 }
 
-const streamAiChat = async (content: string, onChunk: (chunk: string) => void) => {
+const streamAiChat = async (content: string, history: any[], onChunk: (chunk: string) => void) => {
   const userStore = useUserStore()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json'
@@ -289,10 +308,13 @@ const streamAiChat = async (content: string, onChunk: (chunk: string) => void) =
   if (userStore.token) {
     headers['Authorization'] = userStore.token
   }
+  const controller = new AbortController()
+  currentStream.value = { abort: () => controller.abort() }
   const response = await fetch('/api/system/ai/chat/stream', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ content })
+    body: JSON.stringify({ content, history }),
+    signal: controller.signal
   })
   if (!response.ok || !response.body) {
     throw new Error('stream_failed')
@@ -300,28 +322,36 @@ const streamAiChat = async (content: string, onChunk: (chunk: string) => void) =
   const reader = response.body.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed || !trimmed.startsWith('data:')) continue
-      const data = trimmed.slice(5).trim()
-      if (!data) continue
-      if (data === '[DONE]') return
-      try {
-        const json = JSON.parse(data)
-        if (json.content) {
-          onChunk(json.content)
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || !trimmed.startsWith('data:')) continue
+        const data = trimmed.slice(5).trim()
+        if (!data) continue
+        if (data === '[DONE]') return
+        try {
+          const json = JSON.parse(data)
+          if (json.content) {
+            onChunk(json.content)
+          }
+        } catch (e) {
+          onChunk(data)
         }
-      } catch (e) {
-        // 兼容旧格式或纯文本
-        onChunk(data)
       }
     }
+  } catch (err: any) {
+    if (err && err.name === 'AbortError') {
+      throw new Error('stream_aborted')
+    }
+    throw err
+  } finally {
+    currentStream.value = null
   }
 }
 
@@ -364,7 +394,10 @@ const sendMessage = async () => {
     }
 
     try {
-      await streamAiChat(content, (chunk) => {
+      // 提取历史记录 (不再需要前端传递，后端从 Redis 获取)
+      const history: any[] = [] // 空数组，后端会自动从 Redis 加载
+      
+      await streamAiChat(content, history, (chunk) => {
         pendingText += chunk
         if (!isTyping) {
           isTyping = true
@@ -379,18 +412,24 @@ const sendMessage = async () => {
       }
       // 对话结束，保存历史
       saveHistory()
-    } catch (streamError) {
-      // 如果流式失败，降级为非流式
-      isStreamFinished = true // 停止打字机等待
-      const res: any = await sendAiChat(content)
-      if (res.code === 200) {
-        assistantMessage.content = res.data
+    } catch (streamError: any) {
+      if (streamError?.message === 'stream_aborted') {
+        pendingText = ''
+        isStreamFinished = true
+        loading.value = false
       } else {
-        assistantMessage.content = `服务暂时不可用，请稍后重试。（${res.msg || '未知错误'}）`
+        // 如果流式失败，降级为非流式
+        isStreamFinished = true // 停止打字机等待
+        const res: any = await sendAiChat(content)
+        if (res.code === 200) {
+          assistantMessage.content = res.data
+        } else {
+          assistantMessage.content = `服务暂时不可用，请稍后重试。（${res.msg || '未知错误'}）`
+        }
+        loading.value = false
+        // 对话结束，保存历史
+        saveHistory()
       }
-      loading.value = false
-      // 对话结束，保存历史
-      saveHistory()
     }
   } catch (error) {
     // 网络异常，直接在对话框显示
@@ -401,6 +440,12 @@ const sendMessage = async () => {
   } finally {
     // loading 状态在 typeLoop 结束时处理，或者异常时处理
     // 此处不做统一处理，因为流式需要在打字完成后才算结束
+  }
+}
+
+const stopStreaming = () => {
+  if (currentStream.value) {
+    currentStream.value.abort()
   }
 }
 
@@ -984,6 +1029,8 @@ $bg-input: #f8fafc;
     .input-actions {
       display: flex;
       justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
       margin-top: 8px;
     }
   }
@@ -1049,6 +1096,21 @@ $bg-input: #f8fafc;
       &:disabled {
         cursor: not-allowed;
         opacity: 0.6;
+      }
+    }
+
+  .stop-btn {
+      width: 40px;
+      height: 40px;
+      min-height: 40px;
+      border-radius: 12px;
+      border-color: rgba(239, 68, 68, 0.35);
+      box-shadow: 0 6px 16px rgba(239, 68, 68, 0.18);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 22px rgba(239, 68, 68, 0.25);
       }
     }
   }

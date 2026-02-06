@@ -1,5 +1,6 @@
 import chromadb
 import os
+import time
 from knowledge_ingest import JavaParser
 from typing import List, Dict
 import uuid
@@ -12,10 +13,15 @@ import uuid
 # 这就是"本地部署"，不需要安装额外的服务器软件。
 PERSIST_DIRECTORY = os.path.join(os.path.dirname(__file__), "chroma_db")
 COLLECTION_NAME = "swiftboot_codebase"
+MEMORY_COLLECTION_NAME = "swiftboot_chat_memory"
 
 class VectorStore:
+    """
+    代码库向量存储管理类
+    负责处理项目代码的向量化存储与检索
+    """
     def __init__(self):
-        print(f"正在初始化向量数据库，存储路径: {PERSIST_DIRECTORY}")
+        print(f"[{self._now()}]正在初始化向量数据库，存储路径: {PERSIST_DIRECTORY}")
         # 初始化 ChromaDB 客户端
         # PersistentClient 会自动把数据保存到磁盘，类似 SQLite
         self.client = chromadb.PersistentClient(path=PERSIST_DIRECTORY)
@@ -23,28 +29,29 @@ class VectorStore:
         # 获取或创建集合（类似于 SQL 中的 Table）
         # ChromaDB 默认使用 all-MiniLM-L6-v2 模型进行文本向量化
         self.collection = self.client.get_or_create_collection(name=COLLECTION_NAME)
-        print("数据库连接成功！")
+        print(f"[{self._now()}]数据库连接成功！")
 
     def add_documents(self, chunks: List[Dict]):
         """
-        将代码块存入数据库
+        将解析后的代码块存入向量数据库
+        :param chunks: 代码块列表，包含 content, name, type, source 等信息
         """
         if not chunks:
-            print("没有数据需要存储。")
+            print(f"[{self._now()}]没有数据需要存储。")
             return
             
-        print(f"正在准备存储 {len(chunks)} 个代码块...")
+        print(f"[{self._now()}]正在准备存储 {len(chunks)} 个代码块...")
         
         ids = []
         documents = []
         metadatas = []
         
         for chunk in chunks:
-            # 生成唯一ID
+            # 生成唯一ID (UUID v4)
             ids.append(str(uuid.uuid4()))
-            # 存入主要文本内容（用于检索）
+            # 存入主要文本内容（ChromaDB 会自动将其转为 384 维向量）
             documents.append(chunk['content'])
-            # 存入元数据（用于过滤或展示信息）
+            # 存入元数据（用于后续的过滤或前端展示）
             metadatas.append({
                 'name': chunk['name'], 
                 'type': chunk['type'], 
@@ -58,13 +65,15 @@ class VectorStore:
             metadatas=metadatas,
             ids=ids
         )
-        print(f"成功！已将数据持久化保存到: {PERSIST_DIRECTORY}")
+        print(f"[{self._now()}]成功！已将数据持久化保存到: {PERSIST_DIRECTORY}")
 
     def query(self, query_text: str, n_results: int = 3):
         """
         检索最相似的代码块
+        :param query_text: 用户的自然语言问题
+        :param n_results: 返回最相似的 N 个结果
         """
-        print(f"正在检索问题: [{query_text}]")
+        print(f"[{self._now()}]正在检索问题: [{query_text}]")
         results = self.collection.query(
             query_texts=[query_text],
             n_results=n_results
@@ -74,6 +83,7 @@ class VectorStore:
     def delete_by_source(self, source_path: str):
         """
         根据源文件路径删除相关的向量数据
+        用于在文件更新时，先清理旧版本的数据
         """
         try:
             # 1. 先查询是否存在（为了打印日志，ChromaDB 的 delete 默认如果不匹配也不会报错）
@@ -81,13 +91,82 @@ class VectorStore:
             count = len(existing['ids']) if existing and existing['ids'] else 0
             
             if count > 0:
-                print(f"检测到旧数据，正在删除 {count} 条来自 {source_path} 的记录...")
+                print(f"[{self._now()}]检测到旧数据，正在删除 {count} 条来自 {source_path} 的记录...")
                 self.collection.delete(where={"source": source_path})
-                print("旧数据删除成功。")
+                print(f"[{self._now()}]旧数据删除成功。")
             else:
-                print(f"未发现来自 {source_path} 的旧数据，将直接新增。")
+                print(f"[{self._now()}]未发现来自 {source_path} 的旧数据，将直接新增。")
         except Exception as e:
-            print(f"删除旧数据时出错: {str(e)}")
+            print(f"[{self._now()}]删除旧数据时出错: {str(e)}")
+
+    def _now(self):
+        return time.strftime("%Y-%m-%d %H:%M:%S")
+
+class ChatMemoryStore:
+    """
+    对话记忆向量存储管理类
+    负责存储和检索用户的历史对话，用于长期记忆
+    """
+    def __init__(self):
+        print(f"[{self._now()}]正在初始化向量数据库，存储路径: {PERSIST_DIRECTORY}")
+        self.client = chromadb.PersistentClient(path=PERSIST_DIRECTORY)
+        self.collection = self.client.get_or_create_collection(name=MEMORY_COLLECTION_NAME)
+        print(f"[{self._now()}]对话记忆数据库连接成功！")
+
+    def add_messages(self, user_id: str, messages: List[Dict], session_id: str = None):
+        if not messages:
+            return
+        ids = []
+        documents = []
+        metadatas = []
+        
+        # 用于日志展示的摘要
+        summary = []
+        
+        for msg in messages:
+            content = msg.get("content")
+            if not content:
+                continue
+            ids.append(str(uuid.uuid4()))
+            documents.append(content)
+            metadata = {
+                "user_id": str(user_id),
+                "role": msg.get("role", "user"),
+                "timestamp": int(msg.get("timestamp", 0)),
+                "sequence": int(msg.get("sequence", 0))
+            }
+            if session_id:
+                metadata["session_id"] = str(session_id)
+            metadatas.append(metadata)
+            
+            # 记录摘要 (截取前20个字符)
+            role_icon = "👤" if metadata["role"] == "user" else "🤖"
+            summary.append(f"{role_icon} {content[:20]}...")
+
+        if documents:
+            self.collection.add(
+                documents=documents,
+                metadatas=metadatas,
+                ids=ids
+            )
+            print(f"[{self._now()}][记忆存储] 已存入 {len(documents)} 条对话: {' | '.join(summary)}")
+
+    def _now(self):
+        return time.strftime("%Y-%m-%d %H:%M:%S")
+
+    def query(self, query_text: str, user_id: str, n_results: int = 6, session_id: str = None):
+        where = {"user_id": str(user_id)}
+        if session_id:
+            where["session_id"] = str(session_id)
+            
+        print(f"[{self._now()}][记忆检索] 用户: {user_id} | 问题: {query_text[:30]}...")
+        
+        results = self.collection.query(
+            query_texts=[query_text],
+            n_results=n_results,
+            where=where
+        )
+        return results
 
 if __name__ == "__main__":
     # 1. 初始化数据库
@@ -98,7 +177,7 @@ if __name__ == "__main__":
     target_file = r"d:\study\SwiftBoot\swiftboot-backend\swiftboot-admin\src\main\java\com\swiftboot\admin\controller\SysAiController.java"
     
     if os.path.exists(target_file):
-        print(f"\n--- 第一步：解析文件 ---")
+        print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}]--- 第一步：解析文件 ---")
         chunks = parser.parse_file(target_file)
         
         # 补充来源信息
@@ -106,22 +185,22 @@ if __name__ == "__main__":
             chunk['source'] = "SysAiController.java"
             
         # 3. 存入数据库
-        print(f"\n--- 第二步：存入数据库 ---")
+        print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}]--- 第二步：存入数据库 ---")
         vector_store.add_documents(chunks)
         
         # 4. 测试检索效果
-        print(f"\n--- 第三步：测试检索 ---")
+        print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}]--- 第三步：测试检索 ---")
         test_query = "流式输出是怎么实现的？"
         results = vector_store.query(test_query)
         
-        print("\n=== 检索结果 ===")
+        print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}]=== 检索结果 ===")
         if results['documents']:
             for i, doc in enumerate(results['documents'][0]):
                 meta = results['metadatas'][0][i]
-                print(f"\n[结果 {i+1}] 来源: {meta['name']} ({meta['type']})")
+                print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}][结果 {i+1}] 来源: {meta['name']} ({meta['type']})")
                 print(f"内容预览: {doc[:100].replace(chr(10), ' ')}...")
         else:
-            print("未找到相关结果")
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]未找到相关结果")
             
     else:
-        print(f"测试文件不存在: {target_file}")
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]测试文件不存在: {target_file}")
