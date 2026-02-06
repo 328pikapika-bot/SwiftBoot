@@ -203,6 +203,10 @@ public class SysAiController {
                 }
             }
 
+            // 3. 注入近期对话历史 (Redis Short-Term Memory)
+            // 无论是否触发 RAG，都携带最近的 N 条对话记录，保证上下文连贯性
+            addRecentHistory(messages, userId);
+
             JSONObject userMessage = new JSONObject();
             userMessage.set("role", "user");
             userMessage.set("content", content);
@@ -405,6 +409,9 @@ public class SysAiController {
                     }
                 }
 
+                // 5. 注入近期对话历史 (Redis Short-Term Memory)
+                addRecentHistory(messages, userId);
+
                 JSONObject userMessage = new JSONObject();
                 userMessage.set("role", "user");
                 userMessage.set("content", content);
@@ -531,5 +538,30 @@ public class SysAiController {
                 "刚才", "上次", "之前", "继续", "前面", "我们聊过", "你说过", "历史", "上下文"
         };
         return StrUtil.containsAny(text, keywords);
+    }
+
+    /**
+     * 将 Redis 中的近期对话历史添加到消息列表中
+     * @param messages 消息列表
+     * @param userId 用户ID
+     */
+    private void addRecentHistory(JSONArray messages, Long userId) {
+        try {
+            String key = HISTORY_KEY_PREFIX + userId;
+            // 获取最近 10 条历史记录 (Redis List 尾部是最新，头部是最旧)
+            // 我们取最后 10 条，保持时间顺序
+            List<String> historyStr = stringRedisTemplate.opsForList().range(key, -10, -1);
+            if (historyStr != null) {
+                for (String str : historyStr) {
+                    JSONObject historyItem = JSONUtil.parseObj(str);
+                    JSONObject msg = new JSONObject();
+                    msg.set("role", historyItem.getStr("role"));
+                    msg.set("content", historyItem.getStr("content"));
+                    messages.add(msg);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to load recent history: " + e.getMessage());
+        }
     }
 }

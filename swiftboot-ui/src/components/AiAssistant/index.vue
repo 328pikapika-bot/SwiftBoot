@@ -168,7 +168,8 @@ import request from '@/utils/request'
 const md = new MarkdownIt({
   html: true,
   linkify: true,
-  typographer: true
+  typographer: true,
+  breaks: true // 开启换行符转换
 })
 
 // 状态
@@ -255,7 +256,10 @@ const clearHistory = async () => {
   messages.value = []
 }
 
-const toggleMinimize = () => {
+const toggleMinimize = (e?: MouseEvent) => {
+  if (e) {
+    e.stopPropagation() // 阻止事件冒泡，防止触发其他点击事件
+  }
   isMinimized.value = !isMinimized.value
   if (!isMinimized.value) {
     // 展开时检查边界
@@ -1274,6 +1278,35 @@ $bg-input: #f8fafc;
     &.top-right { top: -6px; right: -6px; cursor: nesw-resize; }
     &.bottom-left { bottom: -6px; left: -6px; cursor: nesw-resize; }
     &.bottom-right { bottom: -6px; right: -6px; cursor: nwse-resize; }
+  }
+}
+::v-deep(.markdown-body) {
+  background-color: transparent;
+  font-size: 14px;
+  line-height: 1.6;
+  color: inherit;
+  
+  p {
+    margin-bottom: 10px;
+    white-space: pre-wrap; /* 保留换行 */
+  }
+  
+  pre {
+    background-color: #f6f8fa;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 10px 0;
+    overflow-x: auto;
+  }
+  
+  code {
+    font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+    font-size: 12px;
+  }
+  
+  ul, ol {
+    padding-left: 20px;
+    margin-bottom: 10px;
   }
 }
 </style>
