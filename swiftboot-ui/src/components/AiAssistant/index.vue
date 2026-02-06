@@ -162,6 +162,8 @@ import { ElMessage } from 'element-plus'
 import { sendAiChat } from '@/api/index'
 import { useUserStore } from '@/stores/user'
 import MarkdownIt from 'markdown-it'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/atom-one-dark.css' // 使用暗色主题适配深色代码块
 import 'github-markdown-css/github-markdown.css'
 import request from '@/utils/request'
 
@@ -169,7 +171,18 @@ const md = new MarkdownIt({
   html: true,
   linkify: true,
   typographer: true,
-  breaks: true // 开启换行符转换
+  breaks: true, // 开启换行符转换
+  highlight: function (str, lang) {
+    if (lang && hljs.getLanguage(lang)) {
+      try {
+        return '<pre class="hljs"><code>' +
+               hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
+               '</code></pre>';
+      } catch (__) {}
+    }
+
+    return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
+  }
 })
 
 // 状态
@@ -1147,11 +1160,13 @@ $bg-input: #f8fafc;
   background: transparent !important;
   font-family: inherit !important;
   font-size: 15px !important;
-  line-height: 1.7 !important;
+  line-height: 1 !important;
   color: #334155 !important;
+  white-space: pre-wrap !important; /* 全局保留换行，确保流式输出时纯文本也能正确换行 */
   
   p {
-    margin-bottom: 12px;
+    margin-bottom: 0;
+    /* white-space: pre-wrap; 已在父级设置，此处继承 */
     &:last-child { margin-bottom: 0; }
   }
   
@@ -1159,7 +1174,7 @@ $bg-input: #f8fafc;
     background: #1e293b !important;
     border-radius: 12px !important;
     border: 1px solid #334155;
-    margin: 16px 0 !important;
+    margin: 0 !important;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     
     code {
@@ -1180,10 +1195,10 @@ $bg-input: #f8fafc;
   
   ul, ol {
     padding-left: 24px !important;
-    margin-bottom: 12px !important;
+    margin-bottom: 0 !important;
     
     li {
-      margin-bottom: 6px !important;
+      margin-bottom: 0 !important;
       &::marker { color: #64748b; }
     }
   }
@@ -1191,9 +1206,9 @@ $bg-input: #f8fafc;
   h1, h2, h3, h4 {
     color: #0f172a !important;
     font-weight: 700 !important;
-    margin-top: 24px !important;
-    margin-bottom: 16px !important;
-    padding-bottom: 8px !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
     border-bottom: 1px solid #e2e8f0 !important;
     
     &:first-child { margin-top: 0 !important; }
@@ -1205,7 +1220,7 @@ $bg-input: #f8fafc;
     padding: 12px 16px !important;
     color: #475569 !important;
     border-radius: 0 8px 8px 0 !important;
-    margin: 16px 0 !important;
+    margin: 0 !important;
   }
   
   a {
@@ -1220,10 +1235,9 @@ $bg-input: #f8fafc;
   }
   
   table {
-    display: block;
+    display: table;
     width: 100%;
-    overflow: auto;
-    margin: 16px 0;
+    margin: 0;
     border-spacing: 0;
     border-collapse: collapse;
     
@@ -1234,7 +1248,7 @@ $bg-input: #f8fafc;
     }
     
     td, th {
-      padding: 8px 16px;
+      padding: 4px 8px;
       border: 1px solid #e2e8f0;
     }
     
@@ -1283,19 +1297,20 @@ $bg-input: #f8fafc;
 ::v-deep(.markdown-body) {
   background-color: transparent;
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1;
   color: inherit;
+  white-space: pre-wrap !important; /* 全局强制换行 */
   
   p {
-    margin-bottom: 10px;
-    white-space: pre-wrap; /* 保留换行 */
+    margin-bottom: 0;
+    /* white-space: pre-wrap; */
   }
   
   pre {
     background-color: #f6f8fa;
     border-radius: 8px;
     padding: 12px;
-    margin: 10px 0;
+    margin: 0;
     overflow-x: auto;
   }
   
@@ -1306,7 +1321,15 @@ $bg-input: #f8fafc;
   
   ul, ol {
     padding-left: 20px;
-    margin-bottom: 10px;
+    margin-bottom: 0;
+  }
+
+  table {
+    display: table;
+    width: 100%;
+    margin: 0;
+    border-spacing: 0;
+    border-collapse: collapse;
   }
 }
 </style>

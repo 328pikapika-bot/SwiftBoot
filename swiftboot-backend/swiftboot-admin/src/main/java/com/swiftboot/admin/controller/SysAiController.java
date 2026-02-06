@@ -363,7 +363,11 @@ public class SysAiController {
                 // 添加 RAG 上下文 (代码库知识)
                 if (StrUtil.isNotEmpty(ragContext)) {
                     tempSystemPrompt += ragContext;
-                    tempSystemPrompt += "\n\n请优先根据上述【参考项目代码上下文】来回答用户的问题。如果上下文中没有相关信息，再根据你的通用知识回答。";
+                    tempSystemPrompt += "\n\n请参考上述【项目代码上下文】回答问题。";
+                    tempSystemPrompt += "\n重要注意事项：";
+                    tempSystemPrompt += "\n1. **直接回答问题**：不要说“根据代码上下文...”、“在xxx文件中...”或“根据提供的代码...”这类铺垫的话。";
+                    tempSystemPrompt += "\n2. **格式规范**：必须使用标准的 Markdown 格式输出，代码块必须指定语言（如 ```java）。";
+                    tempSystemPrompt += "\n3. **兜底策略**：如果上下文中没有相关信息，请忽略上下文，直接利用你的通用编程知识回答。";
                 }
 
                 final String systemPrompt = tempSystemPrompt;
@@ -461,7 +465,7 @@ public class SysAiController {
                                 if (delta.containsKey("content")) {
                                     String chunk = delta.getStr("content");
                                     fullReply.append(chunk); // 收集完整回复
-                                    emitter.send(chunk);     // 实时推送到前端
+                                    emitter.send(new JSONObject().set("content", chunk).toString());
                                 }
                             }
                         }

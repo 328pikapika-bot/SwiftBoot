@@ -38,7 +38,7 @@
       <module name="common-redis" options="-parameters" />
       <module name="common-security" options="-parameters" />
       <module name="swiftboot-admin" options="-parameters" />
-      <module name="swiftboot-common" options="" />
+      <module name="swiftboot-common" options="-parameters" />
       <module name="swiftboot-generator" options="-parameters" />
     </option>
   </component>
