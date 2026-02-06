@@ -1,5 +1,6 @@
 package com.swiftboot.admin.service.impl;
 
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -7,20 +8,30 @@ import com.swiftboot.admin.domain.entity.SysOperLog;
 import com.swiftboot.admin.mapper.SysOperLogMapper;
 import com.swiftboot.admin.service.SysOperLogService;
 import com.swiftboot.common.core.domain.PageQuery;
+import com.swiftboot.common.log.annotation.Log;
 import com.swiftboot.common.log.event.OperLogEvent;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.aop.support.AopUtils;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import java.lang.reflect.Method;
+import java.util.*;
 
 /**
  * 操作日志 Service 实现
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class SysOperLogServiceImpl extends ServiceImpl<SysOperLogMapper, SysOperLog> implements SysOperLogService {
+
+    private final ApplicationContext applicationContext;
+    private Set<String> cachedModuleNames;
 
     @Override
     public Page<SysOperLog> selectOperLogPage(SysOperLog operLog, PageQuery pageQuery) {
@@ -51,7 +62,29 @@ public class SysOperLogServiceImpl extends ServiceImpl<SysOperLogMapper, SysOper
 
     @Override
     public List<String> selectOperLogModuleList() {
-        return baseMapper.selectOperLogModuleList();
+        Set<String> modules = new HashSet<>(baseMapper.selectOperLogModuleList());
+
+        // 自动扫描 Controller 中的 @Log 注解获取模块名称（缓存以提升性能）
+        if (cachedModuleNames == null) {
+            cachedModuleNames = new HashSet<>();
+            try {
+                Map<String, Object> beans = applicationContext.getBeansWithAnnotation(RestController.class);
+                for (Object bean : beans.values()) {
+                    Class<?> targetClass = AopUtils.getTargetClass(bean);
+                    Method[] methods = targetClass.getMethods();
+                    for (Method method : methods) {
+                        Log log = method.getAnnotation(Log.class);
+                        if (log != null && StrUtil.isNotBlank(log.title())) {
+                            cachedModuleNames.add(log.title());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to scan @Log annotations", e);
+            }
+        }
+        modules.addAll(cachedModuleNames);
+        return new ArrayList<>(modules);
     }
 
     /**

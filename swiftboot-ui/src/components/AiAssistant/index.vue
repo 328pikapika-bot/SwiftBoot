@@ -265,8 +265,13 @@ const containerStyle = computed(() => {
 
 // 方法
 const clearHistory = async () => {
-  // TODO: 调用后端接口清除 Redis 历史 (当前仅清空前端显示)
-  messages.value = []
+  try {
+    await request({ url: '/system/ai/history/clean', method: 'delete' })
+    messages.value = []
+    ElMessage.success('历史记录已清除')
+  } catch (err) {
+    ElMessage.error('清除失败')
+  }
 }
 
 const toggleMinimize = (e?: MouseEvent) => {

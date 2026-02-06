@@ -8,15 +8,14 @@ import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.swiftboot.common.core.result.R;
+import com.swiftboot.common.log.annotation.Log;
+import com.swiftboot.common.log.enums.BusinessType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.BufferedReader;
@@ -32,7 +31,8 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.util.StreamUtils;
 
 /**
  * AI 智能助手控制器
@@ -46,7 +46,7 @@ import org.springframework.web.bind.annotation.GetMapping;
  * 4. 调用 DeepSeek AI 模型（支持流式/非流式）。
  * 5. 管理对话历史（Redis 短期记忆 + ChromaDB 长期记忆）。
  */
-@Tag(name = "AI助手")
+@Tag(name = "智能会话")
 @RestController
 @RequestMapping("/system/ai")
 public class SysAiController {
@@ -69,8 +69,11 @@ public class SysAiController {
     @Value("${ai.deepseek.model:}")
     private String deepseekModel;
 
-    // 缓存项目内置的 Skills (技能库) 内容，避免每次请求都读取文件
+    // 缓存项目内置的 Skills (技能库) 内容
     private String skillsContext = "";
+    
+    // 缓存 RAG 提示词规则
+    private String ragRuleContext = "";
     
     // Python 检索引擎地址 (RAG 服务)
     // /retrieve: 检索代码库知识
@@ -88,6 +91,19 @@ public class SysAiController {
     @PostConstruct
     public void initSkills() {
         try {
+            // 加载 RAG 规则文件
+            try {
+                ClassPathResource resource = new ClassPathResource("ai/rules/rag_rule.md");
+                if (resource.exists()) {
+                    ragRuleContext = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+                    System.out.println("RAG Rule loaded successfully, length: " + ragRuleContext.length());
+                } else {
+                    System.out.println("RAG Rule file not found in classpath: ai/rules/rag_rule.md");
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to load RAG rule: " + e.getMessage());
+            }
+
             // 扫描项目根目录下的 project-skills 目录
             // 注意：实际部署时路径可能需要调整，这里适配了本地开发环境的多模块结构
             String projectRoot = System.getProperty("user.dir");
@@ -138,6 +154,7 @@ public class SysAiController {
      * 适用于简单的问答场景，前端等待完整响应后一次性展示。
      */
     @Operation(summary = "发送对话")
+    @Log(title = "智能会话", businessType = BusinessType.OTHER)
     @PostMapping("/chat")
     public R<String> chat(@RequestBody Map<String, String> params) {
         String content = params.get("content");
@@ -287,11 +304,26 @@ public class SysAiController {
     }
 
     /**
+     * 清空历史记录
+     * 清除 Redis 中的短期对话记忆
+     */
+    @Operation(summary = "清空历史记录")
+    @Log(title = "智能会话", businessType = BusinessType.CLEAN)
+    @DeleteMapping("/history/clean")
+    public R<Void> cleanHistory() {
+        Long userId = SecurityUtils.getUserId();
+        String key = HISTORY_KEY_PREFIX + userId;
+        stringRedisTemplate.delete(key);
+        return R.ok();
+    }
+
+    /**
      * 发送对话 (流式 Stream)
      * 使用 SSE (Server-Sent Events) 技术，实现打字机效果。
      * 支持 RAG 代码检索 + 历史记忆检索 + 记忆存储。
      */
     @Operation(summary = "发送对话(流式)")
+    @Log(title = "智能会话", businessType = BusinessType.OTHER)
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(@RequestBody Map<String, Object> params) {
         final SseEmitter emitter = new SseEmitter(0L); // 0L 表示永不超时
@@ -363,11 +395,17 @@ public class SysAiController {
                 // 添加 RAG 上下文 (代码库知识)
                 if (StrUtil.isNotEmpty(ragContext)) {
                     tempSystemPrompt += ragContext;
-                    tempSystemPrompt += "\n\n请参考上述【项目代码上下文】回答问题。";
-                    tempSystemPrompt += "\n重要注意事项：";
-                    tempSystemPrompt += "\n1. **直接回答问题**：不要说“根据代码上下文...”、“在xxx文件中...”或“根据提供的代码...”这类铺垫的话。";
-                    tempSystemPrompt += "\n2. **格式规范**：必须使用标准的 Markdown 格式输出，代码块必须指定语言（如 ```java）。";
-                    tempSystemPrompt += "\n3. **兜底策略**：如果上下文中没有相关信息，请忽略上下文，直接利用你的通用编程知识回答。";
+                    
+                    // 使用外部加载的规则，如果未加载成功则使用默认兜底规则
+                    if (StrUtil.isNotEmpty(ragRuleContext)) {
+                         tempSystemPrompt += "\n\n" + ragRuleContext;
+                    } else {
+                        tempSystemPrompt += "\n\n请参考上述【项目代码上下文】理解系统功能与实现逻辑，但请注意：";
+                        tempSystemPrompt += "\n1. **优先解释功能与架构**：除非用户明确要求“看代码”，否则请优先用自然语言解释功能，不要直接贴出大段代码。";
+                        tempSystemPrompt += "\n2. **适度引用**：可以提及关键类名辅助说明。";
+                        tempSystemPrompt += "\n3. **直接回答问题**：不要说“根据代码上下文...”这类铺垫的话。";
+                        tempSystemPrompt += "\n4. **格式规范**：必须使用标准的 Markdown 格式输出。";
+                    }
                 }
 
                 final String systemPrompt = tempSystemPrompt;
