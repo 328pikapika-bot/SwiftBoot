@@ -107,7 +107,7 @@
             type="textarea"
             :autosize="{ minRows: 1, maxRows: 5 }"
             placeholder="输入您的问题 (Shift+Enter 换行)..."
-            @keydown.enter.prevent="(e: KeyboardEvent) => handleEnterKey(e)"
+            @keydown.enter.prevent="handleEnterKey"
             :disabled="loading"
             class="ai-input"
           />
@@ -172,7 +172,7 @@ const md = new MarkdownIt({
   linkify: true,
   typographer: true,
   breaks: true, // 开启换行符转换
-  highlight: function (str, lang) {
+  highlight: function (str: string, lang: string): string {
     if (lang && hljs.getLanguage(lang)) {
       try {
         return '<pre class="hljs"><code>' +
@@ -222,7 +222,7 @@ const saveHistory = () => {
 }
 
 // 监听用户ID变化，重新加载历史
-watch(() => userStore.userInfo?.id, () => {
+watch(() => userStore.userInfo?.userId, () => {
     loadHistory()
 })
 
@@ -317,8 +317,8 @@ const scrollToBottom = () => {
   })
 }
 
-const handleEnterKey = (e: KeyboardEvent) => {
-  if (e.shiftKey) return // Shift+Enter 换行
+const handleEnterKey = (e: Event | KeyboardEvent) => {
+  if (e instanceof KeyboardEvent && e.shiftKey) return // Shift+Enter 换行
   sendMessage()
 }
 
@@ -1165,7 +1165,7 @@ $bg-input: #f8fafc;
   background: transparent !important;
   font-family: inherit !important;
   font-size: 15px !important;
-  line-height: 1 !important;
+  line-height: 1.1 !important;
   color: #334155 !important;
   white-space: pre-wrap !important; /* 全局保留换行，确保流式输出时纯文本也能正确换行 */
   

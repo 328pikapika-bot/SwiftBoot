@@ -140,8 +140,11 @@
     <orderEntry type="library" name="Maven: org.projectlombok:lombok:1.18.30" level="project" />
     <orderEntry type="module" module-name="swiftboot-generator" />
     <orderEntry type="library" name="Maven: org.apache.velocity:velocity-engine-core:2.3" level="project" />
-    <orderEntry type="library" name="Maven: org.slf4j:slf4j-api:2.0.11" level="project" />
     <orderEntry type="library" name="Maven: cn.dev33:sa-token-core:1.37.0" level="project" />
     <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-configuration-processor:3.2.2" level="project" />
+    <orderEntry type="library" name="Maven: com.github.oshi:oshi-core:6.4.10" level="project" />
+    <orderEntry type="library" name="Maven: net.java.dev.jna:jna:5.14.0" level="project" />
+    <orderEntry type="library" name="Maven: net.java.dev.jna:jna-platform:5.14.0" level="project" />
+    <orderEntry type="library" name="Maven: org.slf4j:slf4j-api:2.0.11" level="project" />
   </component>
 </module>

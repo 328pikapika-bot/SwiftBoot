@@ -169,7 +169,27 @@ const iconMap: Record<string, string> = {
   'tool': 'Tools',
   'code': 'Document',
   'star-filled': 'StarFilled',
-  'list': 'List'
+  'list': 'List',
+  'message': 'ChatDotRound',
+  'chart': 'PieChart',
+  'server': 'Coin'
+}
+
+// 安全获取图标组件名
+const getIcon = (iconName: string) => {
+  if (!iconName || iconName === '#' || iconName.trim() === '') {
+    return 'Document' // 默认图标
+  }
+  // 如果在映射表中存在，直接返回
+  if (iconMap[iconName]) {
+    return iconMap[iconName]
+  }
+  // 否则尝试直接使用该名称（必须是合法的组件名，不能包含非法字符）
+  // 简单的正则校验：只允许字母、数字、短横线
+  if (/^[a-zA-Z0-9-]+$/.test(iconName)) {
+    return iconName
+  }
+  return 'Document'
 }
 
 // 菜单列表（使用后端动态菜单）
@@ -185,10 +205,10 @@ const menuList = computed(() => {
     // 后端动态菜单
     const dynamicMenus = menus.map(menu => ({
       path: '/' + menu.path,
-      meta: { title: menu.menuName, icon: iconMap[menu.icon] || menu.icon || 'Document' },
+      meta: { title: menu.menuName, icon: getIcon(menu.icon) },
       children: menu.children?.map((child: any) => ({
         path: child.path,
-        meta: { title: child.menuName, icon: iconMap[child.icon] || child.icon || 'Document' }
+        meta: { title: child.menuName, icon: getIcon(child.icon) }
       })) || []
     }))
     return [homeMenu, ...dynamicMenus]
@@ -247,6 +267,34 @@ const handleLogout = () => {
         opacity: 0;
         width: 0;
         margin: 0;
+        display: none;
+      }
+    }
+
+    /* 修复折叠后菜单居中问题 */
+    .custom-menu {
+      padding: 12px 8px; /* 减少左右内边距 */
+
+      :deep(.el-menu-item), :deep(.el-sub-menu__title) {
+        padding: 0 !important;
+        justify-content: center;
+        
+        .el-icon {
+          margin-right: 0;
+          font-size: 20px;
+        }
+
+        /* 隐藏折叠后的文字和箭头 */
+        span, .el-sub-menu__icon-arrow {
+          display: none;
+        }
+      }
+      
+      /* 修复悬浮子菜单的触发区域 */
+      :deep(.el-sub-menu) {
+        .el-sub-menu__title {
+          justify-content: center;
+        }
       }
     }
   }
@@ -474,5 +522,31 @@ const handleLogout = () => {
 .fade-slide-leave-to {
   opacity: 0;
   transform: translateX(10px);
+}
+
+/* 覆盖 Element Plus 悬浮菜单样式 */
+:global(.el-menu--popup) {
+  min-width: 120px !important;
+  width: auto !important;
+  padding: 4px !important;
+  border-radius: 8px !important;
+  height: auto !important;
+  
+  .el-menu-item {
+    height: 36px !important;
+    line-height: 36px !important;
+    margin-bottom: 2px !important;
+    border-radius: 6px !important;
+    min-width: 120px !important;
+    
+    .el-icon {
+      margin-right: 6px !important;
+      font-size: 16px !important;
+    }
+    
+    span {
+      font-size: 13px !important;
+    }
+  }
 }
 </style>

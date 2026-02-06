@@ -7,6 +7,8 @@ import cn.hutool.http.HttpResponse;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import com.swiftboot.admin.domain.entity.SysAiSession;
+import com.swiftboot.admin.service.SysAiSessionService;
 import com.swiftboot.common.core.result.R;
 import com.swiftboot.common.log.annotation.Log;
 import com.swiftboot.common.log.enums.BusinessType;
@@ -53,6 +55,9 @@ public class SysAiController {
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private SysAiSessionService aiSessionService;
 
     // Redis 历史记录 Key 前缀
     private static final String HISTORY_KEY_PREFIX = "ai:history:";
@@ -267,6 +272,24 @@ public class SysAiController {
                 } catch (Exception e) {
                     System.err.println("Memory add failed: " + e.getMessage());
                 }
+
+                // 5. 持久化到 MySQL (异步记录)
+                try {
+                    SysAiSession aiSession = new SysAiSession();
+                    aiSession.setUserId(userId);
+                    aiSession.setQuestion(content);
+                    aiSession.setAnswer(reply);
+                    aiSession.setModel(deepseekModel);
+                    // 简单估算 Token (1汉字=2token, 1英文=1token)
+                    int tokens = (content.length() + reply.length()) * 2;
+                    aiSession.setTokens(tokens);
+                    // 估算耗时 (暂时没有准确耗时，先填0，流式接口有更准确的耗时)
+                    aiSession.setDuration(0);
+                    aiSessionService.save(aiSession);
+                } catch (Exception e) {
+                    System.err.println("人工智能会话保存到MySQL失败: " + e.getMessage());
+                }
+
                 return R.ok("操作成功", reply);
             } else {
                 if (response.getStatus() == 401) {
@@ -342,6 +365,7 @@ public class SysAiController {
 
         // 异步线程处理 AI 请求，避免阻塞主线程
         new Thread(() -> {
+            long startTime = System.currentTimeMillis();
             StringBuilder fullReply = new StringBuilder(); // 用于收集 AI 的完整回复，以便存入历史
                 try {
                     // 1. RAG 代码检索 (Retrieve)
@@ -513,9 +537,12 @@ public class SysAiController {
                 // 6. 存储对话历史 (Memory Store)
                 // 只有当 fullReply 不为空时才保存历史，防止报错中断导致空记录
                 if (fullReply.length() > 0) {
+                    String reply = fullReply.toString();
+                    long now = System.currentTimeMillis();
+
                     // 6.1 存入 Redis 短期历史 (用于 /history 接口展示，保留最近 20 条)
                     JSONObject userRecord = new JSONObject().set("role", "user").set("content", content);
-                    JSONObject aiRecord = new JSONObject().set("role", "assistant").set("content", fullReply.toString());
+                    JSONObject aiRecord = new JSONObject().set("role", "assistant").set("content", reply);
                     String key = HISTORY_KEY_PREFIX + userId;
                     try {
                         stringRedisTemplate.opsForList().rightPush(key, userRecord.toString());
@@ -525,24 +552,40 @@ public class SysAiController {
                         }
                         stringRedisTemplate.expire(key, 7, TimeUnit.DAYS);
                     } catch (Exception e) {
-                        System.err.println("Failed to save history to Redis: " + e.getMessage());
+                        System.err.println("Redis save failed: " + e.getMessage());
                     }
 
-                    // 6.2 存入 向量数据库 长期记忆 (用于后续 RAG 检索)
+                    // 6.2 存入 Vector DB 长期记忆 (RAG)
                     try {
-                        long now = System.currentTimeMillis();
                         JSONObject memoryAdd = new JSONObject();
                         memoryAdd.set("user_id", String.valueOf(userId));
                         JSONArray memoryMessages = new JSONArray();
                         memoryMessages.add(new JSONObject().set("content", content).set("role", "user").set("timestamp", now).set("sequence", now));
-                        memoryMessages.add(new JSONObject().set("content", fullReply.toString()).set("role", "assistant").set("timestamp", now + 1).set("sequence", now + 1));
+                        memoryMessages.add(new JSONObject().set("content", reply).set("role", "assistant").set("timestamp", now + 1).set("sequence", now + 1));
                         memoryAdd.set("messages", memoryMessages);
                         HttpRequest.post(MEMORY_ADD_URL)
                                 .timeout(5000)
                                 .body(memoryAdd.toString())
                                 .execute();
                     } catch (Exception e) {
-                        System.err.println("Memory add failed: " + e.getMessage());
+                        System.err.println("Vector DB save failed: " + e.getMessage());
+                    }
+
+                    // 6.3 持久化到 MySQL (System Monitor)
+                    try {
+                        long duration = System.currentTimeMillis() - startTime;
+                        SysAiSession aiSession = new SysAiSession();
+                        aiSession.setUserId(userId);
+                        aiSession.setQuestion(content);
+                        aiSession.setAnswer(reply);
+                        aiSession.setModel(deepseekModel);
+                        // 简单估算 Token (1汉字=2token, 1英文=1token)
+                        int tokens = (content.length() + reply.length()) * 2;
+                        aiSession.setTokens(tokens);
+                        aiSession.setDuration((int) duration);
+                        aiSessionService.save(aiSession);
+                    } catch (Exception e) {
+                        System.err.println("Failed to save ai session: " + e.getMessage());
                     }
                 }
                 

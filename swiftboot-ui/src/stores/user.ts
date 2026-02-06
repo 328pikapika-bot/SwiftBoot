@@ -19,6 +19,7 @@ export const useUserStore = defineStore('user', () => {
   async function getUserInfoAction() {
     const res = await getUserInfo()
     userInfo.value = res.data
+    return res // 返回响应以便外部使用
   }
 
   // 登出

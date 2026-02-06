@@ -80,7 +80,7 @@ router.beforeEach(async (to, from, next) => {
       if (!userStore.userInfo) {
         try {
           await userStore.getUserInfo()
-          next({ ...to, replace: true })
+          next()
         } catch (e) {
           userStore.logout()
           next(`/login?redirect=${to.path}`)

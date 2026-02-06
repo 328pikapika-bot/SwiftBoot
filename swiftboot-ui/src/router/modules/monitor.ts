@@ -28,6 +28,24 @@ const monitorRoutes: RouteRecordRaw[] = [
           title: '登录日志',
           icon: 'User'
         }
+      },
+      {
+        path: 'ai-session',
+        name: 'AiSession',
+        component: () => import('@/views/monitor/ai-session/index.vue'),
+        meta: {
+          title: '智能会话',
+          icon: 'ChatDotRound'
+        }
+      },
+      {
+        path: 'server',
+        name: 'ServerMonitor',
+        component: () => import('@/views/monitor/server/index.vue'),
+        meta: {
+          title: '基础资源',
+          icon: 'Coin'
+        }
       }
     ]
   }

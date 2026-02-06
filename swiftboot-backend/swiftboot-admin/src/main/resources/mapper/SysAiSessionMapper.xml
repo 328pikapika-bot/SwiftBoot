@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.swiftboot.admin.mapper.SysAiSessionMapper">
+
+    <resultMap type="com.swiftboot.admin.domain.entity.SysAiSession" id="SysAiSessionResult">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="question" column="question"/>
+        <result property="answer" column="answer"/>
+        <result property="model" column="model"/>
+        <result property="tokens" column="tokens"/>
+        <result property="duration" column="duration"/>
+        <result property="createTime" column="create_time"/>
+        <result property="username" column="username"/>
+    </resultMap>
+
+    <select id="selectAiSessionList" resultMap="SysAiSessionResult">
+        SELECT s.*, 
+               CASE WHEN s.user_id = 1 THEN '超级管理员' ELSE u.username END as username
+        FROM sys_ai_session s
+        LEFT JOIN sys_user u ON s.user_id = u.id
+        <where>
+            <if test="userId != null">
+                AND s.user_id = #{userId}
+            </if>
+            <if test="username != null and username != ''">
+                AND u.username LIKE concat('%', #{username}, '%')
+            </if>
+            <if test="question != null and question != ''">
+                AND s.question LIKE concat('%', #{question}, '%')
+            </if>
+            <if test="model != null and model != ''">
+                AND s.model LIKE concat('%', #{model}, '%')
+            </if>
+        </where>
+        ORDER BY s.create_time DESC
+    </select>
+</mapper>
