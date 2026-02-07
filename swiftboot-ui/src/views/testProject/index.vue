@@ -40,7 +40,7 @@
       </template>
 
       <!-- 表格 -->
-      <el-table v-loading="loading" :data="tableData" @selection-change="handleSelectionChange">
+      <el-table v-loading="loading" :data="tableData" @selection-change="handleSelectionChange" :header-cell-style="{ background: '#f5f7fa' }">
         <el-table-column type="selection" width="55" />
         <el-table-column label="项目名称" prop="projectName" width="140"/>
         <el-table-column label="项目编号" prop="projectCode" width="120"/>

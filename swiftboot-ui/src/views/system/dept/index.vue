@@ -26,7 +26,7 @@
         </div>
       </template>
 
-      <el-table v-loading="loading" :data="tableData" row-key="id" :tree-props="{ children: 'children' }" style="width: 100%">
+      <el-table v-loading="loading" :data="tableData" row-key="id" :tree-props="{ children: 'children' }" style="width: 100%" :header-cell-style="{ background: '#f5f7fa' }">
         <el-table-column label="部门名称" prop="deptName" min-width="200" />
         <el-table-column label="排序" prop="sort" min-width="80" align="center" />
         <el-table-column label="默认角色" prop="defaultRoleName" min-width="120">

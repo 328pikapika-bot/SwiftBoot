@@ -26,7 +26,7 @@
         </div>
       </template>
 
-      <el-table v-loading="loading" :data="tableData" :key="tableKey" row-key="id" :tree-props="{ children: 'children' }" style="width: 100%">
+      <el-table v-loading="loading" :data="tableData" :key="tableKey" row-key="id" :tree-props="{ children: 'children' }" style="width: 100%" :header-cell-style="{ background: '#f5f7fa' }">
         <el-table-column label="菜单名称" prop="menuName" min-width="200" />
         <el-table-column label="图标" prop="icon" min-width="80" align="center">
           <template #default="{ row }">
@@ -64,7 +64,7 @@
           <el-tree-select
             v-model="formData.parentId"
             :data="menuOptions"
-            :props="{ label: 'menuName', children: 'children', value: 'id' }"
+            :props="{ label: 'menuName', children: 'children' }"
             placeholder="选择上级菜单"
             check-strictly
             clearable

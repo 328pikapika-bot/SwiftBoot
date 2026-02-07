@@ -113,6 +113,22 @@ async def query_memory(request: MemoryQueryRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class MemoryDeleteRequest(BaseModel):
+    user_id: str
+    messages: list[str] | None = None
+
+@app.post("/memory/delete")
+async def delete_memory(request: MemoryDeleteRequest):
+    """
+    删除长期记忆接口
+    根据 user_id 删除该用户的所有向量记忆，或根据 messages 删除特定记忆
+    """
+    try:
+        count = memory_db.delete_by_user(request.user_id, request.messages)
+        return {"status": "ok", "deleted_count": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "db_path": db.client._system.settings.persist_directory}

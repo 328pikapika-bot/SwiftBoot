@@ -23,7 +23,7 @@
         </div>
       </template>
 
-      <el-table v-loading="loading" :data="tableData">
+      <el-table v-loading="loading" :data="tableData" :header-cell-style="{ background: '#f5f7fa' }">
         <el-table-column label="字典名称" prop="dictName" width="200" />
         <el-table-column label="字典类型" prop="dictType" width="200">
           <template #default="{ row }">

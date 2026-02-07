@@ -168,6 +168,64 @@ class ChatMemoryStore:
         )
         return results
 
+    def delete_by_user(self, user_id: str, messages: List[str] = None):
+        """
+        删除指定用户的记忆
+        :param user_id: 用户ID
+        :param messages: 要删除的特定消息内容列表（如果为None则删除该用户所有记忆）
+        """
+        try:
+            where = {"user_id": str(user_id)}
+            
+            # 如果指定了消息内容，则进行精确查找删除
+            if messages:
+                print(f"[{self._now()}][记忆删除] 正在查找用户 {user_id} 的 {len(messages)} 条指定记忆...")
+                # 获取该用户的所有记忆
+                existing = self.collection.get(where=where)
+                if not existing or not existing['ids']:
+                    print(f"[{self._now()}][记忆删除] 用户 {user_id} 无记忆数据。")
+                    return
+
+                ids_to_delete = []
+                docs_to_delete = []
+                # 遍历查找匹配的内容
+                # existing['documents'] 是列表
+                for i, doc in enumerate(existing['documents']):
+                    if doc in messages:
+                        ids_to_delete.append(existing['ids'][i])
+                        docs_to_delete.append(doc)
+                
+                if ids_to_delete:
+                    print(f"[{self._now()}][记忆删除] 找到 {len(ids_to_delete)} 条匹配记忆，正在删除...")
+                    # 打印具体删除的内容预览
+                    for doc in docs_to_delete:
+                        preview = doc[:50].replace('\n', ' ') + "..." if len(doc) > 50 else doc.replace('\n', ' ')
+                        print(f"  - 删除: {preview}")
+                        
+                    self.collection.delete(ids=ids_to_delete)
+                    print(f"[{self._now()}][记忆删除] 删除成功。")
+                    return len(ids_to_delete)
+                else:
+                    print(f"[{self._now()}][记忆删除] 未找到匹配的记忆内容。")
+                    return 0
+
+            # 否则删除该用户所有记忆
+            # 1. 先查询是否存在
+            existing = self.collection.get(where=where)
+            count = len(existing['ids']) if existing and existing['ids'] else 0
+            
+            if count > 0:
+                print(f"[{self._now()}][记忆删除] 正在删除用户 {user_id} 的 {count} 条记忆...")
+                self.collection.delete(where=where)
+                print(f"[{self._now()}][记忆删除] 删除成功。")
+                return count
+            else:
+                print(f"[{self._now()}][记忆删除] 用户 {user_id} 无记忆数据。")
+                return 0
+        except Exception as e:
+            print(f"[{self._now()}][记忆删除] 删除出错: {str(e)}")
+            raise e
+
 if __name__ == "__main__":
     # 1. 初始化数据库
     vector_store = VectorStore()

@@ -1,5 +1,6 @@
 import time
 import os
+import json
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from knowledge_ingest import JavaParser
@@ -9,10 +10,32 @@ from vector_store import VectorStore
 # 配置
 # ==========================================
 # 监听的目录（递归监听）
-# 在生产环境中，建议将此路径配置为环境变量或从配置文件读取
-WATCH_DIR = r"d:\study\SwiftBoot"
+# 使用相对路径：当前脚本所在目录(ai-engine)的上一级目录(SwiftBoot)
+WATCH_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 # 忽略的目录（可选）
 IGNORE_DIRS = [".git", "target", "build", "node_modules", "dist", ".idea", ".vscode", "__pycache__", "chroma_db"]
+# 状态文件路径
+STATE_FILE = os.path.join(os.path.dirname(__file__), "file_state.json")
+
+def load_state():
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 成功加载状态文件，共 {len(state)} 条记录。")
+                return state
+        except Exception as e:
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 加载状态文件失败: {e}")
+            return {}
+    return {}
+
+def save_state(state):
+    try:
+        with open(STATE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+            # print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 状态已保存。") 
+    except Exception as e:
+        print(f"保存状态失败: {e}")
 
 class CodeChangeHandler(FileSystemEventHandler):
     """
@@ -20,10 +43,11 @@ class CodeChangeHandler(FileSystemEventHandler):
     监听文件变更事件 (Modified, Created, Moved, Deleted)
     并自动触发向量数据库的更新
     """
-    def __init__(self):
+    def __init__(self, file_state):
         self.parser = JavaParser()
         self.db = VectorStore()
         self.last_processed = {}  # 简单的防抖动机制 {path: timestamp}
+        self.file_state = file_state
 
     def on_modified(self, event):
         self._process_event(event)
@@ -37,6 +61,12 @@ class CodeChangeHandler(FileSystemEventHandler):
              print(f"\n[{self._now()}][检测到文件移动] {event.src_path} -> {event.dest_path}")
              # 1. 删除旧文件的向量数据
              self.db.delete_by_source(os.path.basename(event.src_path))
+             # 更新状态
+             norm_src = os.path.normpath(event.src_path).lower()
+             if norm_src in self.file_state:
+                 del self.file_state[norm_src]
+                 save_state(self.file_state)
+                 
              # 2. 处理新文件（模拟一个 created 事件）
              class MockEvent:
                  is_directory = False
@@ -49,6 +79,11 @@ class CodeChangeHandler(FileSystemEventHandler):
             print(f"\n[{self._now()}][检测到文件删除] {file_name}")
             # 从向量库中移除该文件的所有切片
             self.db.delete_by_source(file_name)
+            # 更新状态
+            norm_src = os.path.normpath(event.src_path).lower()
+            if norm_src in self.file_state:
+                del self.file_state[norm_src]
+                save_state(self.file_state)
 
     def _process_event(self, event):
         """
@@ -73,10 +108,6 @@ class CodeChangeHandler(FileSystemEventHandler):
         
         try:
             # 1. 提取文件名作为 Source ID
-            # 注意：这里我们简单地用文件名作为 source。
-            # 如果不同目录下有同名文件，可能会有冲突。
-            # 生产环境建议用 相对项目根目录的路径 (e.g. src/main/java/.../SysAiController.java)
-            # 但为了和 vector_store.py 保持一致，先用 basename
             source_id = os.path.basename(filename)
 
             # 2. 清理旧数据 (先删后加，确保数据一致性)
@@ -94,6 +125,12 @@ class CodeChangeHandler(FileSystemEventHandler):
                 # 4. 存入数据库
                 self.db.add_documents(chunks)
                 print(f"[{self._now()}]更新完成！已同步 {len(chunks)} 个代码块到向量数据库。")
+                
+                # 更新状态
+                if os.path.exists(filename):
+                    norm_path = os.path.normpath(filename).lower()
+                    self.file_state[norm_path] = os.path.getmtime(filename)
+                    save_state(self.file_state)
             else:
                 print(f"[{self._now()}]警告：解析结果为空，未更新数据库。")
 
@@ -111,12 +148,22 @@ if __name__ == "__main__":
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]启动代码监听服务 (Watchdog)...")
     
     # ==========================================
-    # 启动时全量扫描
+    # 启动时增量代码扫描
     # ==========================================
-    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]正在执行全量代码扫描: {WATCH_DIR} ...")
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]正在执行代码扫描 (增量模式): {WATCH_DIR} ...")
     parser = JavaParser()
     db = VectorStore()
+    
+    # 加载上次的文件状态
+    file_state = load_state()
+    # 如果加载出来的状态 key 不是全小写，做一次规范化
+    if file_state:
+        file_state = {os.path.normpath(k).lower(): v for k, v in file_state.items()}
+        
+    new_file_state = {}
+    
     count = 0
+    skip_count = 0
     
     for root, dirs, files in os.walk(WATCH_DIR):
         # 过滤忽略目录
@@ -125,9 +172,23 @@ if __name__ == "__main__":
         for file in files:
             if file.endswith(".java") or file.endswith(".py"):
                 file_path = os.path.join(root, file)
+                # 统一路径格式（Windows下不区分大小写，统一转小写以避免盘符差异）
+                norm_path = os.path.normpath(file_path).lower()
+                
                 try:
+                    # 获取当前修改时间
+                    mtime = os.path.getmtime(file_path)
+                    new_file_state[norm_path] = mtime
+                    
+                    # 检查是否需要更新
+                    # 注意：如果 file_state 为空（首次运行或状态丢失），则不跳过，执行全量同步
+                    if norm_path in file_state and abs(file_state[norm_path] - mtime) < 0.001:
+                        skip_count += 1
+                        # 确保旧状态也被保留到新状态中（虽然上面已经赋值了，这里逻辑是正确的）
+                        continue
+
                     source_id = os.path.basename(file_path)
-                    # 先清理旧数据，确保是最新的
+                    # 先清理旧数据
                     db.delete_by_source(source_id)
                     
                     chunks = parser.parse_file(file_path)
@@ -136,18 +197,35 @@ if __name__ == "__main__":
                             chunk['source'] = source_id
                         db.add_documents(chunks)
                         count += 1
-                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{count}] 已索引: {source_id} ({len(chunks)} 块)")
+                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{count}] 已同步变更: {source_id} ({len(chunks)} 块)")
                 except Exception as e:
                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]索引文件失败 {file}: {e}")
+
+    # 处理在停止期间被删除的文件
+    deleted_count = 0
+    # 注意：这里加载出来的 file_state 的 key 应该是已经 norm_path 处理过的（如果是从上次保存读取的）
+    # 但为了保险，我们在读取 load_state 后可以做一次规范化，或者假设它是规范的
+    for old_path in file_state:
+        if old_path not in new_file_state:
+            try:
+                source_id = os.path.basename(old_path)
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 检测到文件已删除: {old_path}")
+                db.delete_by_source(source_id)
+                deleted_count += 1
+            except Exception as e:
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 删除失效索引失败: {e}")
+
+    # 保存最新状态
+    save_state(new_file_state)
                     
-    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]全量扫描完成！共索引 {count} 个文件。")
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]扫描完成！同步 {count} 个文件，跳过 {skip_count} 个文件，移除 {deleted_count} 个失效文件。")
     # ==========================================
 
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]正在监控目录: {WATCH_DIR}")
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]当你修改、保存 .java 文件时，系统会自动更新向量数据库。")
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]按 Ctrl+C 停止服务。")
 
-    event_handler = CodeChangeHandler()
+    event_handler = CodeChangeHandler(new_file_state)
     observer = Observer()
     observer.schedule(event_handler, WATCH_DIR, recursive=True)
     observer.start()

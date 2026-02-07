@@ -32,3 +32,12 @@ export function getDashboardStats() {
     method: 'get'
   })
 }
+
+// 清除指定用户的 AI 缓存（Redis + 向量库）
+export function cleanAiCache(userId?: number) {
+  return request({
+    url: '/system/ai/clean',
+    method: 'delete',
+    params: { targetUserId: userId }
+  })
+}

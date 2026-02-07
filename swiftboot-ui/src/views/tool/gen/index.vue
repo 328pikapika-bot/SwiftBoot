@@ -29,7 +29,7 @@
         </div>
       </template>
 
-      <el-table v-loading="loading" :data="tableData" @selection-change="handleSelectionChange" style="width: 100%">
+      <el-table v-loading="loading" :data="tableData" @selection-change="handleSelectionChange" style="width: 100%" :header-cell-style="{ background: '#f5f7fa' }">
         <el-table-column type="selection" width="55" />
         <el-table-column label="表名称" prop="tableName" min-width="200" />
         <el-table-column label="表描述" prop="tableComment" min-width="200" />

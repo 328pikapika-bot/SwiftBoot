@@ -3,6 +3,8 @@ package com.swiftboot.admin.service.impl;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.crypto.digest.BCrypt;
 import cn.hutool.extra.servlet.JakartaServletUtil;
+import cn.hutool.http.useragent.UserAgent;
+import cn.hutool.http.useragent.UserAgentUtil;
 import com.swiftboot.admin.domain.dto.LoginDTO;
 import com.swiftboot.admin.domain.entity.SysLoginLog;
 import com.swiftboot.admin.domain.entity.SysMenu;
@@ -12,6 +14,7 @@ import com.swiftboot.admin.domain.vo.UserInfoVO;
 import com.swiftboot.admin.service.*;
 import com.swiftboot.common.core.exception.BusinessException;
 import com.swiftboot.common.core.result.ResultCode;
+import com.swiftboot.common.core.utils.ip.AddressUtils;
 import com.swiftboot.common.security.domain.LoginUser;
 import com.swiftboot.common.security.utils.SecurityUtils;
 import jakarta.servlet.http.HttpServletRequest;
@@ -50,7 +53,24 @@ public class AuthServiceImpl implements AuthService {
         SysLoginLog loginLog = new SysLoginLog();
         loginLog.setUsername(username);
         loginLog.setLoginTime(LocalDateTime.now());
-        loginLog.setLoginIp(getClientIp());
+        String clientIp = getClientIp();
+        loginLog.setLoginIp(clientIp);
+        loginLog.setLoginLocation(AddressUtils.getRealAddressByIP(clientIp));
+
+        // 获取浏览器和操作系统
+        try {
+            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attributes != null) {
+                HttpServletRequest request = attributes.getRequest();
+                String userAgentStr = request.getHeader("User-Agent");
+                UserAgent userAgent = UserAgentUtil.parse(userAgentStr);
+                if (userAgent != null) {
+                    loginLog.setBrowser(userAgent.getBrowser().getName());
+                    loginLog.setOs(userAgent.getOs().getName());
+                }
+            }
+        } catch (Exception ignored) {
+        }
 
         try {
             // 用户不存在

@@ -142,7 +142,7 @@
         v-loading="loading" 
         :data="tableData" 
         style="width: 100%"
-        :header-cell-style="{ background: 'transparent', color: '#64748b', fontWeight: '600' }"
+        :header-cell-style="{ background: '#ffffff', color: '#64748b', fontWeight: '600' }"
         :row-class-name="'hover-row'"
       >
         <el-table-column label="用户" min-width="140">
@@ -180,14 +180,17 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="时间" prop="createTime" width="180" align="right">
+        <el-table-column label="提问时间" prop="createTime" width="180">
           <template #default="{ row }">
-            <span class="text-xs text-gray-400 font-mono">{{ row.createTime }}</span>
+            <div class="text-sm font-medium text-gray-500">{{ row.createTime }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right" align="center">
+        <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="handleDetail(row)">详情</el-button>
+            <div class="flex gap-2">
+              <el-button link type="primary" @click="handleDetail(row)">详情</el-button>
+              <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -263,10 +266,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
-import { listAiSession, getDashboardStats } from '@/api/monitor/ai-session'
+import { listAiSession, getDashboardStats, cleanAiCache, delAiSession } from '@/api/monitor/ai-session'
 import MarkdownIt from 'markdown-it'
 import * as echarts from 'echarts'
-import { ChatDotRound, Coin, Timer, Search, Refresh, View, User, Cpu, Loading, TrendCharts, Connection } from '@element-plus/icons-vue'
+import { ChatDotRound, Coin, Timer, Search, Refresh, View, User, Cpu, Loading, TrendCharts, Connection, Delete, DeleteFilled } from '@element-plus/icons-vue'
 
 const md = new MarkdownIt()
 const loading = ref(false)
@@ -276,6 +279,7 @@ const detailVisible = ref(false)
 const detailData = ref<any>({})
 const trendChartRef = ref<HTMLElement | null>(null)
 let trendChart: echarts.ECharts | null = null
+const selectedIds = ref<number[]>([])
 
 const stats = reactive({
   todayCount: 0,
@@ -345,6 +349,27 @@ const handleReset = () => {
 const handleDetail = (row: any) => {
   detailData.value = row
   detailVisible.value = true
+}
+
+const handleDelete = (row: any) => {
+  ElMessageBox.confirm(
+    `确定要删除这条会话记录吗？\n这将同时删除数据库记录和关联的长期记忆。`,
+    '删除确认',
+    {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+      icon: DeleteFilled
+    }
+  ).then(async () => {
+    try {
+      await delAiSession(row.id)
+      ElMessage.success('删除成功')
+      getList()
+    } catch (error) {
+      // 错误已在 request.ts 中处理
+    }
+  })
 }
 
 const renderMarkdown = (content: string) => {

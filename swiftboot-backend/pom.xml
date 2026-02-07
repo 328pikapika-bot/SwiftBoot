@@ -133,6 +133,13 @@
                 <artifactId>commons-io</artifactId>
                 <version>2.15.1</version>
             </dependency>
+
+            <!-- Ip2Region -->
+            <dependency>
+                <groupId>org.lionsoul</groupId>
+                <artifactId>ip2region</artifactId>
+                <version>2.7.0</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

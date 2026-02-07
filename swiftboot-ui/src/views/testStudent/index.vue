@@ -47,7 +47,7 @@
       </template>
 
       <!-- 表格 -->
-      <el-table v-loading="loading" :data="tableData" @selection-change="handleSelectionChange">
+      <el-table v-loading="loading" :data="tableData" @selection-change="handleSelectionChange" :header-cell-style="{ background: '#f5f7fa' }">
         <el-table-column type="selection" width="55" />
         <el-table-column label="学生名称" prop="studentName" />
         <el-table-column label="年龄" prop="age" />

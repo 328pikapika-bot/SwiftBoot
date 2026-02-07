@@ -26,7 +26,7 @@
         </div>
       </template>
 
-      <el-table v-loading="loading" :data="tableData" style="width: 100%">
+      <el-table v-loading="loading" :data="tableData" style="width: 100%" :header-cell-style="{ background: '#f5f7fa' }">
         <el-table-column label="角色名称" prop="roleName" min-width="150" />
         <el-table-column label="角色标识" prop="roleKey" min-width="150" />
         <el-table-column label="排序" prop="sort" min-width="80" align="center" />

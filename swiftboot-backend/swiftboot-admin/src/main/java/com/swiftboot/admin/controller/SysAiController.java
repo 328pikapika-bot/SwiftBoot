@@ -84,9 +84,11 @@ public class SysAiController {
     // /retrieve: 检索代码库知识
     // /memory/query: 检索历史对话记忆
     // /memory/add: 存储新的对话记忆
+    // /memory/delete: 删除对话记忆
     private static final String RAG_API_URL = "http://localhost:8001/retrieve";
     private static final String MEMORY_QUERY_URL = "http://localhost:8001/memory/query";
     private static final String MEMORY_ADD_URL = "http://localhost:8001/memory/add";
+    private static final String MEMORY_DELETE_URL = "http://localhost:8001/memory/delete";
 
     /**
      * 初始化 Skills 技能库
@@ -152,6 +154,46 @@ public class SysAiController {
             e.printStackTrace();
             System.err.println("Failed to load skills: " + e.getMessage());
         }
+    }
+
+    /**
+     * 清除 AI 对话缓存 (Redis + 向量库)
+     * 用于管理员或用户手动重置记忆
+     */
+    @Operation(summary = "清除AI缓存")
+    @Log(title = "智能会话", businessType = BusinessType.CLEAN)
+    @DeleteMapping("/clean")
+    public R<Void> cleanHistory(@RequestParam(required = false) Long targetUserId) {
+        // 1. 确定要清除的用户 ID
+        Long currentUserId = SecurityUtils.getUserId();
+        // 只有管理员可以清除其他人的缓存，普通用户只能清除自己的
+        if (targetUserId != null && !currentUserId.equals(targetUserId)) {
+            if (!SecurityUtils.isAdmin()) {
+                return R.fail("无权操作其他用户的缓存");
+            }
+        } else {
+            targetUserId = currentUserId;
+        }
+
+        // 2. 清除 Redis 短期记忆
+        String redisKey = HISTORY_KEY_PREFIX + targetUserId;
+        stringRedisTemplate.delete(redisKey);
+
+        // 3. 清除 向量数据库 长期记忆
+        try {
+            JSONObject body = new JSONObject();
+            body.set("user_id", String.valueOf(targetUserId));
+            
+            HttpRequest.post(MEMORY_DELETE_URL)
+                    .timeout(5000)
+                    .body(body.toString())
+                    .execute();
+        } catch (Exception e) {
+            System.err.println("Vector DB delete failed: " + e.getMessage());
+            // 不阻断流程，继续执行
+        }
+
+        return R.ok();
     }
 
     /**

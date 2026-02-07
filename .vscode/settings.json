@@ -1,4 +1,8 @@
 {
     "java.configuration.updateBuildConfiguration": "automatic",
-    "java.compile.nullAnalysis.mode": "automatic"
+    "java.compile.nullAnalysis.mode": "automatic",
+    "python.defaultInterpreterPath": "D:\\tools\\miniconda3\\envs\\ai_agent\\python.exe",
+    "terminal.integrated.env.windows": {
+        "PATH": "D:\\tools\\miniconda3\\envs\\ai_agent;D:\\tools\\miniconda3\\envs\\ai_agent\\Scripts;${env:PATH}"
+    }
 }

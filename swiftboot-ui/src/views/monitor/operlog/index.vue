@@ -38,7 +38,7 @@
         </div>
       </template>
 
-      <el-table v-loading="loading" :data="tableData" @selection-change="handleSelectionChange" style="width: 100%">
+      <el-table v-loading="loading" :data="tableData" @selection-change="handleSelectionChange" style="width: 100%" :header-cell-style="{ background: '#f5f7fa' }">
         <el-table-column type="selection" width="55" />
         <el-table-column label="日志ID" prop="id" min-width="180" />
         <el-table-column label="模块" prop="title" min-width="120" />

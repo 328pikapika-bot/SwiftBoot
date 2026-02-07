@@ -72,6 +72,7 @@
     <orderEntry type="library" name="Maven: org.webjars:swagger-ui:5.10.3" level="project" />
     <orderEntry type="library" name="Maven: org.apache.commons:commons-lang3:3.14.0" level="project" />
     <orderEntry type="library" name="Maven: commons-io:commons-io:2.15.1" level="project" />
+    <orderEntry type="library" name="Maven: org.lionsoul:ip2region:2.7.0" level="project" />
     <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-starter-data-redis:3.2.2" level="project" />
     <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot-starter:3.2.2" level="project" />
     <orderEntry type="library" name="Maven: org.springframework.boot:spring-boot:3.2.2" level="project" />
