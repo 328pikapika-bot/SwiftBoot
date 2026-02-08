@@ -8,6 +8,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.net.InetAddress;
 
@@ -16,6 +17,7 @@ import java.net.InetAddress;
  */
 @Slf4j
 @EnableAsync
+@EnableScheduling
 @SpringBootApplication
 @ComponentScan(basePackages = {"com.swiftboot"})
 @MapperScan("com.swiftboot.**.mapper")

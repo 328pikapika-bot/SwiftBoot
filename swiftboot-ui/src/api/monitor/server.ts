@@ -7,3 +7,12 @@ export function getServer() {
     method: 'get'
   })
 }
+
+// 获取历史监控数据
+export function getServerHistory(query: any) {
+  return request({
+    url: '/monitor/server/history',
+    method: 'get',
+    params: query
+  })
+}

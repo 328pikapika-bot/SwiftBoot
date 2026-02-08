@@ -4,7 +4,7 @@
     <div class="welcome-section">
       <div class="welcome-banner">
         <div class="banner-content">
-          <h1>{{ $t('dashboard.hello') }}, {{ userStore.userInfo?.nickname || 'Admin' }}! 👋</h1>
+          <h1>{{ $t('dashboard.hello') }}, {{ userStore.userInfo?.nickname || 'Admin' }}! </h1>
           <p>{{ $t('dashboard.subtitle') }}</p>
           <div class="quick-stats">
             <div class="stat-badge">

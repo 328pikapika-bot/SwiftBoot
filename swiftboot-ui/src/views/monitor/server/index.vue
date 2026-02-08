@@ -1,157 +1,356 @@
 <template>
-  <div class="app-container p-4">
-    <div v-loading="loading" element-loading-text="正在加载服务器监控信息...">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 p-6 transition-colors duration-300">
+    <div v-loading="loading" element-loading-background="rgba(0, 0, 0, 0)" class="max-w-7xl mx-auto space-y-6">
       
-      <!-- 顶部核心指标 -->
-      <el-row :gutter="20" class="mb-6">
-        <el-col :xs="24" :sm="12" :md="6" class="mb-4 md:mb-0">
-          <el-card shadow="hover" class="monitor-card glass-effect">
-            <template #header>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-500 font-medium">CPU 使用率</span>
-                <el-icon class="text-blue-500"><Cpu /></el-icon>
-              </div>
-            </template>
-            <div class="text-center py-4">
-              <el-progress type="dashboard" :percentage="server.cpu?.used || 0" :color="colors" />
-              <div class="mt-2 text-sm text-gray-500">{{ server.cpu?.cpuNum }} 核心</div>
+      <!-- 顶部标题栏 -->
+      <div class="flex justify-between items-center mb-8">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">基础资源监控</h1>
+          <p class="text-slate-500 text-sm mt-1">实时监控服务器核心指标与运行状态</p>
+        </div>
+        <div class="flex items-center space-x-2 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-full shadow-sm border border-slate-200 dark:border-slate-700">
+          <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+          <span class="text-xs font-medium text-slate-600 dark:text-slate-300">实时更新中 (1s)</span>
+        </div>
+      </div>
+
+      <!-- 核心指标 Bento Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- CPU Card -->
+        <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-sm hover:shadow-md transition-all border border-slate-100 dark:border-slate-700">
+          <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <el-icon :size="60" class="text-blue-500"><Cpu /></el-icon>
+          </div>
+          <div class="flex flex-col h-full justify-between relative z-10">
+            <div>
+              <p class="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase tracking-wider">CPU 使用率</p>
+              <h2 class="text-3xl font-bold text-slate-800 dark:text-white mt-2">{{ server.cpu?.used || 0 }}%</h2>
             </div>
-          </el-card>
-        </el-col>
+            <div class="mt-4 h-16" ref="cpuChartRef"></div>
+            <div class="mt-2 text-xs text-slate-400">{{ server.cpu?.cpuNum }} 核心 | Sys: {{ server.cpu?.sys }}%</div>
+          </div>
+        </div>
 
-        <el-col :xs="24" :sm="12" :md="6" class="mb-4 md:mb-0">
-          <el-card shadow="hover" class="monitor-card glass-effect">
-             <template #header>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-500 font-medium">系统内存</span>
-                <el-icon class="text-green-500"><Files /></el-icon>
-              </div>
-            </template>
-            <div class="text-center py-4">
-              <el-progress type="dashboard" :percentage="server.mem?.usage || 0" :color="colors" />
-              <div class="mt-2 text-sm text-gray-500">{{ server.mem?.used }}GB / {{ server.mem?.total }}GB</div>
+        <!-- Memory Card -->
+        <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-sm hover:shadow-md transition-all border border-slate-100 dark:border-slate-700">
+          <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <el-icon :size="60" class="text-purple-500"><Files /></el-icon>
+          </div>
+          <div class="flex flex-col h-full justify-between relative z-10">
+            <div>
+              <p class="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase tracking-wider">系统内存</p>
+              <h2 class="text-3xl font-bold text-slate-800 dark:text-white mt-2">{{ server.mem?.usage || 0 }}%</h2>
             </div>
-          </el-card>
-        </el-col>
+             <div class="mt-4 h-16" ref="memChartRef"></div>
+            <div class="mt-2 text-xs text-slate-400">{{ server.mem?.used }}GB / {{ server.mem?.total }}GB</div>
+          </div>
+        </div>
 
-        <el-col :xs="24" :sm="12" :md="6" class="mb-4 md:mb-0">
-          <el-card shadow="hover" class="monitor-card glass-effect">
-             <template #header>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-500 font-medium">JVM 内存</span>
-                <el-icon class="text-purple-500"><Platform /></el-icon>
-              </div>
-            </template>
-            <div class="text-center py-4">
-              <el-progress type="dashboard" :percentage="server.jvm?.usage || 0" :color="colors" />
-              <div class="mt-2 text-sm text-gray-500">{{ server.jvm?.used }}MB / {{ server.jvm?.total }}MB</div>
+        <!-- JVM Card -->
+        <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-sm hover:shadow-md transition-all border border-slate-100 dark:border-slate-700">
+          <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <el-icon :size="60" class="text-teal-500"><Platform /></el-icon>
+          </div>
+          <div class="flex flex-col h-full justify-between relative z-10">
+            <div>
+              <p class="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase tracking-wider">JVM 负载</p>
+              <h2 class="text-3xl font-bold text-slate-800 dark:text-white mt-2">{{ server.jvm?.usage || 0 }}%</h2>
             </div>
-          </el-card>
-        </el-col>
+             <div class="mt-4 h-16" ref="jvmChartRef"></div>
+            <div class="mt-2 text-xs text-slate-400">已用: {{ server.jvm?.used }}MB</div>
+          </div>
+        </div>
 
-         <el-col :xs="24" :sm="12" :md="6" class="mb-4 md:mb-0">
-          <el-card shadow="hover" class="monitor-card glass-effect">
-             <template #header>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-500 font-medium">磁盘总览</span>
-                <el-icon class="text-orange-500"><Coin /></el-icon>
-              </div>
-            </template>
-            <div class="text-center py-4">
-               <!-- 简单的磁盘平均使用率 -->
-               <el-progress type="dashboard" :percentage="avgDiskUsage" :color="colors" />
-               <div class="mt-2 text-sm text-gray-500">平均使用率</div>
+        <!-- Disk Card -->
+        <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-sm hover:shadow-md transition-all border border-slate-100 dark:border-slate-700">
+          <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <el-icon :size="60" class="text-orange-500"><Coin /></el-icon>
+          </div>
+          <div class="flex flex-col h-full justify-between relative z-10">
+            <div>
+              <p class="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase tracking-wider">磁盘均值</p>
+              <h2 class="text-3xl font-bold text-slate-800 dark:text-white mt-2">{{ avgDiskUsage }}%</h2>
             </div>
-          </el-card>
-        </el-col>
-      </el-row>
+            <!-- Progress Bar Style for Disk -->
+            <div class="mt-6 w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+              <div class="bg-gradient-to-r from-orange-400 to-red-500 h-2.5 rounded-full transition-all duration-500" :style="{ width: avgDiskUsage + '%' }"></div>
+            </div>
+            <div class="mt-4 text-xs text-slate-400">各盘符详情见下表</div>
+          </div>
+        </div>
+      </div>
 
-      <!-- 趋势图 -->
-      <el-row :gutter="20" class="mb-6">
-        <el-col :span="24">
-          <el-card shadow="hover" class="glass-effect">
-            <template #header>
-              <div class="flex justify-between items-center">
-                <span class="font-bold">资源监控趋势</span>
-              </div>
-            </template>
-            <div ref="chartRef" style="height: 350px; width: 100%;"></div>
-          </el-card>
-        </el-col>
-      </el-row>
+      <!-- Main Layout: Trend Chart & Details -->
+      
+      <!-- Trend Chart (Full Width) -->
+      <div class="rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+          <div class="flex justify-between items-center mb-6">
+            <h3 class="text-lg font-bold text-slate-800 dark:text-white">实时流量趋势</h3>
+            <div class="flex items-center space-x-4">
+               <div class="flex space-x-4 text-sm mr-4">
+                  <span class="flex items-center"><span class="w-3 h-3 rounded-full bg-blue-500 mr-2"></span>CPU</span>
+                  <span class="flex items-center"><span class="w-3 h-3 rounded-full bg-purple-500 mr-2"></span>内存</span>
+                  <span class="flex items-center"><span class="w-3 h-3 rounded-full bg-teal-500 mr-2"></span>JVM</span>
+               </div>
+               <el-button circle size="small" @click="handleExpand">
+                 <el-icon><FullScreen /></el-icon>
+               </el-button>
+            </div>
+          </div>
+          <div ref="mainChartRef" class="w-full h-[350px]"></div>
+      </div>
 
-      <!-- 详细信息 -->
-      <el-row :gutter="20">
-        <el-col :xs="24" :lg="12" class="mb-6 lg:mb-0">
-          <el-card shadow="hover" class="glass-effect h-full">
-            <template #header>
-              <span class="font-bold">服务器信息</span>
-            </template>
-            <el-descriptions :column="1" border>
-              <el-descriptions-item label="服务器名称">{{ server.sys?.computerName }}</el-descriptions-item>
-              <el-descriptions-item label="服务器IP">{{ server.sys?.computerIp }}</el-descriptions-item>
-              <el-descriptions-item label="操作系统">{{ server.sys?.osName }}</el-descriptions-item>
-              <el-descriptions-item label="系统架构">{{ server.sys?.osArch }}</el-descriptions-item>
-              <el-descriptions-item label="项目路径">{{ server.sys?.userDir }}</el-descriptions-item>
-            </el-descriptions>
-            
-            <div class="mt-6 font-bold mb-4">JVM 信息</div>
-             <el-descriptions :column="1" border>
-              <el-descriptions-item label="Java名称">{{ server.jvm?.name || 'Java HotSpot(TM) 64-Bit Server VM' }}</el-descriptions-item>
-              <el-descriptions-item label="Java版本">{{ server.jvm?.version }}</el-descriptions-item>
-              <el-descriptions-item label="启动时间">{{ server.jvm?.startTime }}</el-descriptions-item>
-              <el-descriptions-item label="运行时长">{{ server.jvm?.runTime }}</el-descriptions-item>
-              <el-descriptions-item label="安装路径">{{ server.jvm?.home }}</el-descriptions-item>
-            </el-descriptions>
-          </el-card>
-        </el-col>
+      <!-- History Dialog -->
+      <el-dialog
+        v-model="dialogVisible"
+        title="历史资源监控趋势"
+        width="80%"
+        destroy-on-close
+        align-center
+        class="glass-dialog"
+      >
+        <div class="flex justify-end mb-4">
+          <el-radio-group v-model="timeRange" size="small" @change="handleTimeRangeChange">
+            <el-radio-button label="1h">1小时</el-radio-button>
+            <el-radio-button label="3h">3小时</el-radio-button>
+            <el-radio-button label="24h">24小时</el-radio-button>
+            <el-radio-button label="7d">7天</el-radio-button>
+          </el-radio-group>
+        </div>
+        <div v-loading="historyLoading" class="h-[500px] w-full" ref="historyChartRef"></div>
+      </el-dialog>
 
-        <el-col :xs="24" :lg="12">
-          <el-card shadow="hover" class="glass-effect h-full">
-            <template #header>
-              <span class="font-bold">磁盘状态</span>
-            </template>
-            <el-table :data="server.sysFiles" style="width: 100%">
-              <el-table-column prop="dirName" label="盘符路径" />
-              <el-table-column prop="typeName" label="文件系统" width="100" />
-              <el-table-column prop="total" label="总大小" width="100" />
-              <el-table-column prop="free" label="可用大小" width="100" />
-              <el-table-column prop="used" label="已用大小" width="100" />
-              <el-table-column label="使用率" width="180">
-                <template #default="scope">
-                  <el-progress 
-                    :percentage="scope.row.usage" 
-                    :color="scope.row.usage > 80 ? '#F56C6C' : (scope.row.usage > 50 ? '#E6A23C' : '#67C23A')"
-                  />
-                </template>
-              </el-table-column>
-            </el-table>
-          </el-card>
-        </el-col>
-      </el-row>
+      <!-- Bottom Info Grid (Server Info & Disk Status) -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Server Info -->
+        <div class="rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-sm border border-slate-100 dark:border-slate-700 h-full">
+             <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-4">服务器信息</h3>
+             <div class="space-y-4">
+                <div class="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-2">
+                  <span class="text-slate-500 text-sm">主机名称</span>
+                  <span class="text-slate-700 dark:text-slate-300 font-medium text-sm truncate max-w-[150px]">{{ server.sys?.computerName }}</span>
+                </div>
+                 <div class="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-2">
+                  <span class="text-slate-500 text-sm">操作系统</span>
+                  <span class="text-slate-700 dark:text-slate-300 font-medium text-sm">{{ server.sys?.osName }}</span>
+                </div>
+                 <div class="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-2">
+                  <span class="text-slate-500 text-sm">系统架构</span>
+                  <span class="text-slate-700 dark:text-slate-300 font-medium text-sm">{{ server.sys?.osArch }}</span>
+                </div>
+                 <div class="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-2">
+                  <span class="text-slate-500 text-sm">Java版本</span>
+                  <span class="text-slate-700 dark:text-slate-300 font-medium text-sm">{{ server.jvm?.version }}</span>
+                </div>
+                 <div class="flex justify-between pt-1">
+                  <span class="text-slate-500 text-sm">运行时长</span>
+                  <span class="text-slate-700 dark:text-slate-300 font-medium text-sm">{{ server.jvm?.runTime }}</span>
+                </div>
+             </div>
+          </div>
+
+          <!-- Disk List -->
+           <div class="rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden h-full">
+             <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-4">磁盘状态</h3>
+             <div class="space-y-4 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                <div v-for="(disk, index) in server.sysFiles" :key="index" class="bg-slate-50 dark:bg-slate-700/50 p-3 rounded-lg">
+                   <div class="flex justify-between items-center mb-2">
+                      <span class="text-xs font-bold text-slate-700 dark:text-slate-300">{{ disk.dirName }}</span>
+                      <span class="text-xs text-slate-500">{{ disk.typeName }}</span>
+                   </div>
+                   <div class="flex justify-between items-center text-xs text-slate-500 mb-1">
+                      <span>{{ disk.used }} / {{ disk.total }}</span>
+                      <span :class="{'text-red-500': disk.usage > 80, 'text-orange-500': disk.usage > 50 && disk.usage <= 80, 'text-green-500': disk.usage <= 50}">{{ disk.usage }}%</span>
+                   </div>
+                   <div class="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-1.5 overflow-hidden">
+                      <div 
+                        class="h-1.5 rounded-full transition-all duration-500" 
+                        :class="{'bg-red-500': disk.usage > 80, 'bg-orange-500': disk.usage > 50 && disk.usage <= 80, 'bg-green-500': disk.usage <= 50}"
+                        :style="{ width: disk.usage + '%' }">
+                      </div>
+                   </div>
+                </div>
+             </div>
+           </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
-import { getServer } from '@/api/monitor/server'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
+import { getServer, getServerHistory } from '@/api/monitor/server'
 import * as echarts from 'echarts'
-import { Cpu, Files, Platform, Coin } from '@element-plus/icons-vue'
+import { Cpu, Files, Platform, Coin, FullScreen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 const loading = ref(true)
 const server = ref<any>({})
-const chartRef = ref<HTMLElement | null>(null)
-let chartInstance: echarts.ECharts | null = null
+const mainChartRef = ref<HTMLElement | null>(null)
+const historyChartRef = ref<HTMLElement | null>(null)
+const cpuChartRef = ref<HTMLElement | null>(null)
+const memChartRef = ref<HTMLElement | null>(null)
+const jvmChartRef = ref<HTMLElement | null>(null)
+
+let mainChart: echarts.ECharts | null = null
+let historyChart: echarts.ECharts | null = null
+let cpuChart: echarts.ECharts | null = null
+let memChart: echarts.ECharts | null = null
+let jvmChart: echarts.ECharts | null = null
 let timer: any = null
 
-// 颜色配置
-const colors = [
-  { color: '#67C23A', percentage: 50 },
-  { color: '#E6A23C', percentage: 80 },
-  { color: '#F56C6C', percentage: 100 },
-]
+const dialogVisible = ref(false)
+const historyLoading = ref(false)
+const timeRange = ref('1h') // 1h, 3h, 24h, 7d
+
+const handleExpand = () => {
+  dialogVisible.value = true
+  nextTick(() => {
+    // 每次打开都重新初始化，因为 dialog 关闭可能导致 DOM 销毁
+    if (historyChart) {
+      historyChart.dispose()
+      historyChart = null
+    }
+    initHistoryChart()
+    fetchHistoryData()
+  })
+}
+
+const handleTimeRangeChange = (val: string) => {
+  timeRange.value = val
+  fetchHistoryData()
+}
+
+const fetchHistoryData = async () => {
+  historyLoading.value = true
+  try {
+    const end = new Date()
+    let start = new Date()
+    
+    switch (timeRange.value) {
+      case '1h':
+        start.setHours(end.getHours() - 1)
+        break
+      case '3h':
+        start.setHours(end.getHours() - 3)
+        break
+      case '24h':
+        start.setHours(end.getHours() - 24)
+        break
+      case '7d':
+        start.setDate(end.getDate() - 7)
+        break
+    }
+
+    const res = await getServerHistory({
+      startTime: formatDate(start),
+      endTime: formatDate(end)
+    })
+    
+    updateHistoryChart(res.data)
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('获取历史数据失败')
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+const formatDate = (date: Date) => {
+  const y = date.getFullYear()
+  const m = (date.getMonth() + 1).toString().padStart(2, '0')
+  const d = date.getDate().toString().padStart(2, '0')
+  const h = date.getHours().toString().padStart(2, '0')
+  const min = date.getMinutes().toString().padStart(2, '0')
+  const s = date.getSeconds().toString().padStart(2, '0')
+  return `${y}-${m}-${d} ${h}:${min}:${s}`
+}
+
+const initHistoryChart = () => {
+  if (historyChartRef.value && !historyChart) {
+    historyChart = echarts.init(historyChartRef.value)
+  }
+}
+
+const updateHistoryChart = (data: any[]) => {
+  if (!historyChart) return
+
+  const times = data.map(item => item.createTime.replace('T', ' '))
+  const cpuData = data.map(item => item.cpuUsage)
+  const memData = data.map(item => item.memUsage)
+  const jvmData = data.map(item => item.jvmUsage)
+
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' }
+    },
+    legend: {
+      data: ['CPU', '内存', 'JVM'],
+      top: 0
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: times,
+      axisLabel: {
+        show: false
+      },
+      axisTick: {
+        show: false
+      }
+    },
+    yAxis: {
+      type: 'value',
+      max: 100
+    },
+    series: [
+      {
+        name: 'CPU',
+        type: 'line',
+        smooth: true,
+        showSymbol: false,
+        data: cpuData,
+        itemStyle: { color: '#3b82f6' },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(59, 130, 246, 0.2)' },
+            { offset: 1, color: 'rgba(59, 130, 246, 0.0)' }
+          ])
+        }
+      },
+      {
+        name: '内存',
+        type: 'line',
+        smooth: true,
+        showSymbol: false,
+        data: memData,
+        itemStyle: { color: '#a855f7' },
+        areaStyle: {
+           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(168, 85, 247, 0.2)' },
+            { offset: 1, color: 'rgba(168, 85, 247, 0.0)' }
+          ])
+        }
+      },
+      {
+        name: 'JVM',
+        type: 'line',
+        smooth: true,
+        showSymbol: false,
+        data: jvmData,
+        itemStyle: { color: '#14b8a6' }
+      }
+    ]
+  }
+  historyChart.setOption(option)
+}
 
 // 简单的平均磁盘使用率计算
 const avgDiskUsage = computed(() => {
@@ -163,7 +362,7 @@ const avgDiskUsage = computed(() => {
   return Math.round(totalUsage / server.value.sysFiles.length)
 })
 
-// 趋势图数据缓存 (只保留最近20个点)
+// 趋势图数据缓存 (只保留最近30个点)
 const trendData = {
   time: [] as string[],
   cpu: [] as number[],
@@ -171,80 +370,162 @@ const trendData = {
   jvm: [] as number[]
 }
 
-const initChart = () => {
-  if (chartRef.value) {
-    chartInstance = echarts.init(chartRef.value)
-    updateChart()
-    window.addEventListener('resize', resizeChart)
-  }
-}
-
-const resizeChart = () => {
-  chartInstance?.resize()
-}
-
-const updateChart = () => {
-  if (!chartInstance) return
-
+// 初始化迷你图表 (Sparklines)
+const initMiniChart = (dom: HTMLElement, color: string, data: number[]) => {
+  const chart = echarts.init(dom)
   const option = {
-    tooltip: {
-      trigger: 'axis'
-    },
-    legend: {
-      data: ['CPU使用率', '内存使用率', 'JVM使用率']
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      boundaryGap: false,
-      data: trendData.time
-    },
-    yAxis: {
-      type: 'value',
-      max: 100
-    },
-    series: [
-      {
-        name: 'CPU使用率',
-        type: 'line',
-        smooth: true,
-        data: trendData.cpu,
-        itemStyle: { color: '#409EFF' },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(64,158,255,0.3)' },
-            { offset: 1, color: 'rgba(64,158,255,0.01)' }
-          ])
-        }
+    animationDuration: 1000,
+    animationEasing: 'cubicOut',
+    grid: { left: 0, right: 0, top: 0, bottom: 0 },
+    xAxis: { type: 'category', show: false, boundaryGap: false },
+    yAxis: { type: 'value', show: false, min: 0, max: 100 },
+    series: [{
+      type: 'line',
+      smooth: true,
+      showSymbol: false,
+      data: data,
+      lineStyle: { 
+        width: 2, 
+        color: color,
+        shadowColor: color, 
+        shadowBlur: 5
       },
-      {
-        name: '内存使用率',
-        type: 'line',
-        smooth: true,
-        data: trendData.mem,
-        itemStyle: { color: '#67C23A' },
-        areaStyle: {
-           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(103,194,58,0.3)' },
-            { offset: 1, color: 'rgba(103,194,58,0.01)' }
-          ])
-        }
-      },
-      {
-        name: 'JVM使用率',
-        type: 'line',
-        smooth: true,
-        data: trendData.jvm,
-        itemStyle: { color: '#E6A23C' }
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: color },
+          { offset: 1, color: 'rgba(255,255,255,0)' } // 透明
+        ]),
+        opacity: 0.2
       }
-    ]
+    }]
   }
-  chartInstance.setOption(option)
+  chart.setOption(option)
+  return chart
+}
+
+const updateMiniCharts = () => {
+    // 构造一些假的历史数据用于填充mini图表的初始状态，或者直接使用trendData
+    // 这里简单使用trendData的最后10个点，如果没有则填充0
+    const len = trendData.cpu.length
+    const sliceLen = 10
+    const cpuData = len >= sliceLen ? trendData.cpu.slice(len - sliceLen) : Array(sliceLen).fill(0).map((_, i) => trendData.cpu[i] || 0)
+    const memData = len >= sliceLen ? trendData.mem.slice(len - sliceLen) : Array(sliceLen).fill(0).map((_, i) => trendData.mem[i] || 0)
+    const jvmData = len >= sliceLen ? trendData.jvm.slice(len - sliceLen) : Array(sliceLen).fill(0).map((_, i) => trendData.jvm[i] || 0)
+
+    cpuChart?.setOption({ series: [{ data: cpuData }] })
+    memChart?.setOption({ series: [{ data: memData }] })
+    jvmChart?.setOption({ series: [{ data: jvmData }] })
+}
+
+
+const initMainChart = () => {
+  if (mainChartRef.value) {
+    mainChart = echarts.init(mainChartRef.value)
+    const option = {
+      animationDuration: 1000,
+      animationEasing: 'cubicOut',
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        borderColor: '#e2e8f0',
+        textStyle: { color: '#1e293b' },
+        axisPointer: {
+            lineStyle: {
+                color: '#94a3b8',
+                type: 'dashed'
+            }
+        }
+      },
+      grid: {
+        left: '10px',
+        right: '10px',
+        bottom: '10px',
+        top: '10px',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'category',
+        boundaryGap: false,
+        data: trendData.time,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { color: '#94a3b8', margin: 15, fontSize: 10 }
+      },
+      yAxis: {
+        type: 'value',
+        max: 100,
+        splitLine: {
+            lineStyle: {
+                color: '#f1f5f9',
+                type: 'dashed'
+            }
+        },
+        axisLabel: { color: '#94a3b8' }
+      },
+      series: [
+        {
+          name: 'CPU',
+          type: 'line',
+          smooth: 0.4,
+          showSymbol: false,
+          data: trendData.cpu,
+          itemStyle: { color: '#3b82f6' }, // Blue-500
+          lineStyle: { 
+            width: 3,
+            shadowColor: 'rgba(59, 130, 246, 0.5)',
+            shadowBlur: 10
+          },
+          areaStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: 'rgba(59, 130, 246, 0.2)' },
+              { offset: 1, color: 'rgba(59, 130, 246, 0.0)' }
+            ])
+          }
+        },
+        {
+          name: '内存',
+          type: 'line',
+          smooth: 0.4,
+          showSymbol: false,
+          data: trendData.mem,
+          itemStyle: { color: '#a855f7' }, // Purple-500
+          lineStyle: { 
+            width: 3,
+            shadowColor: 'rgba(168, 85, 247, 0.5)',
+            shadowBlur: 10
+          },
+          areaStyle: {
+             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: 'rgba(168, 85, 247, 0.2)' },
+              { offset: 1, color: 'rgba(168, 85, 247, 0.0)' }
+            ])
+          }
+        },
+        {
+          name: 'JVM',
+          type: 'line',
+          smooth: 0.4,
+          showSymbol: false,
+          data: trendData.jvm,
+          itemStyle: { color: '#14b8a6' }, // Teal-500
+          lineStyle: { width: 3, type: 'dashed' },
+          areaStyle: { opacity: 0 } // No area for JVM to reduce clutter
+        }
+      ]
+    }
+    mainChart.setOption(option)
+  }
+}
+
+const updateMainChart = () => {
+  mainChart?.setOption({
+    xAxis: { data: trendData.time },
+    series: [
+      { data: trendData.cpu },
+      { data: trendData.mem },
+      { data: trendData.jvm }
+    ]
+  })
 }
 
 const getList = async () => {
@@ -257,7 +538,7 @@ const getList = async () => {
     const now = new Date()
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`
     
-    if (trendData.time.length > 20) {
+    if (trendData.time.length > 30) {
       trendData.time.shift()
       trendData.cpu.shift()
       trendData.mem.shift()
@@ -269,51 +550,60 @@ const getList = async () => {
     trendData.mem.push(server.value.mem?.usage || 0)
     trendData.jvm.push(server.value.jvm?.usage || 0)
     
-    updateChart()
+    updateMainChart()
+    updateMiniCharts()
   } catch (error) {
     console.error(error)
-    ElMessage.error('获取服务器监控信息失败')
+    // ElMessage.error('获取服务器监控信息失败') // 静默失败，避免刷屏
     loading.value = false
   }
+}
+
+const resizeAllCharts = () => {
+    mainChart?.resize()
+    cpuChart?.resize()
+    memChart?.resize()
+    jvmChart?.resize()
 }
 
 onMounted(() => {
   getList()
   nextTick(() => {
-    initChart()
+    initMainChart()
+    // Init mini charts with empty data first
+    if (cpuChartRef.value) cpuChart = initMiniChart(cpuChartRef.value, '#3b82f6', [])
+    if (memChartRef.value) memChart = initMiniChart(memChartRef.value, '#a855f7', [])
+    if (jvmChartRef.value) jvmChart = initMiniChart(jvmChartRef.value, '#14b8a6', [])
+    
+    window.addEventListener('resize', resizeAllCharts)
   })
   timer = setInterval(() => {
     getList()
-  }, 5000)
+  }, 1000) // 1s 刷新一次
 })
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
-  if (chartInstance) {
-    chartInstance.dispose()
-    window.removeEventListener('resize', resizeChart)
-  }
+  mainChart?.dispose()
+  cpuChart?.dispose()
+  memChart?.dispose()
+  jvmChart?.dispose()
+  window.removeEventListener('resize', resizeAllCharts)
 })
 </script>
 
 <style scoped lang="scss">
-.monitor-card {
-  transition: all 0.3s;
-  &:hover {
-    transform: translateY(-5px);
-  }
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
 }
-
-.glass-effect {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
-
-/* 适配暗黑模式 */
-html.dark .glass-effect {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 20px;
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #475569;
 }
 </style>

@@ -9,13 +9,10 @@ import com.swiftboot.admin.mapper.SysOperLogMapper;
 import com.swiftboot.admin.service.SysOperLogService;
 import com.swiftboot.common.core.domain.PageQuery;
 import com.swiftboot.common.log.annotation.Log;
-import com.swiftboot.common.log.event.OperLogEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -85,28 +82,5 @@ public class SysOperLogServiceImpl extends ServiceImpl<SysOperLogMapper, SysOper
         }
         modules.addAll(cachedModuleNames);
         return new ArrayList<>(modules);
-    }
-
-    /**
-     * 异步监听操作日志事件
-     */
-    @Async
-    @EventListener
-    public void handleOperLogEvent(OperLogEvent event) {
-        SysOperLog operLog = new SysOperLog();
-        operLog.setTitle(event.getTitle());
-        operLog.setBusinessType(event.getBusinessType());
-        operLog.setMethod(event.getMethod());
-        operLog.setRequestMethod(event.getRequestMethod());
-        operLog.setOperName(event.getOperName());
-        operLog.setOperUrl(event.getOperUrl());
-        operLog.setOperIp(event.getOperIp());
-        operLog.setOperParam(event.getOperParam());
-        operLog.setJsonResult(event.getJsonResult());
-        operLog.setStatus(event.getStatus());
-        operLog.setErrorMsg(event.getErrorMsg());
-        operLog.setOperTime(event.getOperTime());
-        operLog.setCostTime(event.getCostTime());
-        saveOperLog(operLog);
     }
 }
