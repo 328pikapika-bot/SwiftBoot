@@ -7,12 +7,3 @@ export function getIndexStats() {
     method: 'get'
   })
 }
-
-// 发送 AI 对话
-export function sendAiChat(content: string) {
-  return request({
-    url: '/system/ai/chat',
-    method: 'post',
-    data: { content }
-  })
-}

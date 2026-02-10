@@ -37,16 +37,15 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.util.StreamUtils;
 
 /**
- * AI 智能助手控制器
- * 负责处理前端 AI 助手的对话请求，集成 RAG（检索增强生成）支持。
- * 当前仅支持 DeepSeek 模型。
- *
- * 主要功能：
- * 1. 接收用户问题，判断是否需要检索向量库（RAG）。
- * 2. 调用 Python 向量检索服务获取相关上下文。
- * 3. 组装 System Prompt（包含 Skills 技能库 + RAG 上下文）。
- * 4. 调用 DeepSeek AI 模型（支持流式/非流式）。
- * 5. 管理对话历史（Redis 短期记忆 + ChromaDB 长期记忆）。
+ * AI 智能助手控制器 - Agent 模式
+ * 负责处理前端 AI 助手的对话请求，集成 Agent Function Calling 支持。
+ * 
+ * 【Agent 工具调用流程】：
+ * 1. 用户提问 → LLM（携带 tools 定义）
+ * 2. LLM 决定是否调用工具 → 如需调用，返回 tool_calls
+ * 3. 执行工具（调用 RAG 检索引擎）→ 获取代码上下文
+ * 4. 将工具结果发送给 LLM → LLM 生成最终回答
+ * 5. 流式输出给用户
  */
 @Tag(name = "智能会话")
 @RestController
@@ -62,6 +61,7 @@ public class SysAiController {
     // Redis 历史记录 Key 前缀
     private static final String HISTORY_KEY_PREFIX = "ai:history:";
     // 向量检索的最大距离阈值（越小越相似，0.6 为经验值）
+    // 向量检索的最大距离阈值（越小越相似，0.6 为经验值），已在 RAG 服务内部使用，此处仅作配置声明
     private static final double MEMORY_MAX_DISTANCE = 0.6;
 
     // DeepSeek 配置
@@ -77,44 +77,119 @@ public class SysAiController {
     // 缓存项目内置的 Skills (技能库) 内容
     private String skillsContext = "";
     
-    // 缓存 RAG 提示词规则
+    // 缓存 RAG 提示词规则（旧模式，保留作为降级方案）
     private String ragRuleContext = "";
     
+    // 缓存 Agent 模式提示词规则
+    private String agentRuleContext = "";
+    
+    // 缓存工具搜索规则
+    private String toolSearchRuleContext = "";
+    
+    // Agent 工具定义 (Function Calling)
+    // 关键在于 description 的引导性，让 LLM 主动调用工具
+    private JSONArray agentTools;
+    
+    /**
+     * 构建 Agent 工具定义
+     * DeepSeek API 支持 OpenAI 兼容的 Function Calling 格式
+     */
+    private JSONArray buildAgentTools() {
+        JSONArray tools = new JSONArray();
+        
+        // Tool 1: search_codebase - 代码库检索
+        JSONObject searchCodebaseTool = new JSONObject();
+        searchCodebaseTool.set("type", "function");
+        
+        JSONObject function = new JSONObject();
+        function.set("name", "search_codebase");
+        
+        String desc = "搜索项目代码库，获取相关代码片段和业务逻辑。";
+        if (StrUtil.isNotEmpty(toolSearchRuleContext)) {
+            desc += "\n" + toolSearchRuleContext;
+        } else {
+            // Fallback description if file not found
+            desc += "【必须调用此工具的场景】：\n" +
+                    "1. 用户询问【业务逻辑】【功能流程】【实现原理】时；\n" +
+                    "2. 用户询问【接口定义】【API】【Controller/Service/Mapper】时；\n" +
+                    "3. 用户询问【数据库表结构】【字段含义】【实体类】时；\n" +
+                    "4. 用户询问【报错排查】【异常处理】【Bug 分析】时；\n" +
+                    "5. 用户提出任何宏观问题（如'xx是怎么实现的'、'xx的查询逻辑'）需要代码佐证时。\n" +
+                    "【不需要调用的场景】：纯闲聊、通用编程知识、与本项目无关的问题。";
+        }
+        
+        function.set("description", desc);
+        
+        // 定义参数
+        JSONObject parameters = new JSONObject();
+        parameters.set("type", "object");
+        
+        JSONObject properties = new JSONObject();
+        JSONObject queryParam = new JSONObject();
+        queryParam.set("type", "string");
+        queryParam.set("description", "搜索关键词或问题描述，建议包含具体的类名、方法名、功能模块名等");
+        properties.set("query", queryParam);
+        
+        parameters.set("properties", properties);
+        parameters.set("required", new JSONArray().put("query"));
+        
+        function.set("parameters", parameters);
+        searchCodebaseTool.set("function", function);
+        tools.add(searchCodebaseTool);
+        
+        return tools;
+    }
+    
     // Python 检索引擎地址 (RAG 服务)
-    // /retrieve: 检索代码库知识
-    // /memory/query: 检索历史对话记忆
-    // /memory/add: 存储新的对话记忆
-    // /memory/delete: 删除对话记忆
     private static final String RAG_API_URL = "http://localhost:8001/retrieve";
     private static final String MEMORY_QUERY_URL = "http://localhost:8001/memory/query";
     private static final String MEMORY_ADD_URL = "http://localhost:8001/memory/add";
     private static final String MEMORY_DELETE_URL = "http://localhost:8001/memory/delete";
 
     /**
-     * 初始化 Skills 技能库
-     * 系统启动时，扫描项目根目录下的 `project-skills` 文件夹，读取所有 markdown 文件。
-     * 这些内容会被作为 System Prompt 的一部分，赋予 AI 项目特定的知识。
+     * 初始化 Skills 技能库和 Agent 规则
      */
     @PostConstruct
     public void initSkills() {
         try {
-            // 加载 RAG 规则文件
+            // 加载 RAG 规则文件（旧模式，保留作为降级方案）
             try {
                 ClassPathResource resource = new ClassPathResource("ai/rules/rag_rule.md");
                 if (resource.exists()) {
                     ragRuleContext = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
                     System.out.println("RAG Rule loaded successfully, length: " + ragRuleContext.length());
-                } else {
-                    System.out.println("RAG Rule file not found in classpath: ai/rules/rag_rule.md");
                 }
             } catch (Exception e) {
                 System.err.println("Failed to load RAG rule: " + e.getMessage());
             }
+            
+            // 加载 Agent 模式规则文件
+            try {
+                ClassPathResource agentResource = new ClassPathResource("ai/rules/agent_rule.md");
+                if (agentResource.exists()) {
+                    agentRuleContext = StreamUtils.copyToString(agentResource.getInputStream(), StandardCharsets.UTF_8);
+                    System.out.println("Agent Rule loaded successfully, length: " + agentRuleContext.length());
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to load Agent rule: " + e.getMessage());
+            }
+            
+            // 加载工具搜索规则文件
+            try {
+                ClassPathResource searchRuleResource = new ClassPathResource("ai/rules/tool_search_codebase_rule.md");
+                if (searchRuleResource.exists()) {
+                    toolSearchRuleContext = StreamUtils.copyToString(searchRuleResource.getInputStream(), StandardCharsets.UTF_8);
+                    System.out.println("Tool Search Rule loaded successfully, length: " + toolSearchRuleContext.length());
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to load Tool Search rule: " + e.getMessage());
+            }
+            
+            // 初始化工具定义 (需在规则加载后执行)
+            this.agentTools = buildAgentTools();
 
             // 扫描项目根目录下的 project-skills 目录
-            // 注意：实际部署时路径可能需要调整，这里适配了本地开发环境的多模块结构
             String projectRoot = System.getProperty("user.dir");
-            // 如果是模块运行，可能需要回退一级目录找到根目录
             if (projectRoot.endsWith("swiftboot-admin")) {
                 projectRoot = new File(projectRoot).getParentFile().getParent();
             } else if (projectRoot.endsWith("swiftboot-backend")) {
@@ -132,7 +207,6 @@ public class SysAiController {
                         File skillFile = new File(folder, "SKILL.md");
                         if (skillFile.exists()) {
                             String content = FileUtil.readString(skillFile, StandardCharsets.UTF_8);
-                            // 简单的 frontmatter 解析 (移除文件头部的 YAML 配置信息)
                             String name = folder.getName();
                             if (content.startsWith("---")) {
                                 int endIndex = content.indexOf("---", 3);
@@ -147,8 +221,6 @@ public class SysAiController {
                 }
                 skillsContext = sb.toString();
                 System.out.println("Skills loaded successfully, length: " + skillsContext.length());
-            } else {
-                System.out.println("Skills directory not found: " + skillsDir.getAbsolutePath());
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -158,15 +230,12 @@ public class SysAiController {
 
     /**
      * 清除 AI 对话缓存 (Redis + 向量库)
-     * 用于管理员或用户手动重置记忆
      */
     @Operation(summary = "清除AI缓存")
     @Log(title = "智能会话", businessType = BusinessType.CLEAN)
     @DeleteMapping("/clean")
     public R<Void> cleanHistory(@RequestParam(required = false) Long targetUserId) {
-        // 1. 确定要清除的用户 ID
         Long currentUserId = SecurityUtils.getUserId();
-        // 只有管理员可以清除其他人的缓存，普通用户只能清除自己的
         if (targetUserId != null && !currentUserId.equals(targetUserId)) {
             if (!SecurityUtils.isAdmin()) {
                 return R.fail("无权操作其他用户的缓存");
@@ -175,189 +244,28 @@ public class SysAiController {
             targetUserId = currentUserId;
         }
 
-        // 2. 清除 Redis 短期记忆
         String redisKey = HISTORY_KEY_PREFIX + targetUserId;
         stringRedisTemplate.delete(redisKey);
 
-        // 3. 清除 向量数据库 长期记忆
         try {
             JSONObject body = new JSONObject();
             body.set("user_id", String.valueOf(targetUserId));
-            
-            HttpRequest.post(MEMORY_DELETE_URL)
-                    .timeout(5000)
-                    .body(body.toString())
-                    .execute();
+            HttpRequest.post(MEMORY_DELETE_URL).timeout(5000).body(body.toString()).execute();
         } catch (Exception e) {
             System.err.println("Vector DB delete failed: " + e.getMessage());
-            // 不阻断流程，继续执行
         }
 
         return R.ok();
     }
 
     /**
-     * 发送普通对话 (非流式)
-     * 适用于简单的问答场景，前端等待完整响应后一次性展示。
-     */
-    @Operation(summary = "发送对话")
-    @Log(title = "智能会话", businessType = BusinessType.OTHER)
-    @PostMapping("/chat")
-    public R<String> chat(@RequestBody Map<String, String> params) {
-        String content = params.get("content");
-        if (content == null || content.trim().isEmpty()) {
-            return R.fail("内容不能为空");
-        }
-
-        // 1. 构建 System Prompt
-        String tempSystemPrompt = "你是 SwiftBoot 的智能助手，一个专业的全栈开发专家。请用简洁、专业的语言回答用户关于开发、代码或项目管理的问题。";
-        if (StrUtil.isNotEmpty(skillsContext)) {
-            tempSystemPrompt += "\n\n" + skillsContext;
-        }
-        final String systemPrompt = tempSystemPrompt;
-        Long userId = SecurityUtils.getUserId();
-        
-        try {
-            HttpResponse response;
-            
-            // --- DeepSeek 调用逻辑 ---
-            JSONObject requestBody = new JSONObject();
-            requestBody.set("model", deepseekModel);
-            requestBody.set("stream", false);
-
-            JSONArray messages = new JSONArray();
-            JSONObject systemMessage = new JSONObject();
-            systemMessage.set("role", "system");
-            systemMessage.set("content", systemPrompt);
-            messages.add(systemMessage);
-
-            // 2. 记忆检索 (RAG - 历史对话)
-            // 如果问题包含特定关键词，尝试从向量库检索相关的历史对话
-            if (shouldQueryVector(content)) {
-                try {
-                    JSONObject memoryReq = new JSONObject();
-                    memoryReq.set("user_id", String.valueOf(userId));
-                    memoryReq.set("question", content);
-                    memoryReq.set("n_results", 6);
-                    memoryReq.set("max_distance", MEMORY_MAX_DISTANCE);
-                    String memoryResp = HttpRequest.post(MEMORY_QUERY_URL)
-                            .timeout(5000)
-                            .body(memoryReq.toString())
-                            .execute()
-                            .body();
-                    JSONObject memoryJson = JSONUtil.parseObj(memoryResp);
-                    JSONArray results = memoryJson.getJSONArray("results");
-                    if (results != null) {
-                        // 将检索到的历史记忆插入到 messages 中
-                        for (int i = 0; i < results.size(); i++) {
-                            JSONObject item = results.getJSONObject(i);
-                            JSONObject meta = item.getJSONObject("metadata");
-                            String memContent = item.getStr("content");
-                            String role = meta != null ? meta.getStr("role") : null;
-                            if (StrUtil.isNotBlank(memContent) && StrUtil.isNotBlank(role) && !"system".equals(role)) {
-                                JSONObject msg = new JSONObject();
-                                msg.set("role", role);
-                                msg.set("content", memContent);
-                                messages.add(msg);
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    System.err.println("Memory query failed: " + e.getMessage());
-                }
-            }
-
-            // 3. 注入近期对话历史 (Redis Short-Term Memory)
-            // 无论是否触发 RAG，都携带最近的 N 条对话记录，保证上下文连贯性
-            addRecentHistory(messages, userId);
-
-            JSONObject userMessage = new JSONObject();
-            userMessage.set("role", "user");
-            userMessage.set("content", content);
-            messages.add(userMessage);
-
-            requestBody.set("messages", messages);
-
-            System.out.println("Sending AI request to: " + deepseekApiUrl);
-            response = HttpRequest.post(deepseekApiUrl)
-                    .timeout(90000)
-                    .header("Authorization", "Bearer " + deepseekApiKey)
-                    .header("Content-Type", "application/json")
-                    .body(requestBody.toString())
-                    .execute();
-
-            // 3. 处理响应
-            if (response.isOk()) {
-                JSONObject jsonResponse = JSONUtil.parseObj(response.body());
-                if (jsonResponse.containsKey("error")) {
-                     return R.fail("AI 服务错误: " + jsonResponse.getJSONObject("error").getStr("message"));
-                }
-                String reply = jsonResponse.getJSONArray("choices")
-                        .getJSONObject(0)
-                        .getJSONObject("message")
-                        .getStr("content");
-
-                // 4. 存储新记忆 (RAG - 写入)
-                try {
-                    long now = System.currentTimeMillis();
-                    JSONObject memoryAdd = new JSONObject();
-                    memoryAdd.set("user_id", String.valueOf(userId));
-                    JSONArray memoryMessages = new JSONArray();
-                    // 同时存入用户问题和 AI 回复
-                    memoryMessages.add(new JSONObject().set("content", content).set("role", "user").set("timestamp", now).set("sequence", now));
-                    memoryMessages.add(new JSONObject().set("content", reply).set("role", "assistant").set("timestamp", now + 1).set("sequence", now + 1));
-                    memoryAdd.set("messages", memoryMessages);
-                    HttpRequest.post(MEMORY_ADD_URL)
-                            .timeout(5000)
-                            .body(memoryAdd.toString())
-                            .execute();
-                } catch (Exception e) {
-                    System.err.println("Memory add failed: " + e.getMessage());
-                }
-
-                // 5. 持久化到 MySQL (异步记录)
-                try {
-                    SysAiSession aiSession = new SysAiSession();
-                    aiSession.setUserId(userId);
-                    aiSession.setQuestion(content);
-                    aiSession.setAnswer(reply);
-                    aiSession.setModel(deepseekModel);
-                    // 简单估算 Token (1汉字=2token, 1英文=1token)
-                    int tokens = (content.length() + reply.length()) * 2;
-                    aiSession.setTokens(tokens);
-                    // 估算耗时 (暂时没有准确耗时，先填0，流式接口有更准确的耗时)
-                    aiSession.setDuration(0);
-                    aiSessionService.save(aiSession);
-                } catch (Exception e) {
-                    System.err.println("人工智能会话保存到MySQL失败: " + e.getMessage());
-                }
-
-                return R.ok("操作成功", reply);
-            } else {
-                if (response.getStatus() == 401) {
-                    return R.fail("API Key 无效或过期，请在 application-dev.yml 中配置正确的 API Key");
-                }
-                if (response.getStatus() == 402) {
-                    return R.fail("API Key 余额不足，请充值");
-                }
-                return R.fail("AI 服务响应异常: " + response.getStatus());
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            return R.fail("AI 服务调用失败: " + e.getMessage());
-        }
-    }
-
-    /**
-     * 获取 Redis 中的短期历史记录
-     * 用于前端聊天界面初始化时展示最近的几条对话。
+     * 获取历史记录
      */
     @Operation(summary = "获取历史记录")
     @GetMapping("/history")
     public R<List<JSONObject>> getHistory() {
         Long userId = SecurityUtils.getUserId();
         String key = HISTORY_KEY_PREFIX + userId;
-        // 获取 Redis List 中的所有记录
         List<String> historyStr = stringRedisTemplate.opsForList().range(key, 0, -1);
         if (historyStr == null) {
             return R.ok();
@@ -370,7 +278,6 @@ public class SysAiController {
 
     /**
      * 清空历史记录
-     * 清除 Redis 中的短期对话记忆
      */
     @Operation(summary = "清空历史记录")
     @Log(title = "智能会话", businessType = BusinessType.CLEAN)
@@ -383,168 +290,171 @@ public class SysAiController {
     }
 
     /**
-     * 发送对话 (流式 Stream)
+     * 发送对话 (流式 Stream) - Agent 模式
      * 使用 SSE (Server-Sent Events) 技术，实现打字机效果。
-     * 支持 RAG 代码检索 + 历史记忆检索 + 记忆存储。
+     * 
+     * 【Agent 工具调用流程】：
+     * 1. 用户提问 → LLM（携带 tools 定义）
+     * 2. LLM 决定是否调用工具 → 如需调用，返回 tool_calls
+     * 3. 执行工具（调用 RAG 检索引擎）→ 获取代码上下文
+     * 4. 将工具结果发送给 LLM → LLM 生成最终回答
+     * 5. 流式输出给用户
      */
     @Operation(summary = "发送对话(流式)")
     @Log(title = "智能会话", businessType = BusinessType.OTHER)
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(@RequestBody Map<String, Object> params) {
-        final SseEmitter emitter = new SseEmitter(0L); // 0L 表示永不超时
+        final SseEmitter emitter = new SseEmitter(0L);
         String content = (String) params.get("content");
         Long userId = SecurityUtils.getUserId();
         
         if (content == null || content.trim().isEmpty()) {
             try {
-                JSONObject msg = new JSONObject().set("content", "内容不能为空");
-                emitter.send(msg.toString());
+                emitter.send(new JSONObject().set("content", "内容不能为空").toString());
             } catch (Exception ignored) {
             }
             emitter.complete();
             return emitter;
         }
 
-        // 异步线程处理 AI 请求，避免阻塞主线程
         new Thread(() -> {
             long startTime = System.currentTimeMillis();
-            StringBuilder fullReply = new StringBuilder(); // 用于收集 AI 的完整回复，以便存入历史
-                try {
-                    // 1. RAG 代码检索 (Retrieve)
-                    // 调用 Python 服务的 /retrieve 接口，查找项目代码库中相关的片段
-                    String ragContext = "";
-                    if (shouldQueryVector(content)) {
-                        try {
-                            JSONObject ragRequest = new JSONObject();
-                            ragRequest.set("question", content);
-                            ragRequest.set("n_results", 3); // 获取最相关的 3 个代码片段
-                            
-                            System.out.println("Calling RAG Engine: " + RAG_API_URL);
-                            String ragResponse = HttpRequest.post(RAG_API_URL)
-                                    .timeout(5000)
-                                    .body(ragRequest.toString())
-                                    .execute()
-                                    .body();
-                            
-                            JSONObject ragJson = JSONUtil.parseObj(ragResponse);
-                            JSONArray results = ragJson.getJSONArray("results");
-                            if (results != null && !results.isEmpty()) {
-                                StringBuilder sb = new StringBuilder();
-                                sb.append("\n\n=== 参考项目代码上下文 ===\n");
-                                for (int i = 0; i < results.size(); i++) {
-                                    JSONObject item = results.getJSONObject(i);
-                                    JSONObject meta = item.getJSONObject("metadata");
-                                    String codeContent = item.getStr("content");
-                                    String source = meta != null ? meta.getStr("source") : null;
-                                    if (StrUtil.isNotBlank(codeContent)) {
-                                        sb.append("--- Source: ").append(StrUtil.isNotBlank(source) ? source : "unknown").append(" ---\n");
-                                        sb.append(codeContent).append("\n");
-                                    }
-                                }
-                                sb.append("=========================\n");
-                                ragContext = sb.toString();
-                                System.out.println("RAG Context found, length: " + ragContext.length());
-                            }
-                        } catch (Exception e) {
-                            System.err.println("RAG Engine call failed: " + e.getMessage());
-                        }
-                    }
-
-                // 2. 组装 System Prompt (Augment)
-                String tempSystemPrompt = "你是 SwiftBoot 的智能助手，一个专业的全栈开发专家。请用简洁、专业的语言回答用户关于开发、代码或项目管理的问题。";
+            StringBuilder fullReply = new StringBuilder();
+            
+            try {
+                // 1. 构建 Agent 模式的 System Prompt
+                String systemPrompt = buildAgentSystemPrompt();
                 
-                // 添加 Skills (项目文档知识)
-                if (StrUtil.isNotEmpty(skillsContext)) {
-                    tempSystemPrompt += "\n\n" + skillsContext;
-                }
-                
-                // 添加 RAG 上下文 (代码库知识)
-                if (StrUtil.isNotEmpty(ragContext)) {
-                    tempSystemPrompt += ragContext;
-                    
-                    // 使用外部加载的规则，如果未加载成功则使用默认兜底规则
-                    if (StrUtil.isNotEmpty(ragRuleContext)) {
-                         tempSystemPrompt += "\n\n" + ragRuleContext;
-                    } else {
-                        tempSystemPrompt += "\n\n请参考上述【项目代码上下文】理解系统功能与实现逻辑，但请注意：";
-                        tempSystemPrompt += "\n1. **优先解释功能与架构**：除非用户明确要求“看代码”，否则请优先用自然语言解释功能，不要直接贴出大段代码。";
-                        tempSystemPrompt += "\n2. **适度引用**：可以提及关键类名辅助说明。";
-                        tempSystemPrompt += "\n3. **直接回答问题**：不要说“根据代码上下文...”这类铺垫的话。";
-                        tempSystemPrompt += "\n4. **格式规范**：必须使用标准的 Markdown 格式输出。";
-                    }
-                }
-
-                final String systemPrompt = tempSystemPrompt;
-
-                // 3. 构建消息列表
+                // 2. 构建消息列表
                 JSONArray messages = new JSONArray();
-                JSONObject systemMessage = new JSONObject();
-                systemMessage.set("role", "system");
-                systemMessage.set("content", systemPrompt);
-                messages.add(systemMessage);
-
-                // 4. 记忆检索 (查找历史对话)
-                if (shouldQueryVector(content)) {
-                    try {
-                        JSONObject memoryReq = new JSONObject();
-                        memoryReq.set("user_id", String.valueOf(userId));
-                        memoryReq.set("question", content);
-                        memoryReq.set("n_results", 6);
-                        memoryReq.set("max_distance", MEMORY_MAX_DISTANCE);
-                        String memoryResp = HttpRequest.post(MEMORY_QUERY_URL)
-                                .timeout(5000)
-                                .body(memoryReq.toString())
-                                .execute()
-                                .body();
-                        JSONObject memoryJson = JSONUtil.parseObj(memoryResp);
-                        JSONArray results = memoryJson.getJSONArray("results");
-                        if (results != null) {
-                            for (int i = 0; i < results.size(); i++) {
-                                JSONObject item = results.getJSONObject(i);
-                                JSONObject itemMeta = item.getJSONObject("metadata");
-                                String memContent = item.getStr("content");
-                                String role = itemMeta != null ? itemMeta.getStr("role") : null;
-                                if (StrUtil.isNotBlank(memContent) && StrUtil.isNotBlank(role) && !"system".equals(role)) {
-                                    JSONObject msg = new JSONObject();
-                                    msg.set("role", role);
-                                    msg.set("content", memContent);
-                                    messages.add(msg);
-                                }
-                            }
-                        }
-                    } catch (Exception e) {
-                        System.err.println("Memory query failed: " + e.getMessage());
-                    }
-                }
-
-                // 5. 注入近期对话历史 (Redis Short-Term Memory)
+                messages.add(new JSONObject().set("role", "system").set("content", systemPrompt));
+                
+                // 3. 注入近期对话历史
                 addRecentHistory(messages, userId);
-
-                JSONObject userMessage = new JSONObject();
-                userMessage.set("role", "user");
-                userMessage.set("content", content);
-                messages.add(userMessage);
-
-                // 5. 调用 AI 模型 (Generate) - DeepSeek
-                JSONObject requestBody = new JSONObject();
-                requestBody.set("model", deepseekModel);
-                requestBody.set("stream", true);
+                
+                // 4. 添加用户消息
+                messages.add(new JSONObject().set("role", "user").set("content", content));
+                
+                // 5. Agent 循环：仅允许 1 轮工具调用，以提高响应速度
+                int maxToolCalls = 1;
+                int toolCallCount = 0;
+                boolean toolCallLimitReached = false;
+                
+                while (toolCallCount < maxToolCalls) {
+                    JSONObject requestBody = new JSONObject();
+                    requestBody.set("model", deepseekModel);
+                    requestBody.set("stream", false);
                 requestBody.set("messages", messages);
-
-                try (HttpResponse response = HttpRequest.post(deepseekApiUrl)
-                        .timeout(90000)
-                        .header("Authorization", "Bearer " + deepseekApiKey)
-                        .header("Content-Type", "application/json")
-                        .body(requestBody.toString())
-                        .execute(true)) {
+                requestBody.set("tools", this.agentTools);
+                requestBody.set("tool_choice", "auto");
+                    
+                    System.out.println("[Agent] 发送请求到 LLM，当前工具调用轮次: " + (toolCallCount + 1));
+                    
+                    HttpResponse response = HttpRequest.post(deepseekApiUrl)
+                            .timeout(90000)
+                            .header("Authorization", "Bearer " + deepseekApiKey)
+                            .header("Content-Type", "application/json")
+                            .body(requestBody.toString())
+                            .execute();
+                    
                     if (!response.isOk()) {
-                        JSONObject msg = new JSONObject().set("content", "AI 服务响应异常: " + response.getStatus());
-                        emitter.send(msg.toString());
+                        emitter.send(new JSONObject().set("content", "AI 服务响应异常: " + response.getStatus()).toString());
                         emitter.complete();
                         return;
                     }
-                    // 读取流式响应
-                    try (InputStream inputStream = response.bodyStream();
+                    
+                    JSONObject jsonResponse = JSONUtil.parseObj(response.body());
+                    if (jsonResponse.containsKey("error")) {
+                        emitter.send(new JSONObject().set("content", "AI 服务错误: " + jsonResponse.getJSONObject("error").getStr("message")).toString());
+                        emitter.complete();
+                        return;
+                    }
+                    
+                    JSONObject choice = jsonResponse.getJSONArray("choices").getJSONObject(0);
+                    JSONObject assistantMessage = choice.getJSONObject("message");
+                    String finishReason = choice.getStr("finish_reason");
+                    
+                    // 检查是否需要调用工具
+                    if ("tool_calls".equals(finishReason) && assistantMessage.containsKey("tool_calls")) {
+                        JSONArray toolCalls = assistantMessage.getJSONArray("tool_calls");
+                        System.out.println("[Agent] LLM 请求调用工具，数量: " + toolCalls.size());
+                        
+                        messages.add(assistantMessage);
+                        
+                        JSONObject toolCall = toolCalls.getJSONObject(0);
+                        String toolCallId = toolCall.getStr("id");
+                        JSONObject functionObj = toolCall.getJSONObject("function");
+                        String functionName = functionObj.getStr("name");
+                        String argumentsStr = functionObj.getStr("arguments");
+                        
+                        System.out.println("[Agent] 执行工具: " + functionName + ", 参数: " + argumentsStr);
+                        
+                        String toolResult = executeAgentTool(functionName, argumentsStr);
+                        
+                        JSONObject toolMessage = new JSONObject();
+                        toolMessage.set("role", "tool");
+                        toolMessage.set("tool_call_id", toolCallId);
+                        toolMessage.set("content", toolResult);
+                        messages.add(toolMessage);
+                        
+                        System.out.println("[Agent] 工具执行完成，结果长度: " + toolResult.length());
+                    
+                    toolCallCount++;
+                    
+                    // 检查是否达到工具调用上限
+                    if (toolCallCount >= maxToolCalls) {
+                        System.out.println("[Agent] 达到工具调用上限 (" + maxToolCalls + " 轮)，强制生成回答");
+                        toolCallLimitReached = true;
+                        break;
+                    }
+                    continue;
+                }
+                
+                System.out.println("[Agent] LLM 准备生成最终回答，切换到流式输出");
+                break;
+            }
+            
+            // 关键修正：无论是否达到调用上限，在进入最终回答阶段前，都必须强制注入禁止指令
+            // 只有当 messages 最后一条不是系统指令时才添加，避免重复
+            JSONObject lastMsg = messages.getJSONObject(messages.size() - 1);
+            if (!"system".equals(lastMsg.getStr("role")) || !lastMsg.getStr("content").contains("禁止输出 <|DSML|")) {
+                messages.add(new JSONObject()
+                    .set("role", "system")
+                    .set("content", "【系统指令】工具调用阶段已彻底结束（Do NOT search again）。\n" +
+                                    "1. 忽略之前所有的 tools 定义，现在你没有可用的工具。\n" +
+                                    "2. 严禁输出 '让我搜索...' 或 '我将查找...' 等尝试调用工具的语句。\n" +
+                                    "3. 严禁输出 <|DSML| 或 function_calls 标签。\n" +
+                                    "4. 请直接根据上方提供的上下文代码回答用户问题。如果上下文信息不足，请直接说明“信息不足”，不要尝试再次搜索。\n" +
+                                    "5. 请立即开始生成回答的正文。"));
+            }
+            
+            // 6. 流式输出最终回答
+            // 策略调整：保留 tools 定义但强制 tool_choice="none"，避免模型因上下文结构不一致而困惑
+            // 同时移除 stop 参数，防止误杀正常输出
+            JSONObject streamRequest = new JSONObject();
+            streamRequest.set("model", deepseekModel);
+            streamRequest.set("stream", true);
+            streamRequest.set("messages", messages);
+            streamRequest.set("tools", this.agentTools);
+            streamRequest.set("tool_choice", "none"); // 强制不调用工具
+            
+            System.out.println("[Agent] 开始生成最终回答 (Stream Mode), tool_choice=none");
+                
+                try (HttpResponse streamResponse = HttpRequest.post(deepseekApiUrl)
+                        .timeout(300000) // 延长超时时间到 5分钟，避免长文本生成中断
+                        .header("Authorization", "Bearer " + deepseekApiKey)
+                        .header("Content-Type", "application/json")
+                        .body(streamRequest.toString())
+                        .execute(true)) {
+                    
+                    if (!streamResponse.isOk()) {
+                        System.err.println("[Agent] AI 服务响应异常: " + streamResponse.getStatus());
+                        emitter.send(new JSONObject().set("content", "AI 服务响应异常: " + streamResponse.getStatus()).toString());
+                        emitter.complete();
+                        return;
+                    }
+                    
+                    try (InputStream inputStream = streamResponse.bodyStream();
                          BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
                         String line;
                         while ((line = reader.readLine()) != null) {
@@ -552,113 +462,220 @@ public class SysAiController {
                                 continue;
                             }
                             String data = line.substring(5).trim();
-                            if (data.isEmpty()) {
+                            if (data.isEmpty() || "[DONE]".equals(data)) {
                                 continue;
                             }
-                            if ("[DONE]".equals(data)) {
-                                break;
-                            }
+                            
                             JSONObject json = JSONUtil.parseObj(data);
                             if (json.containsKey("error")) {
-                                emitter.send(json.getStr("error"));
+                                String errorMsg = json.getStr("error");
+                                System.err.println("[Agent] AI 服务返回错误: " + errorMsg);
+                                emitter.send(new JSONObject().set("content", errorMsg).toString());
                                 break;
                             }
+                            
                             JSONArray choices = json.getJSONArray("choices");
                             if (choices != null && !choices.isEmpty()) {
                                 JSONObject delta = choices.getJSONObject(0).getJSONObject("delta");
-                                if (delta.containsKey("content")) {
+                                if (delta != null && delta.containsKey("content")) {
                                     String chunk = delta.getStr("content");
-                                    fullReply.append(chunk); // 收集完整回复
-                                    emitter.send(new JSONObject().set("content", chunk).toString());
+                                    if (chunk != null) {
+                                        fullReply.append(chunk);
+                                        emitter.send(new JSONObject().set("content", chunk).toString());
+                                    }
                                 }
                             }
                         }
                     }
                 }
-
-                // 6. 存储对话历史 (Memory Store)
-                // 只有当 fullReply 不为空时才保存历史，防止报错中断导致空记录
+                
+                // 7. 存储对话历史
                 if (fullReply.length() > 0) {
-                    String reply = fullReply.toString();
-                    long now = System.currentTimeMillis();
-
-                    // 6.1 存入 Redis 短期历史 (用于 /history 接口展示，保留最近 20 条)
-                    JSONObject userRecord = new JSONObject().set("role", "user").set("content", content);
-                    JSONObject aiRecord = new JSONObject().set("role", "assistant").set("content", reply);
-                    String key = HISTORY_KEY_PREFIX + userId;
-                    try {
-                        stringRedisTemplate.opsForList().rightPush(key, userRecord.toString());
-                        stringRedisTemplate.opsForList().rightPush(key, aiRecord.toString());
-                        if (stringRedisTemplate.opsForList().size(key) > 20) {
-                            stringRedisTemplate.opsForList().trim(key, -20, -1);
-                        }
-                        stringRedisTemplate.expire(key, 7, TimeUnit.DAYS);
-                    } catch (Exception e) {
-                        System.err.println("Redis save failed: " + e.getMessage());
-                    }
-
-                    // 6.2 存入 Vector DB 长期记忆 (RAG)
-                    try {
-                        JSONObject memoryAdd = new JSONObject();
-                        memoryAdd.set("user_id", String.valueOf(userId));
-                        JSONArray memoryMessages = new JSONArray();
-                        memoryMessages.add(new JSONObject().set("content", content).set("role", "user").set("timestamp", now).set("sequence", now));
-                        memoryMessages.add(new JSONObject().set("content", reply).set("role", "assistant").set("timestamp", now + 1).set("sequence", now + 1));
-                        memoryAdd.set("messages", memoryMessages);
-                        HttpRequest.post(MEMORY_ADD_URL)
-                                .timeout(5000)
-                                .body(memoryAdd.toString())
-                                .execute();
-                    } catch (Exception e) {
-                        System.err.println("Vector DB save failed: " + e.getMessage());
-                    }
-
-                    // 6.3 持久化到 MySQL (System Monitor)
-                    try {
-                        long duration = System.currentTimeMillis() - startTime;
-                        SysAiSession aiSession = new SysAiSession();
-                        aiSession.setUserId(userId);
-                        aiSession.setQuestion(content);
-                        aiSession.setAnswer(reply);
-                        aiSession.setModel(deepseekModel);
-                        // 简单估算 Token (1汉字=2token, 1英文=1token)
-                        int tokens = (content.length() + reply.length()) * 2;
-                        aiSession.setTokens(tokens);
-                        aiSession.setDuration((int) duration);
-                        aiSessionService.save(aiSession);
-                    } catch (Exception e) {
-                        System.err.println("Failed to save ai session: " + e.getMessage());
-                    }
+                    saveConversationHistory(userId, content, fullReply.toString(), startTime);
+                    System.out.println("[Agent] 流式响应正常结束，回复长度: " + fullReply.length());
+                } else {
+                    System.out.println("[Agent] 流式响应结束，但回复为空");
                 }
                 
-                // 发送结束标记
                 emitter.send("[DONE]");
                 emitter.complete();
-
+                
             } catch (Exception e) {
+                System.err.println("[Agent] 流式响应异常: " + e.getMessage());
+                e.printStackTrace();
                 try {
-                    JSONObject msg = new JSONObject().set("content", "AI 服务调用失败: " + e.getMessage());
-                    emitter.send(msg.toString());
+                    // 发送错误详情，前端已做兼容，不会覆盖已有内容
+                    emitter.send(new JSONObject().set("content", "AI 服务调用失败: " + e.getMessage()).toString());
                 } catch (Exception ignored) {
                 }
                 emitter.complete();
             }
         }).start();
-
+        
         return emitter;
+    }
+    
+    /**
+     * 构建 Agent 模式的 System Prompt
+     */
+    private String buildAgentSystemPrompt() {
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("你是 SwiftBoot 的智能助手，一个专业的全栈开发专家。\n\n");
+        
+        if (StrUtil.isNotEmpty(skillsContext)) {
+            prompt.append(skillsContext).append("\n\n");
+        }
+        
+        if (StrUtil.isNotEmpty(agentRuleContext)) {
+            prompt.append(agentRuleContext);
+        } else {
+            prompt.append("## 输出行为约束\n");
+            prompt.append("1. **严禁直接粘贴代码**：除非用户明确说看代码或写代码，否则将代码逻辑翻译为自然语言的业务规则。\n");
+            prompt.append("2. **识别关键模式**：\n");
+            prompt.append("   - 看到 `LEFT JOIN` → 解释为查询时自动关联了XX信息\n");
+            prompt.append("   - 看到 `if (isAdmin)` 或权限注解 → 解释为管理员和普通用户的权限差异\n");
+            prompt.append("   - 看到 `del_flag = 0` → 解释为默认过滤已删除数据\n");
+            prompt.append("   - 看到 `@DataScope` → 解释为数据权限控制，用户只能看到自己权限范围内的数据\n");
+            prompt.append("3. **引用而非堆砌**：可以提及关键类名（如 `SysProjectService`），但不展开实现代码。\n");
+            prompt.append("4. **直接回答问题**：不要说根据代码上下文...、根据检索结果...这类铺垫的话。\n");
+            prompt.append("5. **避免重复搜索**：每次工具调用都会返回最相关的 10 个代码片段。请充分利用这些上下文，尽量一次性解决问题，除非检索结果完全不相关，否则不要反复调用搜索工具。\n");
+            prompt.append("6. **禁止输出 DSML**：严禁在回答中包含 <|DSML|... 等标签。\n");
+            prompt.append("7. **格式规范**：使用标准的 Markdown 格式输出。\n");
+        }
+        
+        return prompt.toString();
+    }
+    
+    /**
+     * 执行 Agent 工具
+     */
+    private String executeAgentTool(String functionName, String argumentsJson) {
+        try {
+            if ("search_codebase".equals(functionName)) {
+                JSONObject args = JSONUtil.parseObj(argumentsJson);
+                String query = args.getStr("query");
+                
+                if (StrUtil.isBlank(query)) {
+                    return "错误：搜索关键词不能为空";
+                }
+                
+                JSONObject ragRequest = new JSONObject();
+                ragRequest.set("question", query);
+                ragRequest.set("n_results", 10);
+                
+                long ragStartTime = System.currentTimeMillis();
+                System.out.println("[Agent Tool] 调用 RAG 引擎: " + RAG_API_URL + ", query=" + query);
+                
+                String ragResponse = HttpRequest.post(RAG_API_URL)
+                        .timeout(60000) // 延长超时时间到 60秒，应对大量数据检索
+                        .body(ragRequest.toString())
+                        .execute()
+                        .body();
+                
+                System.out.println("[Agent Tool] RAG 响应耗时: " + (System.currentTimeMillis() - ragStartTime) + "ms");
+                
+                JSONObject ragJson = JSONUtil.parseObj(ragResponse);
+                JSONArray results = ragJson.getJSONArray("results");
+                
+                if (results == null || results.isEmpty()) {
+                    return "未找到与 \"" + query + "\" 相关的代码。请尝试使用更具体的类名、方法名或功能描述。";
+                }
+                
+                StringBuilder sb = new StringBuilder();
+                sb.append("找到 ").append(results.size()).append(" 个相关代码片段：\n\n");
+                
+                for (int i = 0; i < results.size(); i++) {
+                    JSONObject item = results.getJSONObject(i);
+                    JSONObject meta = item.getJSONObject("metadata");
+                    String codeContent = item.getStr("content");
+                    String source = meta != null ? meta.getStr("source") : "unknown";
+                    String name = meta != null ? meta.getStr("name") : "";
+                    String type = meta != null ? meta.getStr("type") : "";
+                    
+                    sb.append("### 代码片段 ").append(i + 1);
+                    if (StrUtil.isNotBlank(name)) {
+                        sb.append(" - ").append(name);
+                    }
+                    if (StrUtil.isNotBlank(type)) {
+                        sb.append(" (").append(type).append(")");
+                    }
+                    sb.append("\n");
+                    sb.append("**来源**: ").append(source).append("\n");
+                    sb.append("```java\n").append(codeContent).append("\n```\n\n");
+                }
+                
+                sb.append("\n【系统提示】检索已完成。以上代码已包含足够信息，请根据这些内容直接回答用户问题，不要再次调用工具。");
+                
+                return sb.toString();
+            }
+            
+            return "未知工具: " + functionName;
+            
+        } catch (Exception e) {
+            System.err.println("[Agent Tool] 工具执行失败: " + e.getMessage());
+            return "工具执行失败: " + e.getMessage();
+        }
+    }
+    
+    /**
+     * 保存对话历史（Redis + 向量库 + MySQL）
+     */
+    private void saveConversationHistory(Long userId, String question, String answer, long startTime) {
+        long now = System.currentTimeMillis();
+        
+        // 1. 存入 Redis 短期历史
+        JSONObject userRecord = new JSONObject().set("role", "user").set("content", question);
+        JSONObject aiRecord = new JSONObject().set("role", "assistant").set("content", answer);
+        String key = HISTORY_KEY_PREFIX + userId;
+        try {
+            stringRedisTemplate.opsForList().rightPush(key, userRecord.toString());
+            stringRedisTemplate.opsForList().rightPush(key, aiRecord.toString());
+            if (stringRedisTemplate.opsForList().size(key) > 20) {
+                stringRedisTemplate.opsForList().trim(key, -20, -1);
+            }
+            stringRedisTemplate.expire(key, 7, TimeUnit.DAYS);
+        } catch (Exception e) {
+            System.err.println("Redis save failed: " + e.getMessage());
+        }
+        
+        // 2. 存入 Vector DB 长期记忆
+        try {
+            JSONObject memoryAdd = new JSONObject();
+            memoryAdd.set("user_id", String.valueOf(userId));
+            JSONArray memoryMessages = new JSONArray();
+            memoryMessages.add(new JSONObject().set("content", question).set("role", "user").set("timestamp", now).set("sequence", now));
+            memoryMessages.add(new JSONObject().set("content", answer).set("role", "assistant").set("timestamp", now + 1).set("sequence", now + 1));
+            memoryAdd.set("messages", memoryMessages);
+            HttpRequest.post(MEMORY_ADD_URL).timeout(5000).body(memoryAdd.toString()).execute();
+        } catch (Exception e) {
+            System.err.println("Vector DB save failed: " + e.getMessage());
+        }
+        
+        // 3. 持久化到 MySQL
+        try {
+            long duration = System.currentTimeMillis() - startTime;
+            SysAiSession aiSession = new SysAiSession();
+            aiSession.setUserId(userId);
+            aiSession.setQuestion(question);
+            aiSession.setAnswer(answer);
+            aiSession.setModel(deepseekModel);
+            int tokens = (question.length() + answer.length()) * 2;
+            aiSession.setTokens(tokens);
+            aiSession.setDuration((int) duration);
+            aiSessionService.save(aiSession);
+        } catch (Exception e) {
+            System.err.println("Failed to save ai session: " + e.getMessage());
+        }
     }
 
     /**
-     * 判断是否需要检索向量库
-     * 根据用户问题中的关键词，决定是否触发 RAG 流程。
-     * 避免所有问题都去检索，节省资源并减少无关上下文干扰。
+     * 判断是否需要检索向量库（保留作为降级方案）
      */
     private boolean shouldQueryVector(String content) {
         if (StrUtil.isBlank(content)) {
             return false;
         }
         String text = content.toLowerCase();
-        // 触发关键词列表：涉及代码、数据库、历史回忆等意图
         String[] keywords = new String[]{
                 "接口", "api", "controller", "service", "mapper", "sql", "数据库", "表", "字段", "报错", "异常", "堆栈",
                 "代码", "类", "方法", "函数", "bug", "日志", "运行", "编译", "构建", "依赖", "配置", "yml",
@@ -669,14 +686,10 @@ public class SysAiController {
 
     /**
      * 将 Redis 中的近期对话历史添加到消息列表中
-     * @param messages 消息列表
-     * @param userId 用户ID
      */
     private void addRecentHistory(JSONArray messages, Long userId) {
         try {
             String key = HISTORY_KEY_PREFIX + userId;
-            // 获取最近 10 条历史记录 (Redis List 尾部是最新，头部是最旧)
-            // 我们取最后 10 条，保持时间顺序
             List<String> historyStr = stringRedisTemplate.opsForList().range(key, -10, -1);
             if (historyStr != null) {
                 for (String str : historyStr) {

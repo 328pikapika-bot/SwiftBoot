@@ -3,7 +3,7 @@ import os
 import json
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from knowledge_ingest import JavaParser
+from knowledge_ingest import JavaParser, PythonParser
 from vector_store import VectorStore
 
 # ==========================================
@@ -44,7 +44,8 @@ class CodeChangeHandler(FileSystemEventHandler):
     并自动触发向量数据库的更新
     """
     def __init__(self, file_state):
-        self.parser = JavaParser()
+        self.java_parser = JavaParser()
+        self.py_parser = PythonParser()
         self.db = VectorStore()
         self.last_processed = {}  # 简单的防抖动机制 {path: timestamp}
         self.file_state = file_state
@@ -115,7 +116,12 @@ class CodeChangeHandler(FileSystemEventHandler):
 
             # 3. 重新解析代码文件
             print(f"[{self._now()}]正在重新解析代码...")
-            chunks = self.parser.parse_file(filename)
+            if filename.endswith(".java"):
+                chunks = self.java_parser.parse_file(filename)
+            elif filename.endswith(".py"):
+                chunks = self.py_parser.parse_file(filename)
+            else:
+                chunks = []
             
             if chunks:
                 # 补充 source 字段
@@ -151,7 +157,8 @@ if __name__ == "__main__":
     # 启动时增量代码扫描
     # ==========================================
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]正在执行代码扫描 (增量模式): {WATCH_DIR} ...")
-    parser = JavaParser()
+    java_parser = JavaParser()
+    py_parser = PythonParser()
     db = VectorStore()
     
     # 加载上次的文件状态
@@ -191,7 +198,13 @@ if __name__ == "__main__":
                     # 先清理旧数据
                     db.delete_by_source(source_id)
                     
-                    chunks = parser.parse_file(file_path)
+                    if file_path.endswith(".java"):
+                        chunks = java_parser.parse_file(file_path)
+                    elif file_path.endswith(".py"):
+                        chunks = py_parser.parse_file(file_path)
+                    else:
+                        chunks = []
+                        
                     if chunks:
                         for chunk in chunks:
                             chunk['source'] = source_id

@@ -159,7 +159,6 @@
 import { ref, reactive, computed, nextTick, onUnmounted, watch } from 'vue'
 import { Minus, Position, CopyDocument, Close, Delete } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { sendAiChat } from '@/api/index'
 import { useUserStore } from '@/stores/user'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
@@ -440,16 +439,17 @@ const sendMessage = async () => {
         isStreamFinished = true
         loading.value = false
       } else {
-        // 如果流式失败，降级为非流式
-        isStreamFinished = true // 停止打字机等待
-        const res: any = await sendAiChat(content)
-        if (res.code === 200) {
-          assistantMessage.content = res.data
+        isStreamFinished = true
+        // 如果已经有部分内容，不要覆盖，只是在最后追加错误提示
+        if (assistantMessage.content || pendingText) {
+          assistantMessage.content += `\n\n[连接中断: ${streamError?.message || '未知错误'}]`
+          loading.value = false
         } else {
-          assistantMessage.content = `服务暂时不可用，请稍后重试。（${res.msg || '未知错误'}）`
+          assistantMessage.content = streamError?.message === 'stream_failed'
+            ? '服务暂时不可用，请稍后重试。'
+            : `服务暂时不可用，请稍后重试。（${streamError?.message || '未知错误'}）`
+          loading.value = false
         }
-        loading.value = false
-        // 对话结束，保存历史
         saveHistory()
       }
     }

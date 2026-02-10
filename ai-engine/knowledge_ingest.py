@@ -2,6 +2,326 @@
 import os
 import re
 from typing import List, Dict
+import xml.etree.ElementTree as ET
+
+
+class MapperXmlParser:
+    """
+    MyBatis Mapper XML 解析器
+    负责解析 Mapper.xml 文件，提取 SQL 语句和业务逻辑。
+    这对于理解深层业务逻辑（如连表查询、条件过滤）至关重要。
+    """
+    
+    def parse_file(self, file_path: str) -> List[Dict]:
+        """
+        解析单个 Mapper.xml 文件并返回 SQL 代码块列表。
+        """
+        if not os.path.exists(file_path):
+            return []
+        
+        chunks = []
+        
+        try:
+            # 读取文件内容
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 提取 namespace（通常是对应的 Mapper 接口全限定名）
+            namespace_match = re.search(r'namespace\s*=\s*["\']([^"\']+)["\']', content)
+            namespace = namespace_match.group(1) if namespace_match else ""
+            mapper_name = namespace.split('.')[-1] if namespace else os.path.basename(file_path)
+            
+            # 解析 XML
+            # 移除 DOCTYPE 声明以避免解析错误
+            content_clean = re.sub(r'<!DOCTYPE[^>]*>', '', content)
+            
+            try:
+                root = ET.fromstring(content_clean)
+            except ET.ParseError:
+                # 如果 XML 解析失败，使用正则表达式提取
+                return self._parse_with_regex(file_path, content, namespace, mapper_name)
+            
+            # 提取 SQL 语句块
+            sql_tags = ['select', 'insert', 'update', 'delete']
+            
+            for tag in sql_tags:
+                for elem in root.findall(f'.//{tag}'):
+                    sql_id = elem.get('id', 'unknown')
+                    result_type = elem.get('resultType', elem.get('resultMap', ''))
+                    param_type = elem.get('parameterType', '')
+                    
+                    # 提取完整的 SQL 文本（包括动态 SQL 标签）
+                    sql_text = self._extract_sql_text(elem)
+                    
+                    # 分析 SQL 特征
+                    features = self._analyze_sql_features(sql_text)
+                    
+                    # 构建描述
+                    desc = f"Mapper: {mapper_name}\n"
+                    desc += f"Method: {sql_id}\n"
+                    desc += f"Type: {tag.upper()}\n"
+                    if result_type:
+                        desc += f"ResultType: {result_type}\n"
+                    if param_type:
+                        desc += f"ParamType: {param_type}\n"
+                    if features:
+                        desc += f"Features: {', '.join(features)}\n"
+                    desc += f"\nSQL:\n{sql_text}\n"
+                    
+                    chunk = {
+                        "type": "mapper_sql",
+                        "name": f"{mapper_name}.{sql_id}",
+                        "mapper": mapper_name,
+                        "sql_type": tag,
+                        "content": desc,
+                        "file_path": file_path
+                    }
+                    chunks.append(chunk)
+            
+            # 提取 resultMap 定义
+            for result_map in root.findall('.//resultMap'):
+                map_id = result_map.get('id', 'unknown')
+                map_type = result_map.get('type', '')
+                
+                # 提取字段映射
+                mappings = []
+                for child in result_map:
+                    if child.tag in ['id', 'result']:
+                        column = child.get('column', '')
+                        prop = child.get('property', '')
+                        mappings.append(f"  {column} -> {prop}")
+                    elif child.tag == 'association':
+                        prop = child.get('property', '')
+                        java_type = child.get('javaType', '')
+                        mappings.append(f"  [关联] {prop} ({java_type})")
+                    elif child.tag == 'collection':
+                        prop = child.get('property', '')
+                        of_type = child.get('ofType', '')
+                        mappings.append(f"  [集合] {prop} ({of_type})")
+                
+                if mappings:
+                    desc = f"Mapper: {mapper_name}\n"
+                    desc += f"ResultMap: {map_id}\n"
+                    desc += f"Type: {map_type}\n"
+                    desc += f"Mappings:\n" + "\n".join(mappings)
+                    
+                    chunk = {
+                        "type": "result_map",
+                        "name": f"{mapper_name}.{map_id}",
+                        "mapper": mapper_name,
+                        "content": desc,
+                        "file_path": file_path
+                    }
+                    chunks.append(chunk)
+            
+        except Exception as e:
+            print(f"[MapperXmlParser] 解析失败: {file_path}, 错误: {e}")
+        
+        return chunks
+    
+    def _extract_sql_text(self, elem) -> str:
+        """
+        提取 XML 元素中的完整 SQL 文本，包括动态 SQL 标签。
+        """
+        def get_text_recursive(element, depth=0):
+            parts = []
+            indent = "  " * depth
+            
+            # 添加元素的文本内容
+            if element.text and element.text.strip():
+                parts.append(element.text.strip())
+            
+            # 递归处理子元素
+            for child in element:
+                tag = child.tag
+                
+                if tag == 'if':
+                    test = child.get('test', '')
+                    parts.append(f"\n{indent}<if test=\"{test}\">")
+                    parts.append(get_text_recursive(child, depth + 1))
+                    parts.append(f"{indent}</if>")
+                elif tag == 'where':
+                    parts.append(f"\n{indent}<where>")
+                    parts.append(get_text_recursive(child, depth + 1))
+                    parts.append(f"{indent}</where>")
+                elif tag == 'set':
+                    parts.append(f"\n{indent}<set>")
+                    parts.append(get_text_recursive(child, depth + 1))
+                    parts.append(f"{indent}</set>")
+                elif tag == 'foreach':
+                    collection = child.get('collection', '')
+                    item = child.get('item', '')
+                    parts.append(f"\n{indent}<foreach collection=\"{collection}\" item=\"{item}\">")
+                    parts.append(get_text_recursive(child, depth + 1))
+                    parts.append(f"{indent}</foreach>")
+                elif tag == 'choose':
+                    parts.append(f"\n{indent}<choose>")
+                    parts.append(get_text_recursive(child, depth + 1))
+                    parts.append(f"{indent}</choose>")
+                elif tag in ['when', 'otherwise']:
+                    test = child.get('test', '') if tag == 'when' else ''
+                    parts.append(f"\n{indent}<{tag}" + (f' test=\"{test}\">' if test else '>'))
+                    parts.append(get_text_recursive(child, depth + 1))
+                    parts.append(f"{indent}</{tag}>")
+                elif tag == 'include':
+                    refid = child.get('refid', '')
+                    parts.append(f"\n{indent}<include refid=\"{refid}\"/>")
+                elif tag == 'trim':
+                    prefix = child.get('prefix', '')
+                    suffix = child.get('suffix', '')
+                    parts.append(f"\n{indent}<trim prefix=\"{prefix}\" suffix=\"{suffix}\">")
+                    parts.append(get_text_recursive(child, depth + 1))
+                    parts.append(f"{indent}</trim>")
+                else:
+                    # 其他标签直接提取文本
+                    if child.text and child.text.strip():
+                        parts.append(child.text.strip())
+                
+                # 添加尾部文本
+                if child.tail and child.tail.strip():
+                    parts.append(child.tail.strip())
+            
+            return " ".join(parts)
+        
+        return get_text_recursive(elem)
+    
+    def _analyze_sql_features(self, sql_text: str) -> List[str]:
+        """
+        分析 SQL 的特征，帮助理解业务逻辑。
+        """
+        features = []
+        sql_lower = sql_text.lower()
+        
+        if 'left join' in sql_lower or 'inner join' in sql_lower or 'right join' in sql_lower:
+            features.append("连表查询")
+        if 'group by' in sql_lower:
+            features.append("分组聚合")
+        if 'order by' in sql_lower:
+            features.append("排序")
+        if 'limit' in sql_lower:
+            features.append("分页")
+        if 'del_flag' in sql_lower:
+            features.append("逻辑删除过滤")
+        if 'data_scope' in sql_lower or '${params.dataScope}' in sql_text:
+            features.append("数据权限控制")
+        if '<if' in sql_text or '<where>' in sql_text:
+            features.append("动态条件")
+        if '<foreach' in sql_text:
+            features.append("批量操作")
+        if 'union' in sql_lower:
+            features.append("联合查询")
+        if 'distinct' in sql_lower:
+            features.append("去重")
+        
+        return features
+    
+    def _parse_with_regex(self, file_path: str, content: str, namespace: str, mapper_name: str) -> List[Dict]:
+        """
+        使用正则表达式解析（作为 XML 解析的备选方案）。
+        """
+        chunks = []
+        
+        # 匹配 select/insert/update/delete 标签
+        sql_pattern = re.compile(
+            r'<(select|insert|update|delete)\s+id\s*=\s*["\']([^"\']+)["\'][^>]*>(.*?)</\1>',
+            re.DOTALL | re.IGNORECASE
+        )
+        
+        for match in sql_pattern.finditer(content):
+            sql_type = match.group(1).lower()
+            sql_id = match.group(2)
+            sql_content = match.group(3).strip()
+            
+            # 清理 SQL 内容
+            sql_clean = re.sub(r'<[^>]+>', ' ', sql_content)  # 移除 XML 标签
+            sql_clean = re.sub(r'\s+', ' ', sql_clean).strip()  # 合并空白
+            
+            features = self._analyze_sql_features(sql_content)
+            
+            desc = f"Mapper: {mapper_name}\n"
+            desc += f"Method: {sql_id}\n"
+            desc += f"Type: {sql_type.upper()}\n"
+            if features:
+                desc += f"Features: {', '.join(features)}\n"
+            desc += f"\nSQL:\n{sql_content}\n"
+            
+            chunk = {
+                "type": "mapper_sql",
+                "name": f"{mapper_name}.{sql_id}",
+                "mapper": mapper_name,
+                "sql_type": sql_type,
+                "content": desc,
+                "file_path": file_path
+            }
+            chunks.append(chunk)
+        
+        return chunks
+
+
+class PythonParser:
+    """
+    Python 代码解析器
+    负责解析 Python 文件，提取函数和类定义。
+    """
+    
+    def parse_file(self, file_path: str) -> List[Dict]:
+        """
+        解析单个 Python 文件并返回代码块列表。
+        """
+        if not os.path.exists(file_path):
+            return []
+            
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        chunks = []
+        file_name = os.path.basename(file_path)
+        
+        # 1. 提取所有函数定义
+        # 匹配 def func_name(args): ...
+        func_pattern = re.compile(r'(?:^|\n)(\s*)def\s+(\w+)\s*\((.*?)\)(?:\s*->\s*[^:]+)?:\s*(?:\"\"\"(.*?)\"\"\")?', re.DOTALL)
+        
+        for match in func_pattern.finditer(content):
+            indent = match.group(1)
+            func_name = match.group(2)
+            args = match.group(3)
+            docstring = match.group(4).strip() if match.group(4) else ""
+            
+            # 简单提取函数体 (假设缩进一致，比较粗糙但有效)
+            start_pos = match.start()
+            # 寻找下一个 def 或 class 或文件结束
+            next_match = func_pattern.search(content, match.end())
+            end_pos = next_match.start() if next_match else len(content)
+            
+            func_body = content[start_pos:end_pos].strip()
+            
+            desc = f"Function: {func_name}\nFile: {file_name}\nArgs: {args}\n"
+            if docstring:
+                desc += f"Docstring: {docstring}\n"
+            desc += f"\nImplementation:\n{func_body}\n"
+            
+            chunk = {
+                "type": "python_function",
+                "name": func_name,
+                "file": file_name,
+                "content": desc,
+                "file_path": file_path
+            }
+            chunks.append(chunk)
+            
+        # 2. 如果没有提取到函数（可能是配置类或脚本），则把整个文件作为一个块
+        if not chunks and content.strip():
+             chunk = {
+                "type": "python_script",
+                "name": file_name,
+                "file": file_name,
+                "content": f"Script: {file_name}\n\nContent:\n{content}",
+                "file_path": file_path
+            }
+             chunks.append(chunk)
+             
+        return chunks
+
 
 class JavaParser:
     """
@@ -26,38 +346,30 @@ class JavaParser:
         package_match = re.search(r'package\s+([\w\.]+);', content)
         package_name = package_match.group(1) if package_match else ""
         
+        # 提取导入 (Imports)
+        imports = re.findall(r'import\s+([\w\.]+);', content)
+        # 只保留关键导入，过滤掉 standard java imports 以节省 tokens
+        filtered_imports = [imp for imp in imports if not imp.startswith('java.util.') and not imp.startswith('java.lang.')]
+        imports_str = "\n".join([f"import {imp};" for imp in filtered_imports])
+        
         # 提取类定义 (Class Definition)
-        # 简单的正则匹配类定义，处理注解
+        # 增强正则，匹配 extends 和 implements
         class_pattern = re.compile(r'((?:@[\w\(\)\"\s=]+?\s+)*)public\s+(?:abstract\s+)?(?:class|interface|enum)\s+(\w+)(?:.*?)?\{', re.DOTALL)
+        
+        # 初始化变量，防止未匹配到类时报错
+        class_name = "Unknown"
+        annotations = ""
+        fields = []
         
         class_match = class_pattern.search(content)
         if class_match:
             annotations = class_match.group(1).strip()
             class_name = class_match.group(2)
+            full_class_def = class_match.group(0).strip()[:-1] # 移除末尾的 {
             
-            # 提取类定义的代码块（高层概览）
-        class_info = {
-            "type": "class_definition",
-            "name": class_name,
-            "package": package_name,
-            "content": f"Package: {package_name}\nClass: {class_name}\nAnnotations: {annotations}\n",
-            "file_path": file_path
-        }
-        chunks.append(class_info)
-        
-        # ==============================
-        # 针对实体类 (Entity) 的增强提取
-        # ==============================
-        if "TableName" in annotations or "Entity" in annotations:
-            # 提取表名
-            table_name = "Unknown"
-            tb_match = re.search(r'@TableName\s*\(\s*(?:value\s*=\s*)?["\']([^"\']+)["\']', annotations)
-            if tb_match:
-                table_name = tb_match.group(1)
-            
-            # 提取所有字段 (Field)
+            # 提取所有字段 (Fields) - 通用提取
             fields = []
-            field_pattern = re.compile(r'((?:@[\w\(\)\"\s=]+?\s+)*)private\s+(\w+)\s+(\w+);', re.DOTALL)
+            field_pattern = re.compile(r'((?:@[\w\(\)\"\s=]+?\s+)*)private\s+(?:static\s+)?(?:final\s+)?([\w<>\[\]]+)\s+(\w+)\s*(?:=.*?)?;', re.DOTALL)
             for f_match in field_pattern.finditer(content):
                 f_anno = f_match.group(1).strip() if f_match.group(1) else ""
                 f_type = f_match.group(2)
@@ -69,8 +381,63 @@ class JavaParser:
                 if schema_match:
                     f_desc = schema_match.group(1)
                 
-                fields.append(f"- {f_name} ({f_type}): {f_desc}")
+                # 简化注解显示，只标记关键注解
+                anno_marker = ""
+                if "@Autowired" in f_anno or "@Resource" in f_anno:
+                    anno_marker = " [Injected]"
+                elif "@TableField" in f_anno:
+                     anno_marker = " [DB_Field]"
+                
+                fields.append(f"- {f_name} ({f_type}){anno_marker}: {f_desc}")
             
+            # 提取所有方法签名 (Method Signatures) - 用于类摘要
+            method_signatures = []
+            # 排除构造函数
+            sig_pattern = re.compile(r'public\s+(?:static\s+)?(?:<[\w\s,?]+>\s+)?([\w<>\[\]]+)\s+(\w+)\s*\((.*?)\)', re.DOTALL)
+            for s_match in sig_pattern.finditer(content):
+                m_ret = s_match.group(1).strip()
+                m_name = s_match.group(2).strip()
+                m_args = s_match.group(3).strip()
+                if m_name != class_name:
+                     method_signatures.append(f"+ {m_name}({m_args}) -> {m_ret}")
+
+            # 构建增强版类描述 (Class Summary)
+            # 包含：包名、关键导入、类定义、字段列表、方法签名列表
+            class_desc = f"Package: {package_name}\n"
+            if imports_str:
+                class_desc += f"Imports:\n{imports_str}\n"
+            class_desc += f"\nDefinition:\n{full_class_def}\n"
+            
+            if fields:
+                class_desc += f"\nFields ({len(fields)}):\n" + "\n".join(fields[:30]) # 限制数量
+                if len(fields) > 30:
+                    class_desc += f"\n... (+{len(fields)-30} more)"
+            
+            if method_signatures:
+                class_desc += f"\n\nMethods Summary ({len(method_signatures)}):\n" + "\n".join(method_signatures)
+
+            # 提取类定义的代码块（高层概览）
+            class_info = {
+                "type": "class_definition",
+                "name": class_name,
+                "package": package_name,
+                "content": class_desc,
+                "file_path": file_path
+            }
+            chunks.append(class_info)
+        
+        # ==============================
+        # 针对实体类 (Entity) 的兼容处理
+        # ==============================
+        # 依然保留 entity_info，因为它的格式专门优化过用于理解数据库结构
+        if "TableName" in annotations or "Entity" in annotations:
+            # 提取表名
+            table_name = "Unknown"
+            tb_match = re.search(r'@TableName\s*\(\s*(?:value\s*=\s*)?["\']([^"\']+)["\']', annotations)
+            if tb_match:
+                table_name = tb_match.group(1)
+            
+            # 复用上面提取的 fields，但这里不需要重新提取
             # 创建专门的“数据库表结构”知识块
             entity_content = f"Database Table: {table_name}\nEntity Class: {class_name}\nFields:\n" + "\n".join(fields)
             
@@ -187,17 +554,46 @@ class JavaParser:
         return chunks
 
 if __name__ == "__main__":
-    # 测试代码
-    parser = JavaParser()
-    test_file = r"d:\study\SwiftBoot\swiftboot-backend\swiftboot-admin\src\main\java\com\swiftboot\admin\controller\SysAiController.java"
+    # 测试 Java 解析器
+    print("=" * 60)
+    print("测试 Java 解析器")
+    print("=" * 60)
     
-    if os.path.exists(test_file):
-        print(f"正在解析文件: {test_file}")
-        results = parser.parse_file(test_file)
+    java_parser = JavaParser()
+    test_java_file = r"d:\study\SwiftBoot\swiftboot-backend\swiftboot-admin\src\main\java\com\swiftboot\admin\controller\SysAiController.java"
+    
+    if os.path.exists(test_java_file):
+        print(f"正在解析文件: {test_java_file}")
+        results = java_parser.parse_file(test_java_file)
         for chunk in results:
             print("-" * 50)
             print(f"Type: {chunk['type']}")
             print(f"Name: {chunk['name']}")
             print(f"Content Preview:\n{chunk['content'][:200]}...")
     else:
-        print(f"文件不存在: {test_file}")
+        print(f"文件不存在: {test_java_file}")
+    
+    # 测试 Mapper XML 解析器
+    print("\n" + "=" * 60)
+    print("测试 Mapper XML 解析器")
+    print("=" * 60)
+    
+    mapper_parser = MapperXmlParser()
+    # 查找项目中的 Mapper.xml 文件
+    mapper_base = r"d:\study\SwiftBoot\swiftboot-backend"
+    
+    for root, dirs, files in os.walk(mapper_base):
+        for file in files:
+            if file.endswith("Mapper.xml"):
+                xml_path = os.path.join(root, file)
+                print(f"\n正在解析: {xml_path}")
+                results = mapper_parser.parse_file(xml_path)
+                for chunk in results[:3]:  # 只显示前 3 个结果
+                    print("-" * 50)
+                    print(f"Type: {chunk['type']}")
+                    print(f"Name: {chunk['name']}")
+                    preview = chunk['content'][:300] if len(chunk['content']) > 300 else chunk['content']
+                    print(f"Content Preview:\n{preview}...")
+                if len(results) > 3:
+                    print(f"... 共 {len(results)} 个代码块")
+                break  # 只测试第一个找到的文件

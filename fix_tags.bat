@@ -29,11 +29,19 @@ git push origin v0.1.2
 echo Done.
 echo.
 
-echo [4/4] Fixing v0.1.3...
+echo [4/5] Fixing v0.1.3...
 git tag -d v0.1.3 >nul 2>&1
 git push origin :refs/tags/v0.1.3 >nul 2>&1
 git tag -a v0.1.3 -m "接入了智能问答助手，将项目知识转化为随时调用的 AI 导师，解决了新人上手难与文档查找繁琐的问题。" 2c9282e45c9de3f2b0afa68528de8617a3e7145b
 git push origin v0.1.3
+echo Done.
+echo.
+
+echo [5/5] Fixing v0.1.7...
+git tag -d v0.1.7 >nul 2>&1
+git push origin :refs/tags/v0.1.7 >nul 2>&1
+git tag -a v0.1.7 -m "v0.1.7: 稳固 AI 意图识别（Python解析）与流式架构，修复 Agent 工具循环调用问题。" HEAD
+git push origin v0.1.7
 echo Done.
 echo.
 
