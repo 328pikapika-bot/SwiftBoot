@@ -199,20 +199,49 @@
             </span>
           </button>
         </div>
-        <div class="flex-1 p-6 space-y-6">
-          <div v-for="log in operLogs" :key="log.id" class="flex gap-4">
-            <div class="mt-1 w-2 h-2 rounded-full shrink-0" :class="getBusinessTypeColor(log)"></div>
-            <div>
-              <div class="text-sm font-medium text-slate-900 dark:text-white">
-                <span class="font-bold text-slate-700 dark:text-slate-200">{{ log.operName }}</span> 
-                {{ getLogAction(log) }} 
-                {{ log.title.replace(/完成$/, '') }}
+        <div class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <!-- Left: Vector Logs -->
+          <div class="space-y-6">
+             <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                向量索引更新
+             </h3>
+             <div v-for="log in vectorLogs" :key="log.id" class="flex gap-4">
+                <div class="mt-1 w-2 h-2 rounded-full shrink-0" :class="getBusinessTypeColor(log)"></div>
+                <div>
+                  <div class="text-sm font-medium text-slate-900 dark:text-white">
+                    <span class="font-bold text-slate-700 dark:text-slate-200">{{ log.operName }}</span> 
+                    {{ getLogAction(log) }} 
+                    {{ log.title.replace(/完成$/, '') }}
+                  </div>
+                  <div class="text-xs text-slate-500 mt-1">{{ formatTimeAgo(log.operTime) }}</div>
+                </div>
               </div>
-              <div class="text-xs text-slate-500 mt-1">{{ formatTimeAgo(log.operTime) }}</div>
-            </div>
+              <div v-if="vectorLogs.length === 0" class="text-center text-slate-400 text-sm py-4">
+                暂无更新
+              </div>
           </div>
-          <div v-if="operLogs.length === 0" class="text-center text-slate-400 text-sm py-4">
-            暂无动态
+
+          <!-- Right: User Logs -->
+          <div class="space-y-6 border-l border-slate-100 dark:border-slate-800 pl-8 lg:block hidden">
+             <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                用户操作动态
+             </h3>
+             <div v-for="log in operLogs" :key="log.id" class="flex gap-4">
+                <div class="mt-1 w-2 h-2 rounded-full shrink-0" :class="getBusinessTypeColor(log)"></div>
+                <div>
+                  <div class="text-sm font-medium text-slate-900 dark:text-white">
+                    <span class="font-bold text-slate-700 dark:text-slate-200">{{ log.operName }}</span> 
+                    {{ getLogAction(log) }} 
+                    {{ log.title.replace(/完成$/, '') }}
+                  </div>
+                  <div class="text-xs text-slate-500 mt-1">{{ formatTimeAgo(log.operTime) }}</div>
+                </div>
+              </div>
+              <div v-if="operLogs.length === 0" class="text-center text-slate-400 text-sm py-4">
+                暂无动态
+              </div>
           </div>
         </div>
         <router-link to="/monitor/operlog" class="p-4 text-center text-sm font-medium text-blue-500 hover:bg-slate-50 dark:hover:bg-slate-800 border-t border-slate-100 dark:border-slate-800 rounded-b-xl transition-colors">
@@ -247,6 +276,7 @@ const responseTime = ref(0)
 const uptime = ref('')
 const aiStats = ref({ knowledge_count: 0, memory_count: 0 })
 const operLogs = ref<any[]>([])
+const vectorLogs = ref<any[]>([])
 const isLogsLoading = ref(false)
 let timer: any = null
 let statsTimer: any = null
@@ -264,10 +294,17 @@ const quickLinks = [
 const loadOperLogs = async () => {
   isLogsLoading.value = true
   try {
-    const res = await getOperLogs({ pageNum: 1, pageSize: 5 }) as unknown as ApiResponse
-    if (res.code === 200) {
-      // 兼容 PageResult 的 list 或 rows 字段
-      operLogs.value = res.data?.list || (res as any).rows || []
+    const [userRes, vectorRes] = await Promise.all([
+      getOperLogs({ pageNum: 1, pageSize: 5, logType: 'user' }) as unknown as ApiResponse,
+      getOperLogs({ pageNum: 1, pageSize: 5, logType: 'vector' }) as unknown as ApiResponse
+    ])
+
+    if (userRes.code === 200) {
+      operLogs.value = userRes.data?.list || (userRes as any).rows || []
+    }
+    
+    if (vectorRes.code === 200) {
+      vectorLogs.value = vectorRes.data?.list || (vectorRes as any).rows || []
     }
   } catch (e) {
     console.error('Failed to load oper logs', e)

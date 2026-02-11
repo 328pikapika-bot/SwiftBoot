@@ -26,11 +26,11 @@ export function cleanAiSession() {
 }
 
 // 获取仪表盘统计数据
-export function getDashboardStats(userId?: number) {
+export function getDashboardStats(userId?: number, timeRange?: string, rankType?: string) {
   return request({
     url: '/monitor/ai-session/stats',
     method: 'get',
-    params: { userId }
+    params: { userId, timeRange, rankType }
   })
 }
 

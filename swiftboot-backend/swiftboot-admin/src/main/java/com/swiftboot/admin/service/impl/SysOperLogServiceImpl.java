@@ -37,13 +37,21 @@ public class SysOperLogServiceImpl extends ServiceImpl<SysOperLogMapper, SysOper
     private Set<String> cachedModuleNames;
 
     @Override
-    public Page<SysOperLog> selectOperLogPage(SysOperLog operLog, PageQuery pageQuery) {
+    public Page<SysOperLog> selectOperLogPage(SysOperLog operLog, PageQuery pageQuery, String logType) {
         Page<SysOperLog> page = new Page<>(pageQuery.getPageNum(), pageQuery.getPageSize());
         LambdaQueryWrapper<SysOperLog> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(operLog.getTitle() != null, SysOperLog::getTitle, operLog.getTitle());
         wrapper.eq(operLog.getBusinessType() != null, SysOperLog::getBusinessType, operLog.getBusinessType());
         wrapper.like(operLog.getOperName() != null, SysOperLog::getOperName, operLog.getOperName());
         wrapper.eq(operLog.getStatus() != null, SysOperLog::getStatus, operLog.getStatus());
+        
+        // 根据日志类型过滤
+        if ("vector".equals(logType)) {
+            wrapper.eq(SysOperLog::getMethod, "VectorStore.update");
+        } else if ("user".equals(logType)) {
+            wrapper.ne(SysOperLog::getMethod, "VectorStore.update");
+        }
+        
         wrapper.orderByDesc(SysOperLog::getOperTime);
         
         Page<SysOperLog> result = page(page, wrapper);

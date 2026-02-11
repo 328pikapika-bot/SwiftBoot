@@ -56,14 +56,18 @@ public class SysAiSessionController {
 
     @Operation(summary = "获取仪表盘统计数据")
     @GetMapping("/stats")
-    public R<Map<String, Object>> stats() {
-        return R.ok(aiSessionService.getDashboardStats());
+    public R<Map<String, Object>> stats(@RequestParam(required = false, defaultValue = "week") String timeRange,
+                                      @RequestParam(required = false, defaultValue = "user") String rankType) {
+        return R.ok(aiSessionService.getDashboardStats(timeRange, rankType));
     }
 
     @Operation(summary = "获取用户算力消耗排行（分页）")
     @GetMapping("/user-stats")
-    public R<PageResult<Map<String, Object>>> userStats(PageQuery pageQuery, @RequestParam(required = false) String username) {
-        Page<Map<String, Object>> page = aiSessionService.getUserTokenStats(pageQuery, username);
+    public R<PageResult<Map<String, Object>>> userStats(PageQuery pageQuery, 
+                                                      @RequestParam(required = false) String username,
+                                                      @RequestParam(required = false, defaultValue = "week") String timeRange,
+                                                      @RequestParam(required = false, defaultValue = "user") String rankType) {
+        Page<Map<String, Object>> page = aiSessionService.getUserTokenStats(pageQuery, username, timeRange, rankType);
         return R.ok(PageResult.of(page.getRecords(), page.getTotal(), page.getCurrent(), page.getSize()));
     }
 }

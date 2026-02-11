@@ -4,7 +4,7 @@ import json
 import threading
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from knowledge_ingest import JavaParser, PythonParser
+from knowledge_ingest import JavaParser, PythonParser, VueComponentParser
 from vector_store import VectorStore
 
 # ==========================================
@@ -47,6 +47,7 @@ class CodeChangeHandler(FileSystemEventHandler):
     def __init__(self, file_state):
         self.java_parser = JavaParser()
         self.py_parser = PythonParser()
+        self.vue_parser = VueComponentParser()
         self.db = VectorStore()
         self.last_processed = {}  # 简单的防抖动机制 {path: timestamp}
         self.file_state = file_state
@@ -88,7 +89,7 @@ class CodeChangeHandler(FileSystemEventHandler):
     
     def on_moved(self, event):
         # 如果文件移动了，旧路径的记录应该删除，新路径的记录应该添加
-        if not event.is_directory and (event.src_path.endswith(".java") or event.src_path.endswith(".py")):
+        if not event.is_directory and (event.src_path.endswith(".java") or event.src_path.endswith(".py") or event.src_path.endswith(".vue")):
              print(f"\n[{self._now()}][检测到文件移动] {event.src_path} -> {event.dest_path}")
              # 1. 删除旧文件的向量数据
              self.db.delete_by_source(os.path.basename(event.src_path))
@@ -106,7 +107,7 @@ class CodeChangeHandler(FileSystemEventHandler):
              self._process_event(MockEvent())
 
     def on_deleted(self, event):
-        if not event.is_directory and (event.src_path.endswith(".java") or event.src_path.endswith(".py")):
+        if not event.is_directory and (event.src_path.endswith(".java") or event.src_path.endswith(".py") or event.src_path.endswith(".vue")):
             file_name = os.path.basename(event.src_path)
             print(f"\n[{self._now()}][检测到文件删除] {file_name}")
             # 从向量库中移除该文件的所有切片
@@ -125,7 +126,7 @@ class CodeChangeHandler(FileSystemEventHandler):
             return
         
         filename = event.src_path
-        if not (filename.endswith(".java") or filename.endswith(".py")):
+        if not (filename.endswith(".java") or filename.endswith(".py") or filename.endswith(".vue")):
             return
 
         # 简单的防抖动：1秒内不重复处理同一个文件
@@ -136,7 +137,11 @@ class CodeChangeHandler(FileSystemEventHandler):
                 return
         self.last_processed[filename] = now
 
-        print(f"\n[{self._now()}][检测到代码变更] {filename}")
+        # 区分前后端
+        is_frontend = filename.endswith(".vue") or "swiftboot-ui" in filename
+        change_type = "前端" if is_frontend else "后端"
+        
+        print(f"\n[{self._now()}][检测到{change_type}代码变更] {filename}")
         
         try:
             # 1. 提取文件名作为 Source ID
@@ -151,6 +156,8 @@ class CodeChangeHandler(FileSystemEventHandler):
                 chunks = self.java_parser.parse_file(filename)
             elif filename.endswith(".py"):
                 chunks = self.py_parser.parse_file(filename)
+            elif filename.endswith(".vue"):
+                chunks = self.vue_parser.parse_file(filename)
             else:
                 chunks = []
             
@@ -159,25 +166,33 @@ class CodeChangeHandler(FileSystemEventHandler):
                 for chunk in chunks:
                     chunk['source'] = source_id
                 
-                # 4. 存入数据库
+                # 4. 写入向量数据库
                 self.db.add_documents(chunks)
-                print(f"[{self._now()}]更新完成！已同步 {len(chunks)} 个代码块到向量数据库。")
+                print(f"[{self._now()}]更新完成: {source_id} (新增 {len(chunks)} 个切片)")
                 
-                # 累加更新计数并调度日志同步
-                with self.update_lock:
-                    self.update_count += len(chunks)
-                self._schedule_log_sync()
-                
-                # 更新状态
-                if os.path.exists(filename):
-                    norm_path = os.path.normpath(filename).lower()
-                    self.file_state[norm_path] = os.path.getmtime(filename)
-                    save_state(self.file_state)
+                # 5. 记录到后端操作日志 (通过 HTTP 调用)
+                try:
+                    msg = f"检测到变更: {os.path.basename(filename)}"
+                    self.db._log_to_backend(msg, change_type)
+                    
+                    # 累加更新计数
+                    with self.update_lock:
+                        self.update_count += len(chunks)
+                    # 调度批量同步
+                    self._schedule_log_sync()
+                    
+                except Exception as log_err:
+                    print(f"[{self._now()}]日志记录失败: {log_err}")
             else:
-                print(f"[{self._now()}]警告：解析结果为空，未更新数据库。")
+                print(f"[{self._now()}]警告: 未提取到有效代码切片")
 
+            # 6. 更新状态文件
+            norm_path = os.path.normpath(filename).lower()
+            self.file_state[norm_path] = now
+            save_state(self.file_state)
+            
         except Exception as e:
-            print(f"[{self._now()}]处理文件变更时出错: {str(e)}")
+            print(f"[{self._now()}]处理变更失败: {e}")
 
     def _now(self):
         return time.strftime("%Y-%m-%d %H:%M:%S")
@@ -195,6 +210,7 @@ if __name__ == "__main__":
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]正在执行代码扫描 (增量模式): {WATCH_DIR} ...")
     java_parser = JavaParser()
     py_parser = PythonParser()
+    vue_parser = VueComponentParser()
     db = VectorStore()
     
     # 加载上次的文件状态
@@ -216,7 +232,7 @@ if __name__ == "__main__":
         dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
         
         for file in files:
-            if file.endswith(".java") or file.endswith(".py"):
+            if file.endswith(".java") or file.endswith(".py") or file.endswith(".vue"):
                 file_path = os.path.join(root, file)
                 # 统一路径格式（Windows下不区分大小写，统一转小写以避免盘符差异）
                 norm_path = os.path.normpath(file_path).lower()
@@ -241,6 +257,8 @@ if __name__ == "__main__":
                         chunks = java_parser.parse_file(file_path)
                     elif file_path.endswith(".py"):
                         chunks = py_parser.parse_file(file_path)
+                    elif file_path.endswith(".vue"):
+                        chunks = vue_parser.parse_file(file_path)
                     else:
                         chunks = []
                         

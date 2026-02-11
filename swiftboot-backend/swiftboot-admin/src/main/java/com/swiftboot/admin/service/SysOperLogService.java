@@ -13,9 +13,9 @@ import java.util.List;
 public interface SysOperLogService extends IService<SysOperLog> {
 
     /**
-     * 分页查询操作日志
+     * 分页查询操作日志列表
      */
-    Page<SysOperLog> selectOperLogPage(SysOperLog operLog, PageQuery pageQuery);
+    Page<SysOperLog> selectOperLogPage(SysOperLog operLog, PageQuery pageQuery, String logType);
 
     /**
      * 删除操作日志

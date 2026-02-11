@@ -553,6 +553,106 @@ class JavaParser:
         
         return chunks
 
+
+class VueComponentParser:
+    """
+    Vue 组件解析器
+    负责解析 .vue 文件，将其拆分为 Template (UI)、Script (逻辑)、Style (样式) 三个维度的切片。
+    """
+    
+    def parse_file(self, file_path: str) -> List[Dict]:
+        """
+        解析单个 .vue 文件并返回知识切片列表。
+        """
+        if not os.path.exists(file_path):
+            return []
+        
+        chunks = []
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            file_name = os.path.basename(file_path)
+            component_name = file_name.replace('.vue', '')
+            
+            # 1. 提取 Template (UI 结构)
+            template_match = re.search(r'<template>(.*?)</template>', content, re.DOTALL)
+            if template_match:
+                template_content = template_match.group(1).strip()
+                
+                # 提取关键 UI 元素和绑定
+                ui_elements = self._extract_ui_elements(template_content)
+                
+                desc = f"Component: {component_name}\nType: UI Template\n"
+                desc += f"Key Elements: {', '.join(ui_elements[:10])}\n"
+                desc += f"\nCode:\n{template_content}\n"
+                
+                chunks.append({
+                    "type": "frontend_ui",
+                    "name": f"{component_name}.template",
+                    "component": component_name,
+                    "content": desc,
+                    "file_path": file_path
+                })
+            
+            # 2. 提取 Script (业务逻辑)
+            script_match = re.search(r'<script.*?>(.*?)</script>', content, re.DOTALL)
+            if script_match:
+                script_content = script_match.group(1).strip()
+                
+                # 提取 API 调用、状态变量、方法
+                api_calls = self._extract_api_calls(script_content)
+                methods = self._extract_methods(script_content)
+                state_vars = self._extract_state_vars(script_content)
+                
+                desc = f"Component: {component_name}\nType: Business Logic\n"
+                if api_calls:
+                    desc += f"API Calls: {', '.join(api_calls)}\n"
+                if methods:
+                    desc += f"Methods: {', '.join(methods)}\n"
+                if state_vars:
+                    desc += f"State: {', '.join(state_vars)}\n"
+                desc += f"\nCode:\n{script_content}\n"
+                
+                chunks.append({
+                    "type": "frontend_logic",
+                    "name": f"{component_name}.script",
+                    "component": component_name,
+                    "content": desc,
+                    "file_path": file_path
+                })
+                
+        except Exception as e:
+            print(f"Error parsing Vue file {file_path}: {e}")
+            
+        return chunks
+
+    def _extract_ui_elements(self, template: str) -> List[str]:
+        """提取 UI 关键元素，如按钮、表单、自定义组件"""
+        elements = []
+        # 匹配组件名 <MyComponent ...>
+        tags = re.findall(r'<([A-Z][a-zA-Z0-9]+)', template)
+        elements.extend(tags)
+        
+        # 匹配关键指令 v-if, v-for, @click
+        if 'v-if' in template: elements.append('Condition(v-if)')
+        if 'v-for' in template: elements.append('List(v-for)')
+        if '@click' in template: elements.append('Event(click)')
+        
+        return list(set(elements))
+
+    def _extract_api_calls(self, script: str) -> List[str]:
+        """提取 API 调用函数名"""
+        return re.findall(r'import\s+\{\s*([^}]+)\s*\}\s+from\s+[\'"]@/api/', script)
+
+    def _extract_methods(self, script: str) -> List[str]:
+        """提取方法定义"""
+        return re.findall(r'const\s+([a-zA-Z0-9_]+)\s*=\s*(?:async)?\s*\(\s*\)\s*=>', script)
+
+    def _extract_state_vars(self, script: str) -> List[str]:
+        """提取响应式变量 ref/reactive"""
+        return re.findall(r'const\s+([a-zA-Z0-9_]+)\s*=\s*(?:ref|reactive)\(', script)
+
 if __name__ == "__main__":
     # 测试 Java 解析器
     print("=" * 60)

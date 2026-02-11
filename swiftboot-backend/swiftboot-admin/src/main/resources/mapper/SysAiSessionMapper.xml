@@ -22,6 +22,7 @@
         FROM sys_ai_session s
         LEFT JOIN sys_user u ON s.user_id = u.id
         <where>
+            AND s.deleted = 0
             <if test="userId != null">
                 AND s.user_id = #{userId}
             </if>

@@ -31,10 +31,10 @@ public interface SysAiSessionService extends IService<SysAiSession> {
     /**
      * 获取仪表盘统计数据
      */
-    Map<String, Object> getDashboardStats();
+    Map<String, Object> getDashboardStats(String timeRange, String rankType);
 
     /**
      * 分页查询用户算力消耗排行
      */
-    Page<Map<String, Object>> getUserTokenStats(PageQuery pageQuery, String username);
+    Page<Map<String, Object>> getUserTokenStats(PageQuery pageQuery, String username, String timeRange, String rankType);
 }

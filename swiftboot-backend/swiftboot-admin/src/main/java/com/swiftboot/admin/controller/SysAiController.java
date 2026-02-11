@@ -50,6 +50,7 @@ import org.springframework.util.StreamUtils;
 @Tag(name = "智能会话")
 @RestController
 @RequestMapping("/system/ai")
+@SuppressWarnings("unchecked")
 public class SysAiController {
 
     @Resource
@@ -60,9 +61,6 @@ public class SysAiController {
 
     // Redis 历史记录 Key 前缀
     private static final String HISTORY_KEY_PREFIX = "ai:history:";
-    // 向量检索的最大距离阈值（越小越相似，0.6 为经验值）
-    // 向量检索的最大距离阈值（越小越相似，0.6 为经验值），已在 RAG 服务内部使用，此处仅作配置声明
-    private static final double MEMORY_MAX_DISTANCE = 0.6;
 
     // DeepSeek 配置
     @Value("${ai.deepseek.api-url:}")

@@ -135,35 +135,35 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
     }
 
     @Override
-    public Map<String, Object> getDashboardStats() {
+    public Map<String, Object> getDashboardStats(String timeRange, String rankType) {
         Map<String, Object> stats = new HashMap<>();
         
-        // 1. 今日核心指标
-        Map<String, Object> today = baseMapper.selectTodayStats();
-        if (today != null) {
-            stats.put("todayCount", today.get("today_count"));
-            stats.put("todayTokens", today.get("today_tokens"));
-            stats.put("avgDuration", today.get("avg_duration"));
+        // 1. 核心指标 (根据 Time Range)
+        Map<String, Object> rangeStats = baseMapper.selectStats(timeRange, rankType);
+        if (rangeStats != null) {
+            stats.put("todayCount", rangeStats.get("count")); // 保持前端字段名兼容，实际含义为 Current Range Count
+            stats.put("todayTokens", rangeStats.get("tokens"));
+            stats.put("avgDuration", rangeStats.get("avg_duration"));
         } else {
             stats.put("todayCount", 0);
             stats.put("todayTokens", 0);
             stats.put("avgDuration", 0);
         }
 
-        // 2. Token 趋势
-        List<Map<String, Object>> trend = baseMapper.selectTokenTrend();
+        // 2. Token 趋势 (根据 timeRange 动态变化)
+        List<Map<String, Object>> trend = baseMapper.selectTokenTrend(timeRange);
         stats.put("tokenTrend", trend);
 
-        // 3. 算力消耗排行 (Top 10)
-        List<Map<String, Object>> topUsers = baseMapper.selectTopTokenUsers();
+        // 3. 算力消耗排行 (Top 10) - 动态
+        List<Map<String, Object>> topUsers = baseMapper.selectTopStats(timeRange, rankType);
         stats.put("topUsers", topUsers);
 
         return stats;
     }
 
     @Override
-    public Page<Map<String, Object>> getUserTokenStats(PageQuery pageQuery, String username) {
+    public Page<Map<String, Object>> getUserTokenStats(PageQuery pageQuery, String username, String timeRange, String rankType) {
         Page<Map<String, Object>> page = new Page<>(pageQuery.getPageNum(), pageQuery.getPageSize());
-        return baseMapper.selectUserTokenStats(page, username);
+        return baseMapper.selectUserTokenStats(page, username, timeRange, rankType);
     }
 }

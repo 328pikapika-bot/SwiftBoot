@@ -2,50 +2,89 @@
   <div class="min-h-screen p-6 bg-[#f8fafc] dark:bg-[#0f172a] font-display transition-colors duration-300">
     <!-- Header -->
     <div class="flex items-center justify-between mb-8">
-      <div>
-        <h1 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
-          <span class="w-2 h-8 bg-blue-500 rounded-full"></span>
-          SwiftBoot 智能中枢
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-500 border border-blue-500/20 uppercase tracking-wider">Live</span>
-        </h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1 ml-5 text-sm">AI 大脑实时监控与认知分析系统</p>
-      </div>
-      <div class="flex gap-3 items-center">
+      <div class="flex items-center gap-6">
+        <div>
+          <h1 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
+            <span class="w-2 h-8 bg-blue-500 rounded-full"></span>
+            SwiftBoot 智能中枢
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-500 border border-blue-500/20 uppercase tracking-wider">Live</span>
+          </h1>
+          <p class="text-slate-500 dark:text-slate-400 mt-1 ml-5 text-sm">AI 大脑实时监控与认知分析系统</p>
+        </div>
+
         <!-- 算力消耗榜 Widget (仅管理员) -->
         <div v-if="isAdmin && topUsers.length > 0" 
              @click="openUserSelect" 
-             class="flex items-center bg-slate-50 dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-all group overflow-hidden relative mr-2 py-1.5 px-4 h-12"
+             class="flex items-center bg-white dark:bg-slate-800 rounded-full border-2 border-orange-100 dark:border-orange-900/30 cursor-pointer hover:border-orange-300 dark:hover:border-orange-600 transition-all group overflow-visible relative py-2 px-6 h-16 shadow-lg shadow-orange-100/50 dark:shadow-orange-900/20"
         >
+           <!-- Custom Tooltip -->
+           <div class="absolute -bottom-12 left-1/2 -translate-x-1/2 px-4 py-2 bg-slate-900/90 dark:bg-white/90 backdrop-blur-md text-white dark:text-slate-900 text-xs font-bold rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap z-50 shadow-xl translate-y-2 group-hover:translate-y-0 border border-white/10 dark:border-slate-200/50 flex items-center gap-2">
+              <span class="material-icons-round text-sm text-orange-500 animate-pulse">touch_app</span>
+              <span>点击查看详情</span>
+              <!-- Arrow -->
+              <div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-slate-900/90 dark:bg-white/90 rotate-45 border-l border-t border-white/10 dark:border-slate-200/50"></div>
+           </div>
+
+           <!-- Background Animation -->
+           <div class="absolute inset-0 bg-gradient-to-r from-transparent via-orange-50/30 dark:via-orange-900/10 to-transparent translate-x-[-100%] animate-shimmer-fast"></div>
+           
            <!-- Left: Title -->
-           <div class="flex items-center gap-2 pr-4">
-              <span class="text-sm font-bold text-slate-500 dark:text-slate-400">算力排行 TOP 10</span>
-              <span class="material-icons-round text-slate-400 text-lg">bar_chart</span>
+           <div class="flex items-center gap-3 pr-6 relative z-10">
+              <span class="text-2xl font-black italic tracking-wider text-transparent bg-clip-text bg-gradient-to-tr from-red-600 via-orange-500 to-yellow-400 animate-fire drop-shadow-md">算力排行 TOP 10</span>
+              <div class="relative">
+                 <span class="material-icons-round text-orange-500 text-3xl animate-flame-surge absolute top-0 left-0 blur-[1px] opacity-70">local_fire_department</span>
+                 <span class="material-icons-round text-orange-500 text-3xl animate-bounce-slight relative z-10">local_fire_department</span>
+              </div>
            </div>
 
            <!-- Vertical Divider -->
-           <div class="h-4 w-px bg-slate-300 dark:bg-slate-600 mx-2"></div>
+           <div class="h-8 w-px bg-slate-200 dark:bg-slate-600 mx-4"></div>
 
            <!-- Right: Top 3 -->
-           <div class="flex items-center gap-4 pl-2">
+           <div class="flex items-center gap-6 pl-2 relative z-10">
               <!-- No.1 -->
-              <div class="flex items-center gap-1.5">
-                 <span class="material-icons-round text-yellow-500 text-base">emoji_events</span>
-                 <span class="text-xs font-medium text-slate-600 dark:text-slate-300 max-w-[60px] truncate">{{ topUsers[0]?.nickname || topUsers[0]?.username }}</span>
+              <div class="flex items-center gap-2">
+                 <span class="material-icons-round text-yellow-500 text-2xl drop-shadow-sm animate-pulse">emoji_events</span>
+                 <span class="text-base font-bold text-slate-800 dark:text-slate-100 max-w-[80px] truncate">{{ topUsers[0]?.nickname || topUsers[0]?.username }}</span>
               </div>
               <!-- No.2 -->
-              <div class="flex items-center gap-1.5">
-                 <span class="material-icons-round text-slate-400 text-base">emoji_events</span>
-                 <span class="text-xs font-medium text-slate-600 dark:text-slate-300 max-w-[60px] truncate">{{ topUsers[1]?.nickname || topUsers[1]?.username }}</span>
+              <div class="flex items-center gap-2 opacity-90">
+                 <span class="material-icons-round text-slate-400 text-xl">emoji_events</span>
+                 <span class="text-sm font-bold text-slate-600 dark:text-slate-300 max-w-[80px] truncate">{{ topUsers[1]?.nickname || topUsers[1]?.username }}</span>
               </div>
               <!-- No.3 -->
-              <div class="flex items-center gap-1.5">
-                 <span class="material-icons-round text-amber-700 text-base">emoji_events</span>
-                 <span class="text-xs font-medium text-slate-600 dark:text-slate-300 max-w-[60px] truncate">{{ topUsers[2]?.nickname || topUsers[2]?.username }}</span>
+              <div class="flex items-center gap-2 opacity-80">
+                 <span class="material-icons-round text-amber-700 text-xl">emoji_events</span>
+                 <span class="text-sm font-bold text-slate-600 dark:text-slate-300 max-w-[80px] truncate">{{ topUsers[2]?.nickname || topUsers[2]?.username }}</span>
               </div>
            </div>
         </div>
+      </div>
 
-        <button @click="fetchData" class="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-sm font-medium shadow-sm flex items-center gap-2 h-12">
+      <div class="flex gap-3 items-center">
+        <!-- Dashboard Filters -->
+        <div v-if="isAdmin" class="flex gap-2">
+           <div class="relative">
+              <select v-model="dashboardTimeRange" @change="fetchData" class="appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 h-12 pl-4 pr-10 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shadow-sm">
+                 <option value="day">今日数据</option>
+                 <option value="week">本周数据</option>
+                 <option value="month">本月数据</option>
+                 <option value="total">历史总计</option>
+              </select>
+              <span class="material-icons-round text-slate-400 text-sm absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">expand_more</span>
+           </div>
+
+           <div class="relative">
+              <select v-model="dashboardRankType" @change="fetchData" class="appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 h-12 pl-4 pr-10 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shadow-sm">
+                 <option value="user">按用户统计</option>
+                 <option value="dept_all">按所有部门</option>
+                 <option value="dept_level1">按一级部门</option>
+              </select>
+              <span class="material-icons-round text-slate-400 text-sm absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">expand_more</span>
+           </div>
+        </div>
+
+        <button @click="fetchData" class="px-6 py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400 transition-all text-sm font-medium shadow-sm flex items-center gap-2 h-12">
           <span class="material-icons-round text-base">refresh</span>
           刷新数据
         </button>
@@ -98,11 +137,11 @@
             <span class="text-3xl font-black text-slate-900 dark:text-white">{{ stats.todayCount }}</span>
             <span class="text-xs font-medium text-purple-500 flex items-center gap-1">
               <span class="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span>
-              Live
+              {{ dashboardTimeRange === 'day' ? 'Live' : (dashboardTimeRange === 'week' ? 'Weekly' : (dashboardTimeRange === 'month' ? 'Monthly' : 'Total')) }}
             </span>
           </div>
           <div class="mt-3 h-12 w-full" ref="synapseChartRef"></div>
-          <p class="text-[10px] text-slate-400 mt-2">今日交互会话数 (近7天趋势)</p>
+          <p class="text-[10px] text-slate-400 mt-2">{{ dashboardTimeRange === 'day' ? '今日交互会话数' : (dashboardTimeRange === 'week' ? '本周交互会话数' : (dashboardTimeRange === 'month' ? '本月交互会话数' : '历史总会话数')) }} (近7天趋势)</p>
         </div>
       </div>
 
@@ -308,134 +347,173 @@
     <!-- 用户选择弹窗 (算力消耗榜) -->
     <el-dialog 
       v-model="userSelectVisible" 
-      width="600px" 
-      class="rank-dialog rounded-3xl overflow-hidden" 
+      width="1280px" 
+      class="!rounded-xl overflow-hidden" 
       draggable
       align-center
       :show-close="false"
     >
-      <template #header="{ close, titleId, titleClass }">
-         <div class="relative h-32 bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500 p-6 flex flex-col justify-end overflow-hidden">
-            <!-- 装饰背景 -->
-            <div class="absolute top-0 right-0 p-4 opacity-20">
-               <span class="material-icons-round text-9xl text-white transform rotate-12">emoji_events</span>
-            </div>
-            <div class="absolute top-4 right-4">
-               <button @click="close" class="text-amber-900/50 hover:text-amber-900 transition-colors">
-                  <span class="material-icons-round text-2xl">close</span>
-               </button>
-            </div>
-            
-            <h4 :id="titleId" :class="titleClass" class="text-2xl font-black text-amber-950 flex items-center gap-2 relative z-10">
-               <span class="material-icons-round text-3xl animate-bounce">emoji_events</span>
-               算力消耗排行榜
-            </h4>
-            <p class="text-amber-900/80 text-xs font-bold mt-1 relative z-10">Top Users by Token Consumption</p>
-         </div>
-      </template>
-
-      <div class="p-6 bg-white dark:bg-slate-900">
-        <div class="flex gap-3 mb-6">
-          <div class="relative flex-1 group">
-             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 material-icons-round text-lg transition-colors">search</span>
-             <input 
-               v-model="userSearchQuery" 
-               placeholder="搜索用户名或昵称..." 
-               class="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-amber-400 outline-none transition-all text-sm font-medium"
-               @keyup.enter="fetchUserList"
-             />
+      <div class="px-8 pt-8 pb-6 flex justify-between items-start border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div>
+          <h2 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mb-1">算力消耗排行榜</h2>
+          <p class="text-sm text-slate-500 flex items-center gap-2">
+            <span class="material-icons-round text-sm">analytics</span>
+            SwiftBoot 智能中枢 - 算力消耗详情分析
+          </p>
+        </div>
+        <div class="flex items-center gap-4">
+          <!-- Time Range Filter -->
+          <div class="relative">
+             <select v-model="timeRange" @change="fetchUserList" class="appearance-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-2 pl-4 pr-10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer">
+                <option value="day">今日榜单</option>
+                <option value="week">本周榜单</option>
+                <option value="month">本月榜单</option>
+                <option value="total">历史总榜</option>
+             </select>
+             <span class="material-icons-round text-slate-400 text-sm absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">expand_more</span>
           </div>
-          <button @click="fetchUserList" class="px-5 py-2 rounded-xl bg-slate-900 dark:bg-slate-700 hover:bg-amber-500 text-white text-sm font-bold transition-all shadow-lg hover:shadow-amber-500/30 active:scale-95">
-            搜索
+
+          <!-- Rank Type Filter -->
+          <div class="relative">
+             <select v-model="rankType" @change="fetchUserList" class="appearance-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-2 pl-4 pr-10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer">
+                <option value="user">按用户查看</option>
+                <option value="dept_all">按所有部门</option>
+                <option value="dept_level1">按一级部门</option>
+             </select>
+             <span class="material-icons-round text-slate-400 text-sm absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">expand_more</span>
+          </div>
+
+          <button @click="userSelectVisible = false" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400">
+            <span class="material-icons-round">close</span>
           </button>
         </div>
+      </div>
 
-        <div class="rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
-          <el-table 
-            :data="userList" 
-            v-loading="userListLoading" 
-            highlight-current-row 
-            @current-change="handleUserSelectChange" 
-            style="width: 100%" 
-            height="380px"
-            :header-cell-style="{ background: '#fff', color: '#94a3b8', fontSize: '12px', fontWeight: '800', borderBottom: '2px solid #f1f5f9' }"
-          >
-            <el-table-column width="70" align="center" label="排名">
-              <template #default="scope">
-                <div v-if="scope.$index < 3" class="flex justify-center">
-                   <span class="material-icons-round text-2xl drop-shadow-sm" 
-                         :class="['text-yellow-400', 'text-slate-400', 'text-amber-700'][scope.$index]">
-                      emoji_events
-                   </span>
+      <div class="h-[650px] overflow-y-auto custom-scrollbar bg-white dark:bg-slate-900">
+        <table class="w-full text-left border-collapse table-fixed">
+          <thead class="sticky top-0 bg-white dark:bg-slate-900 z-10 shadow-sm">
+            <tr class="text-[11px] uppercase tracking-[0.1em] text-slate-400 border-b border-slate-100 dark:border-slate-800">
+              <th class="px-8 py-4 font-semibold w-24">排名</th>
+              <th v-if="rankType === 'user'" class="px-6 py-4 font-semibold w-48">用户</th>
+              <th v-if="rankType === 'user'" class="px-6 py-4 font-semibold w-32">姓名</th>
+              <th class="px-6 py-4 font-semibold w-40">{{ rankType === 'user' ? '所属部门' : '部门名称' }}</th>
+              <th class="px-6 py-4 font-semibold w-48">算力消耗 (Tokens)</th>
+              <th class="px-6 py-4 font-semibold w-32">耗费</th>
+              <th class="px-6 py-4 font-semibold w-32">消耗状态</th>
+              <th v-if="rankType === 'user'" class="px-8 py-4 font-semibold text-right w-32">管理操作</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+            <tr v-for="(user, index) in userList" :key="index" 
+                class="group transition-colors"
+                :class="user._isPlaceholder ? 'bg-slate-50/10' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/30 cursor-pointer ' + (tempSelectedUser?.userId === user.userId ? 'bg-slate-50/30' : '')"
+                @click="!user._isPlaceholder && rankType === 'user' && handleUserSelectChange(user)"
+            >
+              <!-- 排名 -->
+              <td class="px-8 py-4 h-16">
+                <div v-if="!user._isPlaceholder">
+                  <div v-if="index === 0" class="flex items-center gap-2">
+                    <span class="material-icons-round text-gold !text-xl">emoji_events</span>
+                    <span class="text-xs font-bold text-gold uppercase tracking-tighter">冠军</span>
+                  </div>
+                  <div v-else-if="index === 1" class="flex items-center gap-2">
+                    <span class="material-icons-round text-silver !text-xl">workspace_premium</span>
+                    <span class="text-xs font-bold text-silver uppercase tracking-tighter">亚军</span>
+                  </div>
+                  <div v-else-if="index === 2" class="flex items-center gap-2">
+                    <span class="material-icons-round text-bronze !text-xl">military_tech</span>
+                    <span class="text-xs font-bold text-bronze uppercase tracking-tighter">季军</span>
+                  </div>
+                  <span v-else class="font-num text-slate-400 text-sm ml-2">{{ (index + 1).toString().padStart(2, '0') }}</span>
                 </div>
-                <span v-else class="text-slate-400 font-bold text-sm">{{ scope.$index + 1 }}</span>
-              </template>
-            </el-table-column>
-            
-            <el-table-column width="60" align="center">
-              <template #default="scope">
-                <div class="w-9 h-9 rounded-xl shadow-sm border-2 border-white dark:border-slate-700 flex items-center justify-center text-white text-xs font-black transform transition-transform hover:scale-110"
-                     :class="scope.$index < 3 ? 'bg-gradient-to-br from-amber-400 to-orange-500' : 'bg-gradient-to-br from-slate-400 to-slate-500'">
-                  {{ (scope.row.nickname || scope.row.username || 'U').charAt(0).toUpperCase() }}
+                <span v-else class="text-slate-300">-</span>
+              </td>
+
+              <!-- 用户 (仅 User 模式) -->
+              <td v-if="rankType === 'user'" class="px-6 py-4 font-num text-sm text-slate-500">
+                {{ user._isPlaceholder ? '暂无' : `${user.username}@swiftboot.ai` }}
+              </td>
+
+              <!-- 姓名 (仅 User 模式) -->
+              <td v-if="rankType === 'user'" class="px-6 py-4">
+                <span class="font-medium text-slate-900 dark:text-white">
+                  {{ user._isPlaceholder ? '暂无' : (user.nickname || user.username) }}
+                </span>
+              </td>
+
+              <!-- 部门 -->
+              <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                {{ user._isPlaceholder ? '暂无' : (user.deptName || '未分配') }}
+              </td>
+
+              <!-- 算力消耗 -->
+              <td class="px-6 py-4">
+                <div v-if="!user._isPlaceholder" class="space-y-1.5 w-44">
+                  <div class="flex justify-between items-end">
+                    <span class="font-num font-semibold text-slate-900 dark:text-white">{{ (user.tokenConsumption || 0).toLocaleString() }}</span>
+                    <span class="text-[10px] text-slate-400 font-num uppercase">{{ Math.min(Math.round(((user.tokenConsumption || 0) / 50000) * 100), 100) }}%</span>
+                  </div>
+                  <div class="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-500"
+                         :class="index === 0 ? 'bg-primary' : (index === 1 ? 'bg-primary/60' : (index === 2 ? 'bg-primary/50' : (index < 5 ? 'bg-primary/40' : (index < 8 ? 'bg-primary/30' : 'bg-primary/20'))))"
+                         :style="{ width: Math.min(((user.tokenConsumption || 0) / 50000) * 100, 100) + '%' }">
+                    </div>
+                  </div>
                 </div>
-              </template>
-            </el-table-column>
+                <span v-else class="text-slate-300">暂无数据</span>
+              </td>
 
-            <el-table-column prop="username" label="用户" min-width="120">
-               <template #default="scope">
-                 <div class="flex flex-col">
-                   <span class="font-bold text-slate-700 dark:text-slate-200 text-sm">{{ scope.row.nickname || scope.row.username }}</span>
-                   <div class="flex items-center gap-2">
-                      <span class="text-[10px] text-slate-400">@{{ scope.row.username }}</span>
-                      <span v-if="scope.row.status === 1" class="px-1.5 py-0.5 rounded text-[9px] bg-red-100 text-red-500 font-bold">已禁用</span>
-                   </div>
-                 </div>
-               </template>
-            </el-table-column>
-            
-            <el-table-column prop="deptName" label="部门" min-width="100">
-               <template #default="scope">
-                 <span class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">{{ scope.row.deptName || '未分配' }}</span>
-               </template>
-            </el-table-column>
+              <!-- 耗费 -->
+              <td class="px-6 py-4">
+                <span v-if="!user._isPlaceholder" class="font-num font-medium text-slate-900 dark:text-white">¥{{ ((user.tokenConsumption || 0) * 0.0002).toFixed(2) }}</span>
+                <span v-else class="text-slate-300">-</span>
+              </td>
 
-            <el-table-column label="算力消耗" width="110" align="right">
-               <template #default="scope">
-                 <div class="font-mono font-black text-sm" :class="scope.$index < 3 ? 'text-amber-500' : 'text-slate-600'">
-                    {{ scope.row.tokenConsumption ? (scope.row.tokenConsumption / 1000).toFixed(1) + 'k' : '0' }}
-                 </div>
-               </template>
-            </el-table-column>
-            
-            <el-table-column label="状态" width="80" align="center">
-               <template #default="scope">
-                  <el-switch 
-                    v-model="scope.row.status" 
-                    :active-value="0" 
-                    :inactive-value="1"
-                    size="small"
-                    style="--el-switch-on-color: #10b981; --el-switch-off-color: #ef4444"
-                    @change="handleStatusChange(scope.row)"
-                    @click.stop
-                  />
-               </template>
-            </el-table-column>
-          </el-table>
+              <!-- 消耗状态 -->
+              <td class="px-6 py-4">
+                <span v-if="!user._isPlaceholder" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium"
+                      :class="(user.tokenConsumption || 0) > (timeRange === 'day' ? 5000 : (timeRange === 'week' ? 30000 : 100000)) ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'">
+                  <span class="w-1 h-1 rounded-full" :class="(user.tokenConsumption || 0) > (timeRange === 'day' ? 5000 : (timeRange === 'week' ? 30000 : 100000)) ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'"></span>
+                  {{ (user.tokenConsumption || 0) > (timeRange === 'day' ? 5000 : (timeRange === 'week' ? 30000 : 100000)) ? '接近上限' : '运行正常' }}
+                </span>
+                <span v-else class="text-slate-300 text-xs">暂无</span>
+              </td>
+
+              <!-- 管理操作 -->
+              <td v-if="rankType === 'user'" class="px-8 py-4 text-right" @click.stop>
+                <div v-if="!user._isPlaceholder" 
+                     class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+                     :class="user.status === 0 ? 'bg-blue-600' : 'bg-slate-200'"
+                     @click="handleStatusChange(user)">
+                  <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                        :class="user.status === 0 ? 'translate-x-5' : 'translate-x-0'"></span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="px-8 py-5 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center border-t border-slate-100 dark:border-slate-800">
+        <div class="text-[11px] text-slate-400 flex items-center gap-2 uppercase tracking-wider">
+          <span class="material-icons-round text-xs">update</span>
+          数据更新于: <span class="font-num">{{ new Date().toLocaleString() }}</span>
         </div>
-        
-        <div class="mt-6 flex justify-between items-center">
-          <span class="text-xs font-bold text-slate-400">Total Users: {{ userPage.total }}</span>
-          <div class="flex gap-3">
-             <button @click="userSelectVisible = false" class="px-5 py-2 rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-bold">
-               关闭
-             </button>
-             <button 
-               @click="confirmUserSelect" 
-               :disabled="!tempSelectedUser"
-               class="px-6 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-950 text-xs font-bold shadow-lg shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
-             >
-               查看该用户数据
-             </button>
+        <div class="flex items-center gap-4">
+          <div class="flex items-center gap-1.5">
+            <button class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 text-slate-500 transition-all"
+                    :disabled="userPage.pageNum <= 1"
+                    @click="userPage.pageNum--; fetchUserList()">
+              <span class="material-icons-round text-sm">chevron_left</span>
+            </button>
+            <div class="flex gap-1 px-1">
+              <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-primary text-white text-xs font-num font-bold">{{ userPage.pageNum }}</button>
+            </div>
+            <button class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 text-slate-500 transition-all"
+                    :disabled="userList.length < userPage.pageSize && !userList.some(u => u._isPlaceholder)"
+                    @click="userPage.pageNum++; fetchUserList()">
+              <span class="material-icons-round text-sm">chevron_right</span>
+            </button>
           </div>
         </div>
       </div>
@@ -457,6 +535,7 @@ import { ElMessage } from 'element-plus'
 interface DashboardUser extends User {
   userId?: number
   tokenConsumption?: number
+  _isPlaceholder?: boolean
 }
 
 const userStore = useUserStore()
@@ -478,6 +557,7 @@ const stats = ref({
   avgDuration: 0,
   activeUsers: [] as any[],
   topUsers: [] as DashboardUser[],
+  tokenTrend: [] as any[],
   last7DaysTrend: [] as number[] // 模拟近7天数据
 })
 
@@ -489,6 +569,11 @@ const userSelectVisible = ref(false)
 const userList = ref<DashboardUser[]>([])
 const userListLoading = ref(false)
 const userSearchQuery = ref('')
+const timeRange = ref('week')
+const rankType = ref('user')
+const dashboardTimeRange = ref('week')
+const dashboardRankType = ref('user')
+
 const userPage = reactive({
   pageNum: 1,
   pageSize: 10,
@@ -509,12 +594,22 @@ const fetchUserList = async () => {
     const res = await getUserTokenStats({
       pageNum: userPage.pageNum,
       pageSize: userPage.pageSize,
-      username: userSearchQuery.value
+      username: userSearchQuery.value,
+      timeRange: timeRange.value,
+      rankType: rankType.value
     })
     // @ts-ignore
     if (res.code === 200) {
       // @ts-ignore
-      userList.value = res.data.list || []
+      const list = res.data.list || []
+      userList.value = list
+      
+      // Pad with placeholders to ensure 10 rows
+      const targetSize = userPage.pageSize
+      while (userList.value.length < targetSize) {
+        userList.value.push({ _isPlaceholder: true } as DashboardUser)
+      }
+
       // @ts-ignore
       userPage.total = res.data.total
     }
@@ -610,12 +705,43 @@ let synapseChart: echarts.ECharts | null = null
 const initCharts = () => {
   if (synapseChartRef.value) {
      synapseChart = echarts.init(synapseChartRef.value)
+     
+     // Generate last 7 data points labels ending with today/current week/current month
+     const xAxisData = []
+     const range = dashboardTimeRange.value
+     
+     if (range === 'month') {
+        for (let i = 6; i >= 0; i--) {
+           const d = new Date()
+           d.setMonth(d.getMonth() - i)
+           xAxisData.push(`${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`)
+        }
+     } else if (range === 'week') {
+        for (let i = 6; i >= 0; i--) {
+           const d = new Date()
+           d.setDate(d.getDate() - i * 7)
+           const weekNum = Math.ceil((d.getDate() + 6 - d.getDay()) / 7)
+           xAxisData.push(`${d.getMonth() + 1}月第${weekNum}周`)
+        }
+     } else {
+        // Default to 'day' (last 7 days)
+        const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+        for (let i = 6; i >= 0; i--) {
+           const d = new Date()
+           d.setDate(d.getDate() - i)
+           xAxisData.push(weekDays[d.getDay()])
+        }
+     }
+
      const data = stats.value.last7DaysTrend.length ? stats.value.last7DaysTrend : [12, 18, 24, 35, 20, 28, stats.value.todayCount || 42]
      
      synapseChart.setOption({
-        tooltip: { trigger: 'axis' },
+        tooltip: { 
+          trigger: 'axis',
+          formatter: '{b}: {c}'
+        },
         grid: { left: 0, right: 0, top: 5, bottom: 0 },
-        xAxis: { type: 'category', show: false, data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] },
+        xAxis: { type: 'category', show: false, data: xAxisData },
         yAxis: { type: 'value', show: false },
         series: [{
            data: data,
@@ -903,10 +1029,70 @@ const initCharts = () => {
   }
 }
 
+const updateSynapseChart = () => {
+  if (!synapseChart) return
+  
+  const range = dashboardTimeRange.value
+  const xAxisData: string[] = []
+  const data: number[] = []
+  
+  // Convert tokenTrend to Map for easy lookup
+  const trendMap = new Map()
+  if (stats.value.tokenTrend && Array.isArray(stats.value.tokenTrend)) {
+    stats.value.tokenTrend.forEach((item: any) => {
+      trendMap.set(item.date, Number(item.tokens))
+    })
+  }
+
+  // Generate 7 time points
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date()
+    let key = ''
+    let label = ''
+    
+    if (range === 'month') {
+       d.setDate(1) // Set to 1st of month to avoid overflow issues
+       d.setMonth(d.getMonth() - i)
+       key = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-01`
+       label = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`
+    } else if (range === 'week') {
+       // Find Monday of current week
+       const day = d.getDay()
+       const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+       d.setDate(diff)
+       // Go back i weeks
+       d.setDate(d.getDate() - i * 7)
+       
+       key = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`
+       
+       // Calculate week number of year for label
+       const d2 = new Date(d)
+       d2.setDate(d2.getDate() + 3) // Thursday
+       const onejan = new Date(d2.getFullYear(), 0, 1)
+       const weekNum = Math.ceil((((d2.getTime() - onejan.getTime()) / 86400000) + onejan.getDay() + 1) / 7)
+       label = `${d.getMonth() + 1}月第${weekNum}周`
+    } else {
+       // Day
+       d.setDate(d.getDate() - i)
+       key = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`
+       const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+       label = i === 0 ? '今天' : weekDays[d.getDay()]
+    }
+    
+    xAxisData.push(label)
+    data.push(trendMap.get(key) || 0)
+  }
+  
+  synapseChart.setOption({
+     xAxis: { data: xAxisData },
+     series: [{ data }]
+  })
+}
+
 const fetchData = async () => {
   loading.value = true
   try {
-    const res = await getDashboardStats(selectedUserId.value)
+    const res = await getDashboardStats(selectedUserId.value, dashboardTimeRange.value, dashboardRankType.value)
     // @ts-ignore
     if (res.code === 200 && res.data) {
       // @ts-ignore
@@ -916,11 +1102,8 @@ const fetchData = async () => {
          topUsers.value = stats.value.topUsers.slice(0, 3)
       }
       
-      // Update charts if they exist
-      if (synapseChart) {
-         const data = stats.value.last7DaysTrend.length ? stats.value.last7DaysTrend : [12, 18, 24, 35, 20, 28, stats.value.todayCount || 42]
-         synapseChart.setOption({ series: [{ data }] })
-      }
+      // Update charts
+      updateSynapseChart()
     }
     
     const listQuery = { pageNum: 1, pageSize: 10 } as any
@@ -977,7 +1160,10 @@ onUnmounted(() => {
 
 <style scoped>
 .font-display {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Space Grotesk', 'PingFang SC', sans-serif;
+}
+.font-num {
+  font-family: 'Space Grotesk', sans-serif;
 }
 
 /* Custom Scrollbar */
@@ -988,11 +1174,58 @@ onUnmounted(() => {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 2px;
+  background: #e2e8f0;
+  border-radius: 10px;
 }
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
   background: #334155;
+}
+
+.toggle-switch {
+  @apply relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none;
+}
+.toggle-active {
+  background-color: #41adec;
+}
+.toggle-inactive {
+  @apply bg-slate-200 dark:bg-slate-700;
+}
+.toggle-dot {
+  @apply pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out;
+}
+.translate-active {
+  transform: translateX(1.25rem);
+}
+.translate-inactive {
+  transform: translateX(0);
+}
+
+.text-gold { color: #D4AF37; }
+.text-silver { color: #A8A8A8; }
+.text-bronze { color: #CD7F32; }
+.bg-primary { background-color: #41adec; }
+.text-primary { color: #41adec; }
+
+/* Dialog Styles Override */
+:deep(.el-dialog) {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 32px 64px -12px rgba(0,0,0,0.14);
+  padding: 0;
+  background-color: #fff;
+}
+.dark :deep(.el-dialog) {
+  background-color: #0f172a;
+  border: 1px solid #1e293b;
+}
+:deep(.el-dialog__header) {
+  display: none;
+}
+:deep(.el-dialog__body) {
+  padding: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes shimmer {
@@ -1005,7 +1238,52 @@ onUnmounted(() => {
   50% { opacity: 0; }
 }
 
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes fire-flicker {
+  0%, 100% { text-shadow: 0 0 4px rgba(255, 69, 0, 0.4), 0 -1px 8px rgba(255, 140, 0, 0.3); transform: scale(1); filter: brightness(1); }
+  50% { text-shadow: 0 0 10px rgba(255, 69, 0, 0.7), 0 -4px 12px rgba(255, 140, 0, 0.6); transform: scale(1.03); filter: brightness(1.2); }
+}
+
+@keyframes flame-surge {
+  0%, 100% { transform: scale(1) translateY(0); opacity: 0.6; }
+  50% { transform: scale(1.3) translateY(-2px); opacity: 0.8; }
+}
+
+@keyframes bounce-slight {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes shimmer-fast {
+  0% { transform: translateX(-100%) skewX(-15deg); }
+  100% { transform: translateX(200%) skewX(-15deg); }
+}
+
 .animate-blink {
   animation: blink 1s step-end infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-fire {
+  animation: fire-flicker 2s ease-in-out infinite;
+}
+
+.animate-flame-surge {
+  animation: flame-surge 1.5s ease-in-out infinite;
+}
+
+.animate-bounce-slight {
+  animation: bounce-slight 2s ease-in-out infinite;
+}
+
+.animate-shimmer-fast {
+  animation: shimmer-fast 3s linear infinite;
 }
 </style>

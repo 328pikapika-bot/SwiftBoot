@@ -30,8 +30,9 @@ public class SysOperLogController {
     @Operation(summary = "分页查询操作日志列表")
     @SaCheckPermission("monitor:operlog:list")
     @GetMapping("/list")
-    public R<PageResult<SysOperLog>> list(SysOperLog operLog, PageQuery pageQuery) {
-        Page<SysOperLog> page = operLogService.selectOperLogPage(operLog, pageQuery);
+    public R<PageResult<SysOperLog>> list(SysOperLog operLog, PageQuery pageQuery, 
+                                        @RequestParam(required = false) String logType) {
+        Page<SysOperLog> page = operLogService.selectOperLogPage(operLog, pageQuery, logType);
         return R.ok(PageResult.of(page.getRecords(), page.getTotal(), page.getCurrent(), page.getSize()));
     }
 

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -47,6 +48,10 @@ public class SysAiSession implements Serializable {
     @Schema(description = "提问时间")
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
+
+    @Schema(description = "逻辑删除标识")
+    @TableLogic
+    private Integer deleted;
 
     @Schema(description = "用户名称")
     @TableField(exist = false)
