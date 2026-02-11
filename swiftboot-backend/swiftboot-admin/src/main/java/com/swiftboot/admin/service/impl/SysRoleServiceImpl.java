@@ -1,5 +1,7 @@
 package com.swiftboot.admin.service.impl;
 
+import cn.dev33.satoken.session.SaSession;
+import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.collection.CollUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -14,7 +16,9 @@ import com.swiftboot.admin.service.SysRoleService;
 import com.swiftboot.common.core.domain.PageQuery;
 import com.swiftboot.common.core.exception.BusinessException;
 import com.swiftboot.common.core.result.ResultCode;
+import com.swiftboot.common.security.domain.LoginUser;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +31,7 @@ import java.util.stream.Collectors;
  * 角色 Service 实现
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> implements SysRoleService {
 
@@ -92,6 +97,37 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
         roleMenuMapper.deleteByRoleId(role.getId());
         // 保存新的菜单关联
         insertRoleMenu(role.getId(), role.getMenuIds());
+
+        // 刷新所有在线用户的权限缓存 (静默更新方式)
+        // 方案：找到所有拥有该角色的用户，更新其 Session 中的权限缓存，无需重新登录
+        List<Long> userIds = userRoleMapper.selectUserIdsByRoleId(role.getId());
+        if (CollUtil.isNotEmpty(userIds)) {
+            for (Long userId : userIds) {
+                // 仅处理在线用户
+                if (StpUtil.isLogin(userId)) {
+                    try {
+                        // 获取用户 Session，如果不在线则不创建
+                        SaSession session = StpUtil.getSessionByLoginId(userId, false);
+                        if (session != null) {
+                            // 获取 Session 中的 LoginUser
+                            LoginUser loginUser = (LoginUser) session.get("loginUser");
+                            if (loginUser != null) {
+                                // 重新查询权限
+                                Set<String> permissions = new HashSet<>(menuMapper.selectPermsByUserId(userId));
+                                // 更新权限
+                                loginUser.setPermissions(permissions);
+                                // 重新写入 Session
+                                session.set("loginUser", loginUser);
+                                log.debug("Refreshed permissions for user: {}", userId);
+                            }
+                        }
+                    } catch (Exception e) {
+                        // 忽略异常，防止影响主流程
+                        log.warn("Failed to refresh permissions for user: {}", userId, e);
+                    }
+                }
+            }
+        }
     }
 
     @Override

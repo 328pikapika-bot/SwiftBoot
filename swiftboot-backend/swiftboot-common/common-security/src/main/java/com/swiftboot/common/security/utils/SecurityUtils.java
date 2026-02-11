@@ -63,9 +63,6 @@ public class SecurityUtils {
         if (loginUser == null) {
             return false;
         }
-        if (isAdmin()) {
-            return true;
-        }
         return loginUser.getPermissions() != null && loginUser.getPermissions().contains(permission);
     }
 
@@ -76,9 +73,6 @@ public class SecurityUtils {
         LoginUser loginUser = getLoginUser();
         if (loginUser == null) {
             return false;
-        }
-        if (isAdmin()) {
-            return true;
         }
         return loginUser.getRoles() != null && loginUser.getRoles().contains(role);
     }

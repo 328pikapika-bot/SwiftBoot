@@ -53,7 +53,12 @@
               class="flex items-center justify-between px-3 py-2.5 mx-2 mb-1 cursor-pointer rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group select-none"
             >
               <div class="flex items-center gap-2.5 text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 transition-colors">
-                 <span class="material-icons-round text-[20px]">{{ getMaterialIcon(item.meta?.icon) }}</span>
+                 <div class="w-[20px] h-[20px] flex items-center justify-center">
+                   <el-icon v-if="isElementIcon(item.meta?.icon)" :size="18">
+                     <component :is="getElementIconName(item.meta?.icon)" />
+                   </el-icon>
+                   <span v-else class="material-icons-round text-[20px]">{{ getMaterialIcon(item.meta?.icon) }}</span>
+                 </div>
                  <span class="text-sm font-medium">{{ item.meta?.title }}</span>
               </div>
               <span class="material-icons-round text-slate-400 text-lg transition-transform duration-300" :class="{ '-rotate-90': !openMenus.includes(item.path) }">expand_more</span>
@@ -69,13 +74,16 @@
                   ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium' 
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'"
               >
-                <span class="material-icons-round text-[20px] transition-transform group-hover:scale-110"
+                <div class="w-[20px] h-[20px] flex items-center justify-center transition-transform group-hover:scale-110"
                       :class="[
                         route.path === resolvePath(item.path, child.path) ? 'text-blue-500' : 'text-slate-400 dark:text-slate-500',
                         appStore.sidebar.opened ? 'ml-1' : ''
                       ]">
-                  {{ getMaterialIcon(child.meta?.icon) }}
-                </span>
+                  <el-icon v-if="isElementIcon(child.meta?.icon)" :size="18">
+                    <component :is="getElementIconName(child.meta?.icon)" />
+                  </el-icon>
+                  <span v-else class="material-icons-round text-[20px]">{{ getMaterialIcon(child.meta?.icon) }}</span>
+                </div>
                 
                 <span class="whitespace-nowrap transition-all duration-300"
                       :class="appStore.sidebar.opened ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 absolute pointer-events-none'">
@@ -90,6 +98,38 @@
               </router-link>
             </div>
           </div>
+          
+          <!-- Single Menu Item (Root level) -->
+          <router-link 
+            v-else-if="item.path !== '/dashboard'"
+            :to="item.path"
+            class="flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative overflow-hidden"
+            :class="route.path === item.path 
+              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium shadow-sm' 
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'"
+          >
+            <div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full transition-all duration-200" 
+                 :class="route.path === item.path ? 'opacity-100' : 'opacity-0 -translate-x-full'"></div>
+            
+            <div class="w-[22px] h-[22px] flex items-center justify-center transition-transform group-hover:scale-110" 
+                  :class="route.path === item.path ? 'text-blue-500' : 'text-slate-400 dark:text-slate-500'">
+              <el-icon v-if="isElementIcon(item.meta?.icon)" :size="20">
+                <component :is="getElementIconName(item.meta?.icon)" />
+              </el-icon>
+              <span v-else class="material-icons-round text-[22px]">{{ getMaterialIcon(item.meta?.icon) }}</span>
+            </div>
+            
+            <span class="whitespace-nowrap transition-all duration-300" 
+                  :class="appStore.sidebar.opened ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 absolute pointer-events-none'">
+              {{ item.meta?.title }}
+            </span>
+            
+            <!-- Tooltip -->
+            <div v-if="!appStore.sidebar.opened" 
+                 class="absolute left-full ml-4 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
+              {{ item.meta?.title }}
+            </div>
+          </router-link>
         </template>
       </nav>
 
@@ -116,7 +156,7 @@
     <!-- Main Content Area -->
     <main class="flex-1 flex flex-col min-w-0 bg-[#f8fafc] dark:bg-[#0f172a]">
       <!-- Header -->
-      <header class="h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-8 z-10 sticky top-0">
+      <header class="h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-8 z-50 sticky top-0">
         <div class="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
           <button 
             @click="appStore.toggleSidebar" 
@@ -216,6 +256,7 @@ import { computed, provide, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
+import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import AiAssistant from '@/components/AiAssistant/index.vue'
@@ -225,6 +266,29 @@ const router = useRouter()
 const appStore = useAppStore()
 const userStore = useUserStore()
 const { locale } = useI18n()
+
+// Element Plus Icons Set
+const elementIcons = Object.keys(ElementPlusIconsVue)
+// 创建小写映射表以支持忽略大小写匹配
+const lowerElementIcons = elementIcons.map(name => name.toLowerCase())
+
+const isElementIcon = (iconName: string | undefined) => {
+  if (!iconName) return false
+  // 1. 精确匹配
+  if (elementIcons.includes(iconName)) return true
+  // 2. 忽略大小写匹配
+  return lowerElementIcons.includes(iconName.toLowerCase())
+}
+
+const getElementIconName = (iconName: string | undefined) => {
+  if (!iconName) return ''
+  // 如果是精确匹配，直接返回
+  if (elementIcons.includes(iconName)) return iconName
+  // 如果是忽略大小写匹配，返回正确的 PascalCase 名称
+  const index = lowerElementIcons.indexOf(iconName.toLowerCase())
+  if (index > -1) return elementIcons[index]
+  return ''
+}
 
 // Theme handling
 const toggleTheme = () => {
@@ -274,13 +338,30 @@ const iconMap: Record<string, string> = {
 
 const getMaterialIcon = (iconName: string | undefined) => {
   if (!iconName) return 'circle'
-  // Remove el-icon prefix if exists
-  const name = iconName.toLowerCase()
+  // Remove el-icon prefix if exists (legacy)
+  const name = iconName.toLowerCase().replace('#', '')
+  
+  // 1. Direct map check
   if (iconMap[name]) return iconMap[name]
-  // Fallback map
+  
+  // 2. Element Plus icon check (CamelCase to underscore if needed)
+  // 如果用户输入的是 Element Plus 图标名 (如 "UserFilled")，我们需要映射到 Material Icon
+  // 或者直接返回原名（如果前端做了组件兼容）。但当前代码使用的是 material-icons-round class，所以必须返回 Material Icon 名。
+  // 这是一个兼容性问题：菜单管理选的是 Element Plus 图标，但 Sidebar 渲染的是 Material Icons。
+  // 临时方案：扩充映射表或支持直接渲染 Element Plus 图标。
+  
+  // 3. Fallback logic based on name keywords
   if (name.includes('user')) return 'person'
   if (name.includes('log')) return 'history'
   if (name.includes('tool')) return 'build'
+  if (name.includes('monitor')) return 'monitor'
+  if (name.includes('chat')) return 'chat'
+  if (name.includes('ai')) return 'psychology'
+  if (name.includes('guide')) return 'map'
+  
+  // 4. If it looks like a Material Icon name (lowercase, underscores), return it directly
+  if (/^[a-z0-9_]+$/.test(name)) return name
+  
   return 'circle' // Default dot
 }
 

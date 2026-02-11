@@ -1,73 +1,71 @@
 <template>
   <div class="flex-1 overflow-y-auto p-8 font-display">
     <!-- Hero Section -->
-    <div class="mb-10 relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 lg:p-12 shadow-sm">
-      <!-- Background Decorations -->
-      <div class="absolute top-0 right-0 -mt-20 -mr-20 h-80 w-80 rounded-full bg-blue-500/5 blur-3xl pointer-events-none"></div>
-      <div class="absolute bottom-0 left-0 -mb-20 -ml-20 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none"></div>
+    <div class="mb-10 relative overflow-hidden rounded-2xl bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800 border border-slate-200/60 dark:border-slate-700/60 p-8 lg:p-12 shadow-xl shadow-slate-200/40 dark:shadow-slate-900/40 transition-all hover:shadow-2xl hover:shadow-blue-500/10 group">
+      <!-- Subtle Background Mesh -->
+      <div class="absolute top-0 right-0 w-[600px] h-[600px] bg-gradient-to-br from-blue-400/10 to-emerald-400/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
       
-      <div class="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
-        <div class="flex-1">
-          <div class="flex flex-wrap items-center gap-3 mb-6">
-            <span class="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-300 text-xs font-bold tracking-wider uppercase flex items-center gap-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-              v1.0.0 Release
-            </span>
-            <span class="px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800 text-emerald-600 dark:text-emerald-300 text-xs font-bold tracking-wider uppercase flex items-center gap-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              AI Native
-            </span>
-          </div>
-          
-          <h1 class="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight mb-6 text-slate-900 dark:text-white leading-tight">
-            Swift<span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-emerald-500">Boot</span>
-            <br/>
-            <span class="text-2xl md:text-3xl font-light text-slate-400 dark:text-slate-500 block mt-2">下一代 AI 原生全栈框架</span>
-          </h1>
-          
-          <p class="text-slate-600 dark:text-slate-300 text-lg max-w-2xl leading-relaxed mb-8">
-            重塑企业级开发体验。深度融合 <strong class="text-slate-900 dark:text-white">Spring Boot 3</strong> 与 <strong class="text-slate-900 dark:text-white">Vue 3</strong>，
-            内置 <strong class="text-emerald-600 dark:text-emerald-400">本地 RAG 知识引擎</strong>，让每一行代码都充满智慧。
-          </p>
-          
-          <div class="flex flex-wrap gap-6">
-            <div class="flex items-center gap-2.5">
-              <div class="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
-                <span class="material-icons-round text-sm">check_circle</span>
-              </div>
-              <span class="text-sm font-medium text-slate-700 dark:text-slate-200">开箱即用工程模板</span>
-            </div>
-            <div class="flex items-center gap-2.5">
-              <div class="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                <span class="material-icons-round text-sm">psychology</span>
-              </div>
-              <span class="text-sm font-medium text-slate-700 dark:text-slate-200">私有化 AI 知识库</span>
-            </div>
-            <div class="flex items-center gap-2.5">
-              <div class="p-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
-                <span class="material-icons-round text-sm">speed</span>
-              </div>
-              <span class="text-sm font-medium text-slate-700 dark:text-slate-200">极致性能调优</span>
-            </div>
-          </div>
+      <div class="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-10">
+        <!-- Text Content -->
+        <div class="flex-1 space-y-6">
+            <!-- Badges -->
+             <div class="flex flex-wrap items-center gap-3">
+               <span class="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-300 text-xs font-bold tracking-wider uppercase flex items-center gap-1">
+                 <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                 v1.0.0 Release
+               </span>
+               <span class="px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800 text-emerald-600 dark:text-emerald-300 text-xs font-bold tracking-wider uppercase flex items-center gap-1">
+                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                 AI Native
+               </span>
+             </div>
+             
+             <!-- Heading -->
+             <h1 class="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 dark:text-white leading-tight drop-shadow-sm">
+               Swift<span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-emerald-500">Boot</span>
+               <br/>
+               <span class="text-2xl md:text-3xl font-light text-slate-400 dark:text-slate-500 block mt-2">下一代 AI 原生全栈框架</span>
+             </h1>
+             
+             <!-- Desc -->
+             <p class="text-slate-600 dark:text-slate-300 text-lg max-w-2xl leading-relaxed">
+               重塑企业级开发体验。深度融合 <strong class="text-slate-900 dark:text-white">Spring Boot 3</strong> 与 <strong class="text-slate-900 dark:text-white">Vue 3</strong>,
+               内置 <strong class="text-emerald-600 dark:text-emerald-400">本地 RAG 知识引擎</strong>，让每一行代码都充满智慧。
+             </p>
+             
+             <!-- Feature Tags -->
+             <div class="flex flex-wrap gap-4 pt-2">
+               <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 backdrop-blur-sm shadow-sm">
+                 <span class="material-icons-round text-sm text-emerald-500">check_circle</span>
+                 <span class="text-sm font-medium text-slate-600 dark:text-slate-300">工程模板</span>
+               </div>
+               <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 backdrop-blur-sm shadow-sm">
+                 <span class="material-icons-round text-sm text-blue-500">psychology</span>
+                 <span class="text-sm font-medium text-slate-600 dark:text-slate-300">私有知识库</span>
+               </div>
+               <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 backdrop-blur-sm shadow-sm">
+                 <span class="material-icons-round text-sm text-purple-500">speed</span>
+                 <span class="text-sm font-medium text-slate-600 dark:text-slate-300">极致性能</span>
+               </div>
+             </div>
         </div>
-        
+
         <!-- Visual Element -->
-        <div class="hidden lg:block relative mr-8">
-           <div class="relative w-32 h-32">
-             <div class="absolute inset-0 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-3xl rotate-6 opacity-20 blur-sm"></div>
-             <div class="absolute inset-0 bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-xl flex items-center justify-center transform -rotate-3 transition-transform hover:rotate-0 duration-500">
-               <span class="text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-blue-600 to-emerald-500">SB</span>
-             </div>
-             <!-- Orbiting Elements -->
-             <div class="absolute -top-4 -right-4 p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-700 animate-bounce" style="animation-duration: 3s;">
-                <span class="material-icons-round text-emerald-500 text-xl">smart_toy</span>
-             </div>
-             <div class="absolute -bottom-4 -left-4 p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-700 animate-bounce" style="animation-duration: 4s; animation-delay: 1s;">
-                <span class="material-icons-round text-blue-500 text-xl">code</span>
-             </div>
-           </div>
-        </div>
+         <div class="hidden lg:block relative mr-8">
+            <div class="relative w-32 h-32">
+              <div class="absolute inset-0 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-3xl rotate-6 opacity-20 blur-sm"></div>
+              <div class="absolute inset-0 bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-xl flex items-center justify-center transform -rotate-3 transition-transform hover:rotate-0 duration-500">
+                <span class="text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-blue-600 to-emerald-500">SB</span>
+              </div>
+              <!-- Orbiting Elements -->
+              <div class="absolute -top-4 -right-4 p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-700 animate-bounce" style="animation-duration: 3s;">
+                 <span class="material-icons-round text-emerald-500 text-xl">smart_toy</span>
+              </div>
+              <div class="absolute -bottom-4 -left-4 p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-700 animate-bounce" style="animation-duration: 4s; animation-delay: 1s;">
+                 <span class="material-icons-round text-blue-500 text-xl">code</span>
+              </div>
+            </div>
+         </div>
       </div>
     </div>
 
@@ -186,8 +184,20 @@
 
       <!-- System Dynamics -->
       <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
-        <div class="p-6 border-b border-slate-100 dark:border-slate-800">
+        <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
           <h2 class="text-lg font-bold text-slate-900 dark:text-white">系统动态</h2>
+          <button 
+            @click="handleRefreshLogs" 
+            class="group w-8 h-8 flex items-center justify-center transition-all duration-300 outline-none focus:outline-none border-none bg-transparent hover:rotate-180"
+            :title="isLogsLoading ? '加载中...' : '刷新动态'"
+          >
+            <span 
+              class="material-icons-round text-[20px] text-slate-400 group-hover:text-blue-500 transition-all duration-500"
+              :class="{ 'animate-spin text-blue-500': isLogsLoading }"
+            >
+              sync
+            </span>
+          </button>
         </div>
         <div class="flex-1 p-6 space-y-6">
           <div v-for="log in operLogs" :key="log.id" class="flex gap-4">
@@ -195,8 +205,8 @@
             <div>
               <div class="text-sm font-medium text-slate-900 dark:text-white">
                 <span class="font-bold text-slate-700 dark:text-slate-200">{{ log.operName }}</span> 
-                {{ getBusinessTypeAction(log.businessType) }} 
-                {{ log.title }}
+                {{ getLogAction(log) }} 
+                {{ log.title.replace(/完成$/, '') }}
               </div>
               <div class="text-xs text-slate-500 mt-1">{{ formatTimeAgo(log.operTime) }}</div>
             </div>
@@ -221,8 +231,8 @@
     </div>
 
     <!-- Background Decoration -->
-    <div class="fixed top-0 right-0 -z-10 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none"></div>
-    <div class="fixed bottom-0 left-0 -z-10 w-[400px] h-[400px] bg-blue-400/5 rounded-full blur-[80px] pointer-events-none"></div>
+    <div class="fixed top-0 right-0 -z-50 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none"></div>
+    <div class="fixed bottom-0 left-0 -z-50 w-[400px] h-[400px] bg-blue-400/5 rounded-full blur-[80px] pointer-events-none"></div>
   </div>
 </template>
 
@@ -237,6 +247,7 @@ const responseTime = ref(0)
 const uptime = ref('')
 const aiStats = ref({ knowledge_count: 0, memory_count: 0 })
 const operLogs = ref<any[]>([])
+const isLogsLoading = ref(false)
 let timer: any = null
 let statsTimer: any = null
 
@@ -251,6 +262,7 @@ const quickLinks = [
 ]
 
 const loadOperLogs = async () => {
+  isLogsLoading.value = true
   try {
     const res = await getOperLogs({ pageNum: 1, pageSize: 5 }) as unknown as ApiResponse
     if (res.code === 200) {
@@ -259,7 +271,16 @@ const loadOperLogs = async () => {
     }
   } catch (e) {
     console.error('Failed to load oper logs', e)
+  } finally {
+    // 延迟一点点以展示动画效果，防止闪烁
+    setTimeout(() => {
+      isLogsLoading.value = false
+    }, 500)
   }
+}
+
+const handleRefreshLogs = () => {
+  loadOperLogs()
 }
 
 const formatTimeAgo = (time: string) => {
@@ -290,6 +311,13 @@ const getBusinessTypeColor = (log: any) => {
   }
   
   return 'bg-slate-400' // 其他默认为灰色
+}
+
+const getLogAction = (log: any) => {
+  if (log.title && log.title.includes('RAG 向量索引更新')) {
+    return '完成'
+  }
+  return getBusinessTypeAction(log.businessType)
 }
 
 const getBusinessTypeAction = (type: number) => {

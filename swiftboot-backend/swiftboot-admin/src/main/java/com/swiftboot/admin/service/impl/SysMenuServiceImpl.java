@@ -7,7 +7,6 @@ import com.swiftboot.admin.domain.entity.SysMenu;
 import com.swiftboot.admin.mapper.SysMenuMapper;
 import com.swiftboot.admin.mapper.SysRoleMenuMapper;
 import com.swiftboot.admin.service.SysMenuService;
-import com.swiftboot.common.core.constant.Constants;
 import com.swiftboot.common.core.exception.BusinessException;
 import com.swiftboot.common.core.result.ResultCode;
 import lombok.RequiredArgsConstructor;
@@ -30,8 +29,8 @@ public class SysMenuServiceImpl extends ServiceImpl<SysMenuMapper, SysMenu> impl
         LambdaQueryWrapper<SysMenu> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(menu.getMenuName() != null, SysMenu::getMenuName, menu.getMenuName());
         wrapper.eq(menu.getStatus() != null, SysMenu::getStatus, menu.getStatus());
-        // 只查询目录和菜单类型，不查询按钮
-        wrapper.in(SysMenu::getMenuType, "M", "C");
+        // 查询所有类型（包括按钮），以便角色分配权限
+        // wrapper.in(SysMenu::getMenuType, "M", "C");
         wrapper.orderByAsc(SysMenu::getParentId, SysMenu::getSort);
         return list(wrapper);
     }
@@ -44,17 +43,7 @@ public class SysMenuServiceImpl extends ServiceImpl<SysMenuMapper, SysMenu> impl
 
     @Override
     public List<SysMenu> selectMenuTreeByUserId(Long userId) {
-        List<SysMenu> menus;
-        if (Constants.SUPER_ADMIN_ID.equals(userId)) {
-            // 管理员查询所有菜单
-            LambdaQueryWrapper<SysMenu> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(SysMenu::getStatus, 0);
-            wrapper.in(SysMenu::getMenuType, "M", "C");
-            wrapper.orderByAsc(SysMenu::getParentId, SysMenu::getSort);
-            menus = list(wrapper);
-        } else {
-            menus = baseMapper.selectMenusByUserId(userId);
-        }
+        List<SysMenu> menus = baseMapper.selectMenusByUserId(userId);
         return buildMenuTree(menus);
     }
 
@@ -65,10 +54,6 @@ public class SysMenuServiceImpl extends ServiceImpl<SysMenuMapper, SysMenu> impl
 
     @Override
     public Set<String> selectPermsByUserId(Long userId) {
-        if (Constants.SUPER_ADMIN_ID.equals(userId)) {
-            // 管理员拥有所有权限
-            return Set.of("*:*:*");
-        }
         List<String> perms = baseMapper.selectPermsByUserId(userId);
         return new HashSet<>(perms);
     }
