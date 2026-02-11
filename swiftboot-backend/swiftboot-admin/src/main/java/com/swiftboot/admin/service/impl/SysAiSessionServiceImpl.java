@@ -154,10 +154,16 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
         List<Map<String, Object>> trend = baseMapper.selectTokenTrend();
         stats.put("tokenTrend", trend);
 
-        // 3. 活跃用户
-        List<Map<String, Object>> activeUsers = baseMapper.selectActiveUsers();
-        stats.put("activeUsers", activeUsers);
+        // 3. 算力消耗排行 (Top 10)
+        List<Map<String, Object>> topUsers = baseMapper.selectTopTokenUsers();
+        stats.put("topUsers", topUsers);
 
         return stats;
+    }
+
+    @Override
+    public Page<Map<String, Object>> getUserTokenStats(PageQuery pageQuery, String username) {
+        Page<Map<String, Object>> page = new Page<>(pageQuery.getPageNum(), pageQuery.getPageSize());
+        return baseMapper.selectUserTokenStats(page, username);
     }
 }

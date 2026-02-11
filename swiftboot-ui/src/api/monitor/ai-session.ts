@@ -26,10 +26,20 @@ export function cleanAiSession() {
 }
 
 // 获取仪表盘统计数据
-export function getDashboardStats() {
+export function getDashboardStats(userId?: number) {
   return request({
     url: '/monitor/ai-session/stats',
-    method: 'get'
+    method: 'get',
+    params: { userId }
+  })
+}
+
+// 获取用户算力消耗排行（分页）
+export function getUserTokenStats(query: any) {
+  return request({
+    url: '/monitor/ai-session/user-stats',
+    method: 'get',
+    params: query
   })
 }
 

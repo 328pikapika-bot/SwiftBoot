@@ -37,8 +37,23 @@ public interface SysAiSessionMapper extends BaseMapper<SysAiSession> {
     List<Map<String, Object>> selectTokenTrend();
 
     /**
-     * 统计活跃用户 Top 10
+     * 统计算力消耗 Top 10 用户
      */
-    @Select("SELECT u.username, COUNT(*) as count FROM sys_ai_session s LEFT JOIN sys_user u ON s.user_id = u.id GROUP BY s.user_id ORDER BY count DESC LIMIT 10")
-    List<Map<String, Object>> selectActiveUsers();
+    @Select("SELECT u.username, u.nickname, u.dept_id, d.dept_name, s.user_id, SUM(s.tokens) as tokenConsumption FROM sys_ai_session s LEFT JOIN sys_user u ON s.user_id = u.id LEFT JOIN sys_dept d ON u.dept_id = d.id GROUP BY s.user_id ORDER BY tokenConsumption DESC LIMIT 10")
+    List<Map<String, Object>> selectTopTokenUsers();
+
+    /**
+     * 分页查询用户算力消耗排行
+     */
+    @Select("<script>" +
+            "SELECT u.id as userId, u.username, u.nickname, u.status, d.dept_name as deptName, COALESCE(SUM(s.tokens), 0) as tokenConsumption " +
+            "FROM sys_user u " +
+            "LEFT JOIN sys_dept d ON u.dept_id = d.id " +
+            "LEFT JOIN sys_ai_session s ON u.id = s.user_id " +
+            "WHERE u.del_flag = '0' " +
+            "<if test='username != null and username != \"\"'> AND (u.username LIKE concat('%', #{username}, '%') OR u.nickname LIKE concat('%', #{username}, '%'))</if> " +
+            "GROUP BY u.id " +
+            "ORDER BY tokenConsumption DESC" +
+            "</script>")
+    Page<Map<String, Object>> selectUserTokenStats(Page<?> page, @Param("username") String username);
 }

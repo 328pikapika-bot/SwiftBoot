@@ -59,4 +59,11 @@ public class SysAiSessionController {
     public R<Map<String, Object>> stats() {
         return R.ok(aiSessionService.getDashboardStats());
     }
+
+    @Operation(summary = "获取用户算力消耗排行（分页）")
+    @GetMapping("/user-stats")
+    public R<PageResult<Map<String, Object>>> userStats(PageQuery pageQuery, @RequestParam(required = false) String username) {
+        Page<Map<String, Object>> page = aiSessionService.getUserTokenStats(pageQuery, username);
+        return R.ok(PageResult.of(page.getRecords(), page.getTotal(), page.getCurrent(), page.getSize()));
+    }
 }

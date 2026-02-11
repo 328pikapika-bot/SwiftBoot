@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#41adec",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#111b21",
+                        "border-light": "#f0f0f0",
+                        "gold": "#D4AF37",
+                        "silver": "#A8A8A8",
+                        "bronze": "#CD7F32",
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk", "PingFang SC", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        }
+        .font-num {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+        }
+        .toggle-switch {
+            @apply relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none;
+        }
+        .toggle-active {
+            @apply bg-primary;
+        }
+        .toggle-inactive {
+            @apply bg-slate-200 dark:bg-slate-700;
+        }
+        .toggle-dot {
+            @apply pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out;
+        }
+        .translate-active {
+            @apply translate-x-5;
+        }
+        .translate-inactive {
+            @apply translate-x-0;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-800 dark:text-slate-200 antialiased min-h-screen">
+<div class="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+<div class="p-8 max-w-7xl mx-auto grid grid-cols-12 gap-6 opacity-40 blur-sm">
+<header class="col-span-12 flex justify-between items-center mb-8">
+<div class="h-10 w-48 bg-slate-200 dark:bg-slate-800 rounded"></div>
+<div class="flex gap-4">
+<div class="h-10 w-10 bg-slate-200 dark:bg-slate-800 rounded-full"></div>
+<div class="h-10 w-10 bg-slate-200 dark:bg-slate-800 rounded-full"></div>
+</div>
+</header>
+<div class="col-span-8 h-96 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-border-light dark:border-slate-800"></div>
+<div class="col-span-4 h-96 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-border-light dark:border-slate-800"></div>
+</div>
+</div>
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md bg-white/30 dark:bg-black/40">
+<div class="bg-white dark:bg-slate-900 w-full max-w-7xl rounded-xl shadow-[0_32px_64px_-12px_rgba(0,0,0,0.14)] border border-border-light dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]">
+<div class="px-8 pt-8 pb-6 flex justify-between items-start border-b border-border-light dark:border-slate-800">
+<div>
+<h2 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mb-1">算力消耗排行榜 (增加耗费列)</h2>
+<p class="text-sm text-slate-500 flex items-center gap-2">
+<span class="material-icons-outlined text-sm">analytics</span>
+                    SwiftBoot 智能中枢 - 算力消耗详情分析
+                </p>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative">
+<button class="flex items-center gap-2 px-4 py-2 border border-border-light dark:border-slate-700 rounded-lg text-sm bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+<span class="text-slate-600 dark:text-slate-300">按部门筛选</span>
+<span class="material-icons-outlined text-sm">expand_more</span>
+</button>
+</div>
+<button class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400">
+<span class="material-icons-outlined">close</span>
+</button>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar">
+<table class="w-full text-left border-collapse">
+<thead class="sticky top-0 bg-white dark:bg-slate-900 z-10">
+<tr class="text-[11px] uppercase tracking-[0.1em] text-slate-400 border-b border-border-light dark:border-slate-800">
+<th class="px-8 py-4 font-semibold">排名</th>
+<th class="px-6 py-4 font-semibold">用户</th>
+<th class="px-6 py-4 font-semibold">姓名</th>
+<th class="px-6 py-4 font-semibold">所属部门</th>
+<th class="px-6 py-4 font-semibold">算力消耗 (Tokens)</th>
+<th class="px-6 py-4 font-semibold">耗费</th>
+<th class="px-6 py-4 font-semibold">消耗状态</th>
+<th class="px-8 py-4 font-semibold text-right">管理操作</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-light dark:divide-slate-800">
+<tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-8 py-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-gold !text-xl">emoji_events</span>
+<span class="text-xs font-bold text-gold uppercase tracking-tighter">冠军</span>
+</div>
+</td>
+<td class="px-6 py-4 font-num text-sm text-slate-500">chen.my@swiftboot.ai</td>
+<td class="px-6 py-4">
+<span class="font-medium text-slate-900 dark:text-white">陈明远</span>
+</td>
+<td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">深度学习实验室</td>
+<td class="px-6 py-4">
+<div class="space-y-1.5 w-44">
+<div class="flex justify-between items-end">
+<span class="font-num font-semibold text-slate-900 dark:text-white">1,248,500</span>
+<span class="text-[10px] text-slate-400 font-num uppercase">92%</span>
+</div>
+<div class="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full w-[92%]"></div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="font-num font-medium text-slate-900 dark:text-white">¥124.85</span>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">
+<span class="w-1 h-1 rounded-full bg-amber-500 animate-pulse"></span>
+                            接近上限
+                        </span>
+</td>
+<td class="px-8 py-4 text-right">
+<button class="toggle-switch toggle-active" role="switch" type="button">
+<span class="toggle-dot translate-active"></span>
+</button>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-8 py-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-silver !text-xl">workspace_premium</span>
+<span class="text-xs font-bold text-silver uppercase tracking-tighter">亚军</span>
+</div>
+</td>
+<td class="px-6 py-4 font-num text-sm text-slate-500">li.rx@swiftboot.ai</td>
+<td class="px-6 py-4">
+<span class="font-medium text-slate-900 dark:text-white">李若曦</span>
+</td>
+<td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">创意营销中心</td>
+<td class="px-6 py-4">
+<div class="space-y-1.5 w-44">
+<div class="flex justify-between items-end">
+<span class="font-num font-semibold text-slate-900 dark:text-white">842,000</span>
+<span class="text-[10px] text-slate-400 font-num uppercase">64%</span>
+</div>
+<div class="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+<div class="h-full bg-primary/60 rounded-full w-[64%]"></div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="font-num font-medium text-slate-900 dark:text-white">¥84.20</span>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">
+<span class="w-1 h-1 rounded-full bg-emerald-500"></span>
+                            运行正常
+                        </span>
+</td>
+<td class="px-8 py-4 text-right">
+<button class="toggle-switch toggle-active" role="switch" type="button">
+<span class="toggle-dot translate-active"></span>
+</button>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-8 py-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-bronze !text-xl">military_tech</span>
+<span class="text-xs font-bold text-bronze uppercase tracking-tighter">季军</span>
+</div>
+</td>
+<td class="px-6 py-4 font-num text-sm text-slate-500">zhang.hr@swiftboot.ai</td>
+<td class="px-6 py-4">
+<span class="font-medium text-slate-900 dark:text-white">张浩然</span>
+</td>
+<td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">系统架构组</td>
+<td class="px-6 py-4">
+<div class="space-y-1.5 w-44">
+<div class="flex justify-between items-end">
+<span class="font-num font-semibold text-slate-900 dark:text-white">721,400</span>
+<span class="text-[10px] text-slate-400 font-num uppercase">55%</span>
+</div>
+<div class="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+<div class="h-full bg-primary/50 rounded-full w-[55%]"></div>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="font-num font-medium text-slate-900 dark:text-white">¥72.14</span>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">
+<span class="w-1 h-1 rounded-full bg-emerald-500"></span>
+                            运行正常
+                        </span>
+</td>
+<td class="px-8 py-4 text-right">
+<button class="toggle-switch toggle-active" role="switch" type="button">
+<span class="toggle-dot translate-active"></span>
+</button>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-8 py-4"><span class="font-num text-slate-400 text-sm ml-2">04</span></td>
+<td class="px-6 py-4 font-num text-sm text-slate-500">wang.jm@swiftboot.ai</td>
+<td class="px-6 py-4 text-slate-900 dark:text-white font-medium">王嘉明</td>
+<td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">数据分析团队</td>
+<td class="px-6 py-4"><div class="space-y-1.5 w-44"><div class="flex justify-between items-end"><span class="font-num font-semibold text-slate-900 dark:text-white">459,200</span><span class="text-[10px] text-slate-400 font-num uppercase">31%</span></div><div class="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden"><div class="h-full bg-primary/40 rounded-full w-[31%]"></div></div></div></td>
+<td class="px-6 py-4"><span class="font-num font-medium text-slate-900 dark:text-white">¥45.92</span></td>
+<td class="px-6 py-4"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"><span class="w-1 h-1 rounded-full bg-emerald-500"></span>运行正常</span></td>
+<td class="px-8 py-4 text-right">
+<button class="toggle-switch toggle-active" role="switch" type="button">
+<span class="toggle-dot translate-active"></span>
+</button>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-8 py-4"><span class="font-num text-slate-400 text-sm ml-2">05</span></td>
+<td class="px-6 py-4 font-num text-sm text-slate-500">zhou.xy@swiftboot.ai</td>
+<td class="px-6 py-4 text-slate-900 dark:text-white font-medium">周小雨</td>
+<td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">产品设计部</td>
+<td class="px-6 py-4"><div class="space-y-1.5 w-44"><div class="flex justify-between items-end"><span class="font-num font-semibold text-slate-900 dark:text-white">321,000</span><span class="text-[10px] text-slate-400 font-num uppercase">22%</span></div><div class="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden"><div class="h-full bg-primary/30 rounded-full w-[22%]"></div></div></div></td>
+<td class="px-6 py-4"><span class="font-num font-medium text-slate-900 dark:text-white">¥32.10</span></td>
+<td class="px-6 py-4"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"><span class="w-1 h-1 rounded-full bg-emerald-500"></span>运行正常</span></td>
+<td class="px-8 py-4 text-right">
+<button class="toggle-switch toggle-inactive" role="switch" type="button">
+<span class="toggle-dot translate-inactive"></span>
+</button>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-8 py-4"><span class="font-num text-slate-400 text-sm ml-2">06</span></td>
+<td class="px-6 py-4 font-num text-sm text-slate-500">lin.hj@swiftboot.ai</td>
+<td class="px-6 py-4 text-slate-900 dark:text-white font-medium">林宏基</td>
+<td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">客户服务部</td>
+<td class="px-6 py-4"><div class="space-y-1.5 w-44"><div class="flex justify-between items-end"><span class="font-num font-semibold text-slate-900 dark:text-white">215,800</span><span class="text-[10px] text-slate-400 font-num uppercase">14%</span></div><div class="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden"><div class="h-full bg-primary/30 rounded-full w-[14%]"></div></div></div></td>
+<td class="px-6 py-4"><span class="font-num font-medium text-slate-900 dark:text-white">¥21.58</span></td>
+<td class="px-6 py-4"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"><span class="w-1 h-1 rounded-full bg-emerald-500"></span>运行正常</span></td>
+<td class="px-8 py-4 text-right">
+<button class="toggle-switch toggle-active" role="switch" type="button">
+<span class="toggle-dot translate-active"></span>
+</button>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-8 py-4"><span class="font-num text-slate-400 text-sm ml-2">07</span></td>
+<td class="px-6 py-4 font-num text-sm text-slate-500">wu.yy@swiftboot.ai</td>
+<td class="px-6 py-4 text-slate-900 dark:text-white font-medium">吴语嫣</td>
+<td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">战略运营部</td>
+<td class="px-6 py-4"><div class="space-y-1.5 w-44"><div class="flex justify-between items-end"><span class="font-num font-semibold text-slate-900 dark:text-white">198,400</span><span class="text-[10px] text-slate-400 font-num uppercase">12%</span></div><div class="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden"><div class="h-full bg-primary/20 rounded-full w-[12%]"></div></div></div></td>
+<td class="px-6 py-4"><span class="font-num font-medium text-slate-900 dark:text-white">¥19.84</span></td>
+<td class="px-6 py-4"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"><span class="w-1 h-1 rounded-full bg-emerald-500"></span>运行正常</span></td>
+<td class="px-8 py-4 text-right">
+<button class="toggle-switch toggle-active" role="switch" type="button">
+<span class="toggle-dot translate-active"></span>
+</button>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-8 py-4"><span class="font-num text-slate-400 text-sm ml-2">08</span></td>
+<td class="px-6 py-4 font-num text-sm text-slate-500">zheng.k@swiftboot.ai</td>
+<td class="px-6 py-4 text-slate-900 dark:text-white font-medium">郑凯</td>
+<td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">人力资源中心</td>
+<td class="px-6 py-4"><div class="space-y-1.5 w-44"><div class="flex justify-between items-end"><span class="font-num font-semibold text-slate-900 dark:text-white">142,000</span><span class="text-[10px] text-slate-400 font-num uppercase">9%</span></div><div class="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden"><div class="h-full bg-primary/20 rounded-full w-[9%]"></div></div></div></td>
+<td class="px-6 py-4"><span class="font-num font-medium text-slate-900 dark:text-white">¥14.20</span></td>
+<td class="px-6 py-4"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"><span class="w-1 h-1 rounded-full bg-emerald-500"></span>运行正常</span></td>
+<td class="px-8 py-4 text-right">
+<button class="toggle-switch toggle-active" role="switch" type="button">
+<span class="toggle-dot translate-active"></span>
+</button>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-8 py-4"><span class="font-num text-slate-400 text-sm ml-2">09</span></td>
+<td class="px-6 py-4 font-num text-sm text-slate-500">gao.f@swiftboot.ai</td>
+<td class="px-6 py-4 text-slate-900 dark:text-white font-medium">高飞</td>
+<td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">财务管理部</td>
+<td class="px-6 py-4"><div class="space-y-1.5 w-44"><div class="flex justify-between items-end"><span class="font-num font-semibold text-slate-900 dark:text-white">86,500</span><span class="text-[10px] text-slate-400 font-num uppercase">5%</span></div><div class="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden"><div class="h-full bg-primary/20 rounded-full w-[5%]"></div></div></div></td>
+<td class="px-6 py-4"><span class="font-num font-medium text-slate-900 dark:text-white">¥8.65</span></td>
+<td class="px-6 py-4"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"><span class="w-1 h-1 rounded-full bg-emerald-500"></span>运行正常</span></td>
+<td class="px-8 py-4 text-right">
+<button class="toggle-switch toggle-active" role="switch" type="button">
+<span class="toggle-dot translate-active"></span>
+</button>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-8 py-4"><span class="font-num text-slate-400 text-sm ml-2">10</span></td>
+<td class="px-6 py-4 font-num text-sm text-slate-500">sun.m@swiftboot.ai</td>
+<td class="px-6 py-4 text-slate-900 dark:text-white font-medium">孙美琳</td>
+<td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">品牌公关部</td>
+<td class="px-6 py-4"><div class="space-y-1.5 w-44"><div class="flex justify-between items-end"><span class="font-num font-semibold text-slate-900 dark:text-white">42,300</span><span class="text-[10px] text-slate-400 font-num uppercase">3%</span></div><div class="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden"><div class="h-full bg-primary/20 rounded-full w-[3%]"></div></div></div></td>
+<td class="px-6 py-4"><span class="font-num font-medium text-slate-900 dark:text-white">¥4.23</span></td>
+<td class="px-6 py-4"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"><span class="w-1 h-1 rounded-full bg-emerald-500"></span>运行正常</span></td>
+<td class="px-8 py-4 text-right">
+<button class="toggle-switch toggle-inactive" role="switch" type="button">
+<span class="toggle-dot translate-inactive"></span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="px-8 py-5 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center border-t border-border-light dark:border-slate-800">
+<div class="text-[11px] text-slate-400 flex items-center gap-2 uppercase tracking-wider">
+<span class="material-icons-outlined text-xs">update</span>
+                数据更新于: <span class="font-num">2023-10-24 14:30:05</span>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-1.5">
+<button class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 text-slate-500 transition-all">
+<span class="material-icons-outlined text-sm">chevron_left</span>
+</button>
+<div class="flex gap-1 px-1">
+<button class="w-8 h-8 flex items-center justify-center rounded-lg bg-primary text-white text-xs font-num font-bold">1</button>
+<button class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-num text-slate-500">2</button>
+</div>
+<button class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 text-slate-500 transition-all">
+<span class="material-icons-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</body></html>
