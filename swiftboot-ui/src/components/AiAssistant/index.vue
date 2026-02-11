@@ -6,13 +6,21 @@
     ref="containerRef"
   >
     <!-- 最小化状态 -->
-    <div v-if="isMinimized" class="ai-minimized" @dblclick="toggleMinimize" @mousedown="startDrag">
-      <div class="ai-avatar-pulse">
-        <div class="ai-logo-text">AI</div>
+    <div v-if="isMinimized" class="ai-minimized-new group" @dblclick="toggleMinimize" @mousedown="startDrag">
+      <!-- Pulse Background -->
+      <div class="absolute inset-0 rounded-full bg-blue-500/20 ai-pulse pointer-events-none -z-10 scale-150"></div>
+      <div class="absolute inset-0 rounded-full bg-blue-500/10 ai-pulse pointer-events-none -z-10 scale-125" style="animation-delay: 1.5s;"></div>
+      
+      <!-- Main Button -->
+      <div class="relative w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 dark:from-blue-500 dark:to-blue-700 text-white rounded-full shadow-[0_8px_30px_rgb(59,130,246,0.3)] flex items-center justify-center hover:scale-110 transition-all duration-300 backdrop-blur-sm bg-opacity-90 cursor-pointer">
+        <span class="material-symbols-outlined text-4xl group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.8)] transition-all">neurology</span>
+        <div class="absolute top-0 right-0 w-4 h-4 bg-green-400 rounded-full border-2 border-white dark:border-slate-900 shadow-sm"></div>
       </div>
-      <div class="status-indicator"></div>
-      <!-- 未读消息徽章 (示例) -->
-      <div class="unread-badge" v-if="false">1</div>
+
+      <!-- Tooltip -->
+      <span class="absolute right-full mr-4 top-1/2 -translate-y-1/2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-1.5 rounded-lg text-sm font-medium shadow-xl opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all pointer-events-none whitespace-nowrap border border-slate-100 dark:border-slate-700">
+        双击进入智能会话
+      </span>
     </div>
 
     <!-- 展开状态 -->
@@ -250,8 +258,8 @@ const containerStyle = computed(() => {
     const centerX = windowState.x + windowState.width / 2
     const centerY = windowState.y + windowState.height / 2
     return {
-      left: `${centerX - 28}px`, // 56/2 = 28
-      top: `${centerY - 28}px`
+      left: `${centerX - 32}px`, // 64/2 = 32
+      top: `${centerY - 32}px`
     }
   }
   return {
@@ -513,11 +521,11 @@ const onDrag = (e: MouseEvent) => {
   } else {
     // 最小化时拖动 (newX, newY 是悬浮球左上角坐标)
     // 目标：保持中心对齐
-    // 悬浮球中心 = newX + 28
+    // 悬浮球中心 = newX + 32
     // 窗口中心 = windowState.x + windowState.width / 2
-    // => windowState.x = newX + 28 - windowState.width / 2
-    windowState.x = newX + 28 - windowState.width / 2
-    windowState.y = newY + 28 - windowState.height / 2
+    // => windowState.x = newX + 32 - windowState.width / 2
+    windowState.x = newX + 32 - windowState.width / 2
+    windowState.y = newY + 32 - windowState.height / 2
   }
 }
 
@@ -630,20 +638,7 @@ $bg-input: #f8fafc;
   color: $color-text-main;
   
   &.minimized {
-    width: 56px !important;
-    height: 56px !important;
-    border-radius: 28px; /* 圆形 */
-    cursor: pointer;
-    /* 醒目橙色渐变 */
-    background: linear-gradient(135deg, #4f46e5 0%, #0ea5e9 100%);
-    border: 2px solid rgba(255, 255, 255, 0.8);
-    box-shadow: 0 12px 30px rgba(79, 70, 229, 0.35);
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    
-    &:hover {
-      transform: scale(1.08);
-      box-shadow: 0 16px 36px rgba(79, 70, 229, 0.45);
-    }
+    /* Let the template control size */
   }
 
   .ai-expanded {
@@ -661,53 +656,13 @@ $bg-input: #f8fafc;
   }
 }
 
-.ai-minimized {
-  width: 100%;
-  height: 100%;
-  border-radius: 20px;
+.ai-minimized-new {
+  width: 64px;
+  height: 64px;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  
-  .ai-avatar-pulse {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    
-    .ai-logo-text {
-      font-weight: 900;
-      font-size: 20px;
-      color: #FFFFFF;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-  }
-  
-  .status-indicator {
-    position: absolute;
-    bottom: 6px;
-    right: 6px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #67C23A; /* 绿色在线状态 */
-    box-shadow: 0 0 2px #fff;
-    /* animation: pulse-status 2s infinite; */
-  }
-  
-  .unread-badge {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background: #FF4D4F;
-    color: #fff;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 10px;
-    border: 1px solid #fff;
-  }
 }
 
 @keyframes pulse-status {

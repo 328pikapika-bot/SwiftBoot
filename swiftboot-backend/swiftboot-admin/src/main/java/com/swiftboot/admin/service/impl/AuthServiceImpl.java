@@ -116,6 +116,9 @@ public class AuthServiceImpl implements AuthService {
 
             // 保存到 Session
             SecurityUtils.setLoginUser(loginUser);
+            
+            // 将昵称也放入 Session，方便 LogAspect 获取
+            StpUtil.getSession().set("nickname", user.getNickname());
 
             // 更新用户登录信息
             SysUser updateUser = new SysUser();

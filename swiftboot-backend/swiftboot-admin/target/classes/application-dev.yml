@@ -24,3 +24,14 @@ ai:
   # 请替换为您自己的 DeepSeek API Key (申请地址: https://platform.deepseek.com/)
   api-key: sk-007917fab0564b83a47cabd191bdcda1
   model: deepseek-chat
+  # Python 引擎相关配置
+  engine:
+    # 向量数据库持久化路径 (支持相对路径，./ 表示 ai-engine 脚本所在目录)
+    vector-db-path: ./chroma_db
+    # 向量集合名称 (Codebase)
+    collection-name: swiftboot_codebase
+    # 记忆集合名称 (Chat Memory)
+    memory-collection-name: swiftboot_chat_memory
+    # 后端日志 API 地址 (Python 脚本完成索引更新后回调此接口)
+    # 部署时请注意修改 host (如 http://swiftboot-backend:8080/...)
+    backend-log-api: http://localhost:8080/monitor/operlog/inner/add

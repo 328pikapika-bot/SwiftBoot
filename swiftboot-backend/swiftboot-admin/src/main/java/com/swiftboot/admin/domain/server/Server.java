@@ -417,6 +417,10 @@ public class Server {
              long time = ManagementFactory.getRuntimeMXBean().getStartTime();
              return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date(time));
         }
+
+        public long getStartTimeLong() {
+            return ManagementFactory.getRuntimeMXBean().getStartTime();
+        }
     }
 
     public class Sys {

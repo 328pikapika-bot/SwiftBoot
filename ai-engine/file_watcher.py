@@ -1,6 +1,7 @@
 import time
 import os
 import json
+import threading
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from knowledge_ingest import JavaParser, PythonParser
@@ -49,6 +50,35 @@ class CodeChangeHandler(FileSystemEventHandler):
         self.db = VectorStore()
         self.last_processed = {}  # 简单的防抖动机制 {path: timestamp}
         self.file_state = file_state
+        
+        # 批量日志处理相关
+        self.update_count = 0
+        self.update_lock = threading.Lock()
+        self.log_timer = None
+
+    def _schedule_log_sync(self):
+        """
+        调度日志同步任务 (防抖)
+        """
+        with self.update_lock:
+            if self.log_timer:
+                self.log_timer.cancel()
+            self.log_timer = threading.Timer(2.0, self._sync_log)
+            self.log_timer.start()
+
+    def _sync_log(self):
+        """
+        执行日志同步
+        """
+        with self.update_lock:
+            count = self.update_count
+            if count > 0:
+                try:
+                    self.db._log_to_backend(f"{count}条RAG 向量索引更新完成", "AI Engine")
+                    print(f"[{self._now()}]已触发操作日志同步 (批量更新: {count}条)。")
+                    self.update_count = 0
+                except Exception as e:
+                    print(f"[{self._now()}]操作日志同步失败: {e}")
 
     def on_modified(self, event):
         self._process_event(event)
@@ -67,6 +97,7 @@ class CodeChangeHandler(FileSystemEventHandler):
              if norm_src in self.file_state:
                  del self.file_state[norm_src]
                  save_state(self.file_state)
+                 
                  
              # 2. 处理新文件（模拟一个 created 事件）
              class MockEvent:
@@ -132,6 +163,11 @@ class CodeChangeHandler(FileSystemEventHandler):
                 self.db.add_documents(chunks)
                 print(f"[{self._now()}]更新完成！已同步 {len(chunks)} 个代码块到向量数据库。")
                 
+                # 累加更新计数并调度日志同步
+                with self.update_lock:
+                    self.update_count += len(chunks)
+                self._schedule_log_sync()
+                
                 # 更新状态
                 if os.path.exists(filename):
                     norm_path = os.path.normpath(filename).lower()
@@ -172,6 +208,9 @@ if __name__ == "__main__":
     count = 0
     skip_count = 0
     
+    # 批量更新计数器
+    batch_update_count = 0
+    
     for root, dirs, files in os.walk(WATCH_DIR):
         # 过滤忽略目录
         dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
@@ -209,6 +248,7 @@ if __name__ == "__main__":
                         for chunk in chunks:
                             chunk['source'] = source_id
                         db.add_documents(chunks)
+                        batch_update_count += len(chunks)
                         count += 1
                         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{count}] 已同步变更: {source_id} ({len(chunks)} 块)")
                 except Exception as e:
@@ -232,6 +272,14 @@ if __name__ == "__main__":
     save_state(new_file_state)
                     
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]扫描完成！同步 {count} 个文件，跳过 {skip_count} 个文件，移除 {deleted_count} 个失效文件。")
+
+    # 启动时如果有更新，统一记录一次日志
+    if batch_update_count > 0:
+        try:
+            db._log_to_backend(f"{batch_update_count}条RAG 向量索引更新完成", "AI Engine")
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]已触发启动时批量更新日志同步。")
+        except Exception as e:
+            print(f"日志同步失败: {e}")
     # ==========================================
 
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]正在监控目录: {WATCH_DIR}")

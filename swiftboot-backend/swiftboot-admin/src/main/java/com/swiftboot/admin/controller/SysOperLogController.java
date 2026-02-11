@@ -59,4 +59,11 @@ public class SysOperLogController {
     public R<List<String>> moduleList() {
         return R.ok(operLogService.selectOperLogModuleList());
     }
+
+    @Operation(summary = "内部接口：添加操作日志")
+    @PostMapping("/inner/add")
+    public R<Void> innerAdd(@RequestBody SysOperLog operLog) {
+        operLogService.save(operLog);
+        return R.ok();
+    }
 }

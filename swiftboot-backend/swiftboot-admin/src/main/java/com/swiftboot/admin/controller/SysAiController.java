@@ -145,6 +145,29 @@ public class SysAiController {
     private static final String MEMORY_QUERY_URL = "http://localhost:8001/memory/query";
     private static final String MEMORY_ADD_URL = "http://localhost:8001/memory/add";
     private static final String MEMORY_DELETE_URL = "http://localhost:8001/memory/delete";
+    private static final String STATS_URL = "http://localhost:8001/stats";
+
+    /**
+     * 获取 AI 引擎统计信息
+     */
+    @Operation(summary = "获取AI引擎统计信息")
+    @GetMapping("/stats")
+    public R<Map<String, Object>> getStats() {
+        try {
+            String result = HttpRequest.get(STATS_URL)
+                    .timeout(2000)
+                    .execute()
+                    .body();
+            if (StrUtil.isEmpty(result)) {
+                return R.ok(Map.of("knowledge_count", 0, "memory_count", 0));
+            }
+            Map<String, Object> map = JSONUtil.toBean(result, Map.class);
+            return R.ok(map);
+        } catch (Exception e) {
+            // 服务未启动或调用失败，返回默认值
+            return R.ok(Map.of("knowledge_count", 0, "memory_count", 0));
+        }
+    }
 
     /**
      * 初始化 Skills 技能库和 Agent 规则

@@ -1,9 +1,19 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from vector_store import VectorStore, ChatMemoryStore
 import uvicorn
 
 app = FastAPI(title="SwiftBoot AI Knowledge Engine")
+
+# 配置 CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 允许所有来源，生产环境建议配置为具体的域名
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 初始化向量数据库
 db = VectorStore()
@@ -110,6 +120,16 @@ async def query_memory(request: MemoryQueryRequest):
         # 按时间戳排序，保证返回给 AI 的上下文是按时间顺序的
         response.sort(key=lambda x: int(x["metadata"].get("timestamp", 0)))
         return {"results": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/stats")
+def get_stats():
+    try:
+        return {
+            "knowledge_count": db.count(),
+            "memory_count": memory_db.count()
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

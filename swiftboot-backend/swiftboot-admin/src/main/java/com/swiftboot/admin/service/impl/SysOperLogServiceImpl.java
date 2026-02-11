@@ -1,11 +1,15 @@
 package com.swiftboot.admin.service.impl;
 
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.NumberUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.swiftboot.admin.domain.entity.SysOperLog;
+import com.swiftboot.admin.domain.entity.SysUser;
 import com.swiftboot.admin.mapper.SysOperLogMapper;
+import com.swiftboot.admin.mapper.SysUserMapper;
 import com.swiftboot.admin.service.SysOperLogService;
 import com.swiftboot.common.core.domain.PageQuery;
 import com.swiftboot.common.log.annotation.Log;
@@ -18,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 操作日志 Service 实现
@@ -28,6 +33,7 @@ import java.util.*;
 public class SysOperLogServiceImpl extends ServiceImpl<SysOperLogMapper, SysOperLog> implements SysOperLogService {
 
     private final ApplicationContext applicationContext;
+    private final SysUserMapper userMapper;
     private Set<String> cachedModuleNames;
 
     @Override
@@ -39,7 +45,36 @@ public class SysOperLogServiceImpl extends ServiceImpl<SysOperLogMapper, SysOper
         wrapper.like(operLog.getOperName() != null, SysOperLog::getOperName, operLog.getOperName());
         wrapper.eq(operLog.getStatus() != null, SysOperLog::getStatus, operLog.getStatus());
         wrapper.orderByDesc(SysOperLog::getOperTime);
-        return page(page, wrapper);
+        
+        Page<SysOperLog> result = page(page, wrapper);
+
+        // 尝试将 operName (如果是ID) 转换为昵称
+        if (CollUtil.isNotEmpty(result.getRecords())) {
+            Set<Long> userIds = new HashSet<>();
+            
+            for (SysOperLog log : result.getRecords()) {
+                // 如果是纯数字，认为是用户ID
+                if (NumberUtil.isLong(log.getOperName())) {
+                    userIds.add(Long.parseLong(log.getOperName()));
+                }
+            }
+            
+            if (CollUtil.isNotEmpty(userIds)) {
+                List<SysUser> users = userMapper.selectBatchIds(userIds);
+                Map<String, String> userMap = users.stream().collect(Collectors.toMap(u -> u.getId().toString(), SysUser::getNickname));
+                
+                for (SysOperLog logItem : result.getRecords()) {
+                    if (userMap.containsKey(logItem.getOperName())) {
+                        String nickname = userMap.get(logItem.getOperName());
+                        if (StrUtil.isNotBlank(nickname)) {
+                            logItem.setOperName(nickname);
+                        }
+                    }
+                }
+            }
+        }
+
+        return result;
     }
 
     @Override

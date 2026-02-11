@@ -1,84 +1,165 @@
 <template>
-  <div class="layout-container">
-    <!-- 侧边栏 -->
-    <aside class="sidebar" :class="{ 'is-collapse': !appStore.sidebar.opened }">
-      <div class="logo">
-        <div class="logo-wrapper">
-          <SwiftLogo class="logo-icon" />
+  <div class="bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 min-h-screen flex font-display">
+    <!-- Sidebar -->
+    <aside 
+      class="border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hidden lg:flex flex-col sticky top-0 h-screen transition-all duration-300 ease-in-out"
+      :class="appStore.sidebar.opened ? 'w-48' : 'w-20'"
+    >
+      <div class="h-16 flex items-center justify-center border-b border-slate-100 dark:border-slate-800 transition-all duration-300">
+        <div class="flex items-center gap-3 overflow-hidden whitespace-nowrap" :class="{ 'px-6': appStore.sidebar.opened, 'px-0': !appStore.sidebar.opened }">
+          <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white font-bold shrink-0 shadow-lg shadow-blue-500/30">S</div>
+          <span class="text-lg font-bold tracking-tight text-slate-800 dark:text-white transition-opacity duration-300" :class="appStore.sidebar.opened ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'">
+            SwiftBoot
+          </span>
         </div>
-        <span v-show="appStore.sidebar.opened" class="app-title">SwiftBoot</span>
       </div>
-      <el-scrollbar>
-        <el-menu
-          :default-active="route.path"
-          :collapse="!appStore.sidebar.opened"
-          :collapse-transition="false"
-          router
-          background-color="transparent"
-          text-color="#94a3b8"
-          active-text-color="#fff"
-          class="custom-menu"
+      
+      <nav class="flex-1 px-3 space-y-1 mt-4 overflow-y-auto sidebar-scroll custom-scrollbar">
+        <!-- Dashboard Link (Static) -->
+        <router-link 
+          to="/dashboard" 
+          class="flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative overflow-hidden"
+          :class="route.path === '/dashboard' 
+            ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium shadow-sm' 
+            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'"
         >
-          <template v-for="item in menuList" :key="item.path">
-            <!-- 有子菜单的显示为下拉菜单 -->
-            <el-sub-menu v-if="item.children && item.children.length > 0" :index="item.path">
-              <template #title>
-                <el-icon><component :is="item.meta?.icon" /></el-icon>
-                <span>{{ item.meta?.title }}</span>
-              </template>
-              <el-menu-item
+          <div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full transition-all duration-200" 
+               :class="route.path === '/dashboard' ? 'opacity-100' : 'opacity-0 -translate-x-full'"></div>
+          
+          <span class="material-icons-round text-[22px] transition-transform group-hover:scale-110" :class="route.path === '/dashboard' ? 'text-blue-500' : 'text-slate-400 dark:text-slate-500'">dashboard</span>
+          
+          <span class="whitespace-nowrap transition-all duration-300" 
+                :class="appStore.sidebar.opened ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 absolute pointer-events-none'">
+            首页控制台
+          </span>
+          
+          <!-- Tooltip for collapsed state -->
+          <div v-if="!appStore.sidebar.opened" 
+               class="absolute left-full ml-4 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+            首页控制台
+          </div>
+        </router-link>
+
+        <div class="my-4 border-t border-slate-100 dark:border-slate-800 mx-2"></div>
+
+        <!-- Dynamic Menu -->
+        <template v-for="item in menuList" :key="item.path">
+          <!-- Group Title / Submenu -->
+          <div v-if="item.children && item.children.length > 0 && item.path !== '/dashboard'" class="mb-2">
+            <!-- Clickable Header (Expanded) -->
+            <div 
+              v-if="appStore.sidebar.opened"
+              @click="toggleMenu(item.path)"
+              class="flex items-center justify-between px-3 py-2.5 mx-2 mb-1 cursor-pointer rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group select-none"
+            >
+              <div class="flex items-center gap-2.5 text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 transition-colors">
+                 <span class="material-icons-round text-[20px]">{{ getMaterialIcon(item.meta?.icon) }}</span>
+                 <span class="text-sm font-medium">{{ item.meta?.title }}</span>
+              </div>
+              <span class="material-icons-round text-slate-400 text-lg transition-transform duration-300" :class="{ '-rotate-90': !openMenus.includes(item.path) }">expand_more</span>
+            </div>
+
+            <div v-show="appStore.sidebar.opened ? openMenus.includes(item.path) : true" class="space-y-1">
+              <router-link
                 v-for="child in item.children"
                 :key="child.path"
-                :index="`${item.path}/${child.path}`"
+                :to="resolvePath(item.path, child.path)"
+                class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 group relative"
+                :class="route.path === resolvePath(item.path, child.path) 
+                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium' 
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'"
               >
-                <el-icon><component :is="child.meta?.icon" /></el-icon>
-                <span>{{ child.meta?.title }}</span>
-              </el-menu-item>
-            </el-sub-menu>
-            <!-- 没有子菜单的直接显示 -->
-            <el-menu-item v-else :index="item.path">
-              <el-icon><component :is="item.meta?.icon" /></el-icon>
-              <span>{{ item.meta?.title }}</span>
-            </el-menu-item>
-          </template>
-        </el-menu>
-      </el-scrollbar>
+                <span class="material-icons-round text-[20px] transition-transform group-hover:scale-110"
+                      :class="[
+                        route.path === resolvePath(item.path, child.path) ? 'text-blue-500' : 'text-slate-400 dark:text-slate-500',
+                        appStore.sidebar.opened ? 'ml-1' : ''
+                      ]">
+                  {{ getMaterialIcon(child.meta?.icon) }}
+                </span>
+                
+                <span class="whitespace-nowrap transition-all duration-300"
+                      :class="appStore.sidebar.opened ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 absolute pointer-events-none'">
+                  {{ child.meta?.title }}
+                </span>
+
+                <!-- Tooltip for collapsed state -->
+                <div v-if="!appStore.sidebar.opened" 
+                     class="absolute left-full ml-4 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
+                  {{ child.meta?.title }}
+                </div>
+              </router-link>
+            </div>
+          </div>
+        </template>
+      </nav>
+
+      <div class="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50" v-show="appStore.sidebar.opened">
+        <div class="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <span class="relative flex h-2 w-2">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+              </span>
+              <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">RAG 引擎</span>
+            </div>
+            <span class="text-[10px] px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-md font-medium">在线</span>
+          </div>
+          <div class="text-[10px] text-slate-400 dark:text-slate-500 flex justify-between items-center">
+            <span>索引文档</span>
+            <span class="font-mono">12,402</span>
+          </div>
+        </div>
+      </div>
     </aside>
 
-    <!-- 主内容区 -->
-    <div class="main-container" :class="{ 'is-collapse': !appStore.sidebar.opened }">
-      <!-- 头部 -->
-      <header class="header">
-        <div class="header-left">
-          <div class="collapse-btn" @click="appStore.toggleSidebar">
-            <el-icon :size="20">
-              <Fold v-if="appStore.sidebar.opened" />
-              <Expand v-else />
-            </el-icon>
-          </div>
-          <el-breadcrumb separator="/" class="custom-breadcrumb">
-            <el-breadcrumb-item v-for="item in breadcrumbs" :key="item.path">
-              {{ item.meta?.title }}
-            </el-breadcrumb-item>
-          </el-breadcrumb>
-        </div>
-        <div class="header-right">
-          <el-tooltip content="Gitee 源码" placement="bottom">
-            <a href="https://gitee.com/cs_shuang/SwiftBoot" target="_blank" class="header-icon-btn">
-              <el-icon :size="20"><GiteeIcon /></el-icon>
-            </a>
-          </el-tooltip>
-
-          <el-tooltip content="Github 源码" placement="bottom">
-            <a href="https://github.com/328pikapika-bot/SwiftBoot" target="_blank" class="header-icon-btn">
-              <el-icon :size="20"><GithubIcon /></el-icon>
-            </a>
-          </el-tooltip>
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col min-w-0 bg-[#f8fafc] dark:bg-[#0f172a]">
+      <!-- Header -->
+      <header class="h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-8 z-10 sticky top-0">
+        <div class="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
+          <button 
+            @click="appStore.toggleSidebar" 
+            class="w-9 h-9 flex items-center justify-center rounded-xl bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 shadow-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800 transition-all duration-300 group"
+            :title="appStore.sidebar.opened ? '收起侧边栏' : '展开侧边栏'"
+          >
+            <svg class="w-5 h-5 transition-transform duration-500" :class="{ 'rotate-180': !appStore.sidebar.opened }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 6h11M9 12h11M9 18h11M5 12l4-4M5 12l4 4" class="group-hover:stroke-blue-500 transition-colors" />
+            </svg>
+          </button>
           
-          <el-dropdown trigger="click" @command="handleLanguageChange" class="header-icon-btn">
-            <div class="language-btn flex items-center justify-center h-full px-2">
-              <span class="text-sm font-medium">{{ locale === 'zh-cn' ? '中文' : 'En' }}</span>
+          <div class="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+          
+          <div class="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+            <span class="material-icons-round text-lg opacity-80">home</span>
+            <span class="material-icons-round text-xs opacity-50">chevron_right</span>
+            <span class="font-medium">{{ route.meta.title || '首页控制台' }}</span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-5">
+          <a class="group transition-all hover:scale-110" href="https://gitee.com/cs_shuang/SwiftBoot" target="_blank" title="Gitee">
+            <div class="w-9 h-9 rounded-full bg-[#c71d23] flex items-center justify-center shadow-lg shadow-[#c71d23]/20 border border-white/10">
+              <svg class="w-5 h-5 fill-white" viewBox="0 0 1024 1024">
+                <path d="M512 1024C230.4 1024 0 793.6 0 512S230.4 0 512 0s512 230.4 512 512-230.4 512-512 512z m259.2-569.6H480c-12.8 0-25.6 12.8-25.6 25.6v64c0 12.8 12.8 25.6 25.6 25.6h176c12.8 0 25.6 12.8 25.6 25.6v12.8c0 41.6-35.2 76.8-76.8 76.8h-240c-12.8 0-25.6-12.8-25.6-25.6V416c0-12.8 12.8-25.6 25.6-25.6h448c12.8 0 25.6-12.8 25.6-25.6V300.8c0-12.8-12.8-25.6-25.6-25.6H409.6c-89.6 0-160 70.4-160 160v256c0 89.6 70.4 160 160 160h256c89.6 0 160-70.4 160-160V480c0-12.8-12.8-25.6-25.6-25.6z"></path>
+              </svg>
             </div>
+          </a>
+          <a class="group transition-all hover:scale-110" href="https://github.com/328pikapika-bot/SwiftBoot" target="_blank" title="GitHub">
+            <div class="w-9 h-9 rounded-full bg-[#333333] flex items-center justify-center shadow-lg shadow-black/20 border border-white/10">
+              <svg class="w-5 h-5 fill-white" viewBox="0 0 24 24">
+                <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"></path>
+              </svg>
+            </div>
+          </a>
+          
+          <el-dropdown trigger="click" @command="handleLanguageChange">
+            <button class="h-9 px-3 rounded-full bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-2 transition-all text-slate-600 dark:text-slate-300">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+              </svg>
+              <span class="text-xs font-medium">{{ locale === 'zh-cn' ? '中文' : 'En' }}</span>
+            </button>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="zh-cn" :disabled="locale === 'zh-cn'">中文</el-dropdown-item>
@@ -87,62 +168,75 @@
             </template>
           </el-dropdown>
 
-          <el-dropdown trigger="click" class="user-dropdown">
-            <div class="user-info">
-              <el-avatar :size="36" :src="userStore.userInfo?.avatar || ''" class="user-avatar" />
-              <div class="user-details">
-                <span class="username">{{ userStore.userInfo?.nickname || userStore.userInfo?.username }}</span>
-                <span class="role-badge">Admin</span>
+          <button class="w-9 h-9 rounded-full bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center transition-all text-slate-600 dark:text-slate-300" @click="toggleTheme" title="切换主题">
+            <!-- Sun Icon (Light Mode) -->
+            <svg class="w-4 h-4 block dark:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <!-- Moon Icon (Dark Mode) -->
+            <svg class="w-4 h-4 hidden dark:block" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+          </button>
+
+          <el-dropdown trigger="click">
+            <div class="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-800 cursor-pointer">
+              <div class="text-right hidden sm:block">
+                <div class="text-xs font-semibold leading-none text-slate-900 dark:text-slate-100">{{ userStore.userInfo?.nickname || 'Admin' }}</div>
+                <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Super User</div>
               </div>
-              <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
+              <img :src="userStore.userInfo?.avatar || 'https://lh3.googleusercontent.com/aida-public/AB6AXuBKKxp4o64VKOOMt5SPw0ePf0XixCWAa-cd_srSjsglvXvFMIXJY2SeSvo8K7CRpA1C0Uyov8aCvmBWX_hx5Q0GnfOvRclbXvP_UM-STIQZ-v8m-qqyXpc7IBjEFbxjJlyHoXuAq92bnLhZGA037m3AwvTPq1e8DAWqS1s1qKt6nkGoaVOPYpH_yIQFq6zwWSuTyh__otMPntjywlTfrmw57JJeTcN9lKePhYU-JDRwHSL-VwN5BjGH_5gAuIS1Z8uMNG_46ATQQ5k'" alt="User Avatar" class="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700"/>
             </div>
             <template #dropdown>
-              <el-dropdown-menu class="custom-dropdown">
-                <el-dropdown-item @click="handleLogout">
-                  <el-icon><SwitchButton /></el-icon>
-                  {{ $t('header.logout') }}
-                </el-dropdown-item>
+              <el-dropdown-menu>
+                <el-dropdown-item @click="handleLogout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
         </div>
       </header>
 
-      <!-- 内容 -->
-      <main class="content">
-        <router-view v-slot="{ Component }">
-          <transition name="fade-slide" mode="out-in">
-            <keep-alive>
-              <component :is="Component" />
-            </keep-alive>
-          </transition>
-        </router-view>
-      </main>
-    </div>
+      <!-- Router View -->
+      <router-view v-slot="{ Component }">
+        <transition name="fade-slide" mode="out-in">
+          <keep-alive>
+            <component :is="Component" />
+          </keep-alive>
+        </transition>
+      </router-view>
+    </main>
 
-    <!-- 全局智能助手 -->
+    <!-- Global AI Assistant -->
     <AiAssistant />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, provide } from 'vue'
+import { computed, provide, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import AiAssistant from '@/components/AiAssistant/index.vue'
-import SwiftLogo from '@/components/SwiftLogo/index.vue'
-import GithubIcon from '@/components/GithubIcon/index.vue'
-import GiteeIcon from '@/components/GiteeIcon/index.vue'
-import { Fold, Expand, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const userStore = useUserStore()
 const { locale } = useI18n()
+
+// Theme handling
+const toggleTheme = () => {
+  const htmlElement = document.documentElement
+  if (htmlElement.classList.contains('dark')) {
+    htmlElement.classList.remove('dark')
+    localStorage.theme = 'light'
+  } else {
+    htmlElement.classList.add('dark')
+    localStorage.theme = 'dark'
+  }
+}
 
 const handleLanguageChange = (lang: string) => {
   locale.value = lang
@@ -155,76 +249,89 @@ const refreshMenu = async () => {
 }
 provide('refreshMenu', refreshMenu)
 
-// 图标映射（后端图标名 -> Element Plus 图标名）
+// Icon mapping (Backend -> Material Icons)
 const iconMap: Record<string, string> = {
-  'setting': 'Setting',
-  'user': 'User',
-  'peoples': 'UserFilled',
-  'menu': 'Menu',
-  'tree': 'OfficeBuilding',
-  'dict': 'Collection',
-  'monitor': 'Monitor',
-  'form': 'Document',
-  'logininfor': 'Tickets',
-  'tool': 'Tools',
-  'code': 'Document',
-  'star-filled': 'StarFilled',
-  'list': 'List',
-  'message': 'ChatDotRound',
-  'chart': 'PieChart',
-  'server': 'Coin'
+  'setting': 'settings',
+  'user': 'person',
+  'peoples': 'group',
+  'menu': 'menu',
+  'tree': 'corporate_fare', // dept
+  'dict': 'book',
+  'monitor': 'monitor_heart',
+  'form': 'description',
+  'logininfor': 'login',
+  'tool': 'build',
+  'code': 'code',
+  'star-filled': 'star',
+  'list': 'list',
+  'message': 'chat',
+  'chart': 'bar_chart',
+  'server': 'memory',
+  'job': 'schedule',
+  'druid': 'storage',
+  'system': 'settings_suggest'
 }
 
-// 安全获取图标组件名
-const getIcon = (iconName: string) => {
-  if (!iconName || iconName === '#' || iconName.trim() === '') {
-    return 'Document' // 默认图标
-  }
-  // 如果在映射表中存在，直接返回
-  if (iconMap[iconName]) {
-    return iconMap[iconName]
-  }
-  // 否则尝试直接使用该名称（必须是合法的组件名，不能包含非法字符）
-  // 简单的正则校验：只允许字母、数字、短横线
-  if (/^[a-zA-Z0-9-]+$/.test(iconName)) {
-    return iconName
-  }
-  return 'Document'
+const getMaterialIcon = (iconName: string | undefined) => {
+  if (!iconName) return 'circle'
+  // Remove el-icon prefix if exists
+  const name = iconName.toLowerCase()
+  if (iconMap[name]) return iconMap[name]
+  // Fallback map
+  if (name.includes('user')) return 'person'
+  if (name.includes('log')) return 'history'
+  if (name.includes('tool')) return 'build'
+  return 'circle' // Default dot
 }
 
-// 菜单列表（使用后端动态菜单）
+const resolvePath = (parentPath: string, childPath: string) => {
+  if (childPath.startsWith('/')) return childPath
+  return `${parentPath}/${childPath}`.replace('//', '/')
+}
+
+// Menu List
 const menuList = computed(() => {
   const menus = userStore.userInfo?.menus || []
   if (menus.length > 0) {
-    // 首页菜单（固定，直接显示为单个菜单项）
     const homeMenu = {
       path: '/dashboard',
-      meta: { title: '首页', icon: 'HomeFilled' },
+      meta: { title: '首页控制台', icon: 'dashboard' },
       children: [] as any[]
     }
-    // 后端动态菜单
     const dynamicMenus = menus.map(menu => ({
       path: '/' + menu.path,
-      meta: { title: menu.menuName, icon: getIcon(menu.icon) },
+      meta: { title: menu.menuName, icon: menu.icon },
       children: menu.children?.map((child: any) => ({
         path: child.path,
-        meta: { title: child.menuName, icon: getIcon(child.icon) }
+        meta: { title: child.menuName, icon: child.icon }
       })) || []
     }))
     return [homeMenu, ...dynamicMenus]
   }
-  // 后端菜单为空时使用静态路由
-  return router.options.routes.filter(
-    (item) => item.path !== '/login' && item.name !== 'NotFound' && !item.meta?.hidden
-  )
+  return []
 })
 
-// 面包屑
-const breadcrumbs = computed(() => {
-  return route.matched.filter((item) => item.meta?.title)
-})
+const openMenus = ref<string[]>([])
 
-// 退出登录
+const toggleMenu = (path: string) => {
+  const index = openMenus.value.indexOf(path)
+  if (index > -1) {
+    openMenus.value.splice(index, 1)
+  } else {
+    openMenus.value.push(path)
+  }
+}
+
+watch([() => route.path, menuList], ([newPath, menus]) => {
+  menus.forEach(item => {
+    if (item.children?.some((child: any) => resolvePath(item.path, child.path) === newPath)) {
+      if (!openMenus.value.includes(item.path)) {
+        openMenus.value.push(item.path)
+      }
+    }
+  })
+}, { immediate: true })
+
 const handleLogout = () => {
   ElMessageBox.confirm('确定要退出登录吗?', '提示', {
     confirmButtonText: '确定',
@@ -234,281 +341,35 @@ const handleLogout = () => {
     userStore.logout()
   })
 }
+
+onMounted(() => {
+  // Init theme
+  if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+  }
+})
 </script>
 
-<style lang="scss" scoped>
-.layout-container {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  background-color: #f8fafc;
+<style>
+.font-display {
+  font-family: 'Inter', 'Noto Sans SC', sans-serif;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 10px;
+}
+.dark .sidebar-scroll::-webkit-scrollbar-thumb {
+  background: #1e293b;
 }
 
-/* Sidebar Styling */
-.sidebar {
-  width: 232px;
-  height: 100%;
-  background-color: #0f172a; /* Dark blue-grey from login */
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.05);
-  z-index: 100;
-  
-  &.is-collapse {
-    width: 72px;
-    
-    .logo {
-      padding: 0;
-      justify-content: center;
-      
-      .app-title {
-        opacity: 0;
-        width: 0;
-        margin: 0;
-        display: none;
-      }
-    }
-
-    /* 修复折叠后菜单居中问题 */
-    .custom-menu {
-      padding: 12px 8px; /* 减少左右内边距 */
-
-      :deep(.el-menu-item), :deep(.el-sub-menu__title) {
-        padding: 0 !important;
-        justify-content: center;
-        
-        .el-icon {
-          margin-right: 0;
-          font-size: 20px;
-        }
-
-        /* 隐藏折叠后的文字和箭头 */
-        span, .el-sub-menu__icon-arrow {
-          display: none;
-        }
-      }
-      
-      /* 修复悬浮子菜单的触发区域 */
-      :deep(.el-sub-menu) {
-        .el-sub-menu__title {
-          justify-content: center;
-        }
-      }
-    }
-  }
-  
-  .logo {
-    height: 72px;
-    display: flex;
-    align-items: center;
-    padding: 0 24px;
-    gap: 12px;
-    transition: all 0.3s;
-    
-    .logo-wrapper {
-      width: 36px;
-      height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-    
-    .logo-icon {
-      transform: scale(0.9);
-    }
-    
-    .app-title {
-      font-size: 20px;
-      font-weight: 700;
-      color: #fff;
-      white-space: nowrap;
-      font-family: 'Outfit', sans-serif;
-      letter-spacing: -0.5px;
-      background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      transition: opacity 0.3s, width 0.3s;
-    }
-  }
-}
-
-/* Menu Styling */
-.custom-menu {
-  border-right: none;
-  padding: 12px;
-  
-  :deep(.el-menu-item), :deep(.el-sub-menu__title) {
-    height: 50px;
-    line-height: 50px;
-    margin-bottom: 4px;
-    border-radius: 12px;
-    
-    &:hover {
-      background-color: rgba(255, 255, 255, 0.05) !important;
-      color: #fff !important;
-    }
-    
-    .el-icon {
-      font-size: 18px;
-    }
-  }
-  
-  :deep(.el-menu-item.is-active) {
-    background: linear-gradient(90deg, #409eff 0%, #3b82f6 100%) !important;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-    font-weight: 600;
-    
-    .el-icon {
-      color: #fff;
-    }
-  }
-}
-
-/* Main Container */
-.main-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transition: all 0.3s;
-}
-
-/* Header Styling */
-.header {
-  height: 72px;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  z-index: 90;
-  
-  .header-left {
-    display: flex;
-    align-items: center;
-    gap: 24px;
-    
-    .collapse-btn {
-      width: 40px;
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 10px;
-      cursor: pointer;
-      color: #64748b;
-      transition: all 0.2s;
-      
-      &:hover {
-        background-color: #f1f5f9;
-        color: #1e293b;
-      }
-    }
-    
-    .custom-breadcrumb {
-      :deep(.el-breadcrumb__item) {
-        .el-breadcrumb__inner {
-          font-weight: 500;
-          color: #64748b;
-          
-          &:hover {
-            color: #409eff;
-          }
-        }
-        
-        &:last-child .el-breadcrumb__inner {
-          color: #1e293b;
-          font-weight: 600;
-        }
-      }
-    }
-  }
-  
-  .header-right {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    
-    .header-icon-btn {
-      width: 36px;
-      height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 10px;
-      color: #64748b;
-      transition: all 0.2s;
-      
-      &:hover {
-        background-color: #f1f5f9;
-        color: #1e293b;
-      }
-    }
-    
-    .user-dropdown {
-      cursor: pointer;
-      padding: 6px 12px;
-      border-radius: 40px;
-      transition: all 0.2s;
-      border: 1px solid transparent;
-      
-      &:hover {
-        background-color: #fff;
-        border-color: #e2e8f0;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-      }
-      
-      .user-info {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        
-        .user-avatar {
-          border: 2px solid #fff;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-        
-        .user-details {
-          display: flex;
-          flex-direction: column;
-          line-height: 1.2;
-          
-          .username {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1e293b;
-          }
-          
-          .role-badge {
-            font-size: 11px;
-            color: #94a3b8;
-          }
-        }
-        
-        .dropdown-icon {
-          color: #94a3b8;
-          font-size: 12px;
-          margin-left: 4px;
-        }
-      }
-    }
-  }
-}
-
-/* Content Area */
-.content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px 32px;
-  background-color: #f8fafc;
-}
-
-/* Transitions */
 .fade-slide-enter-active,
 .fade-slide-leave-active {
   transition: opacity 0.3s, transform 0.3s;
@@ -516,37 +377,11 @@ const handleLogout = () => {
 
 .fade-slide-enter-from {
   opacity: 0;
-  transform: translateX(-10px);
+  transform: translateY(10px);
 }
 
 .fade-slide-leave-to {
   opacity: 0;
-  transform: translateX(10px);
-}
-
-/* 覆盖 Element Plus 悬浮菜单样式 */
-:global(.el-menu--popup) {
-  min-width: 120px !important;
-  width: auto !important;
-  padding: 4px !important;
-  border-radius: 8px !important;
-  height: auto !important;
-  
-  .el-menu-item {
-    height: 36px !important;
-    line-height: 36px !important;
-    margin-bottom: 2px !important;
-    border-radius: 6px !important;
-    min-width: 120px !important;
-    
-    .el-icon {
-      margin-right: 6px !important;
-      font-size: 16px !important;
-    }
-    
-    span {
-      font-size: 13px !important;
-    }
-  }
+  transform: translateY(-10px);
 }
 </style>

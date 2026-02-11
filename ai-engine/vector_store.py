@@ -4,16 +4,73 @@ import time
 from knowledge_ingest import JavaParser
 from typing import List, Dict
 import uuid
+import requests
+import yaml
+
+# ==========================================
+# 配置加载
+# ==========================================
+# 尝试读取后端的 application-dev.yml
+CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "../swiftboot-backend/swiftboot-admin/src/main/resources/application-dev.yml"))
+
+def load_config():
+    """
+    加载配置文件
+    """
+    default_config = {
+        "backend": {
+            "api_url": "http://localhost:8080/monitor/operlog/inner/add"
+        },
+        "vector_db": {
+            "persist_directory": os.path.join(os.path.dirname(__file__), "chroma_db"),
+            "collection_name": "swiftboot_codebase",
+            "memory_collection_name": "swiftboot_chat_memory"
+        }
+    }
+     
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                app_config = yaml.safe_load(f)
+                
+                # 解析 ai.engine 配置
+                if 'ai' in app_config and 'engine' in app_config['ai']:
+                    engine_config = app_config['ai']['engine']
+                    
+                    if 'backend-log-api' in engine_config:
+                        default_config["backend"]["api_url"] = engine_config['backend-log-api']
+                        
+                    if 'vector-db-path' in engine_config:
+                        # 如果配置的是相对路径，则相对于当前脚本目录
+                        path = engine_config['vector-db-path']
+                        if path.startswith("./"):
+                            default_config["vector_db"]["persist_directory"] = os.path.join(os.path.dirname(__file__), path)
+                        else:
+                            default_config["vector_db"]["persist_directory"] = path
+                            
+                    if 'collection-name' in engine_config:
+                        default_config["vector_db"]["collection_name"] = engine_config['collection-name']
+                        
+                    if 'memory-collection-name' in engine_config:
+                        default_config["vector_db"]["memory_collection_name"] = engine_config['memory-collection-name']
+                        
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 成功加载后端配置文件: {CONFIG_FILE}")
+        except Exception as e:
+            print(f"加载配置文件失败: {e}，将使用默认配置")
+    else:
+        print(f"配置文件不存在: {CONFIG_FILE}，将使用默认配置")
+        
+    return default_config
+
+config = load_config()
 
 # ==========================================
 # 向量数据库配置
 # ==========================================
-# 这里的路径决定了数据库文件存在哪里。
-# 我们设置为当前脚本目录下的 "chroma_db" 文件夹。
-# 这就是"本地部署"，不需要安装额外的服务器软件。
-PERSIST_DIRECTORY = os.path.join(os.path.dirname(__file__), "chroma_db")
-COLLECTION_NAME = "swiftboot_codebase"
-MEMORY_COLLECTION_NAME = "swiftboot_chat_memory"
+PERSIST_DIRECTORY = config["vector_db"]["persist_directory"]
+COLLECTION_NAME = config["vector_db"]["collection_name"]
+MEMORY_COLLECTION_NAME = config["vector_db"]["memory_collection_name"]
+BACKEND_LOG_API = config["backend"]["api_url"]
 
 class VectorStore:
     """
@@ -30,6 +87,37 @@ class VectorStore:
         # ChromaDB 默认使用 all-MiniLM-L6-v2 模型进行文本向量化
         self.collection = self.client.get_or_create_collection(name=COLLECTION_NAME)
         print(f"[{self._now()}]数据库连接成功！")
+
+    def _now(self):
+        return time.strftime("%Y-%m-%d %H:%M:%S")
+
+    def _log_to_backend(self, title: str, oper_name: str, status: int = 0):
+        """
+        调用后端 API 记录操作日志
+        """
+        try:
+            payload = {
+                "title": title,
+                "businessType": 0, # 其他
+                "method": "VectorStore.update",
+                "requestMethod": "POST",
+                "operName": oper_name,
+                "operUrl": "/inner/rag/sync",
+                "operIp": "127.0.0.1",
+                "status": status,
+                "operTime": time.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            # 这里需要注意，后端接口可能需要鉴权，或者是一个内部接口
+            # 为了简单起见，假设后端提供了一个无需鉴权的内部接口用于系统调用
+            # 或者通过添加特定的 header 来通过鉴权
+            response = requests.post(BACKEND_LOG_API, json=payload, timeout=2)
+            if response.status_code != 200:
+                print(f"[{self._now()}]记录日志失败，后端返回: {response.status_code} - {response.text}")
+            else:
+                # print(f"[{self._now()}]操作日志已同步到后端。")
+                pass
+        except Exception as e:
+            print(f"[{self._now()}]记录日志失败: {e}")
 
     def add_documents(self, chunks: List[Dict]):
         """
@@ -79,6 +167,12 @@ class VectorStore:
             n_results=n_results
         )
         return results
+
+    def count(self):
+        """
+        获取向量库中的文档总数
+        """
+        return self.collection.count()
 
     def delete_by_source(self, source_path: str):
         """
@@ -167,6 +261,12 @@ class ChatMemoryStore:
             where=where
         )
         return results
+
+    def count(self):
+        """
+        获取记忆库中的文档总数
+        """
+        return self.collection.count()
 
     def delete_by_user(self, user_id: str, messages: List[str] = None):
         """

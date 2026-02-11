@@ -87,7 +87,16 @@ public class LogAspect {
             // 获取操作人
             try {
                 if (StpUtil.isLogin()) {
-                    operLog.setOperName(StpUtil.getLoginIdAsString());
+                    // 获取用户昵称，这里需要注意，Session中可能没有存储昵称，需要根据项目情况获取
+                    // 假设 Session 中存储了 UserInfo，或者直接存储了昵称
+                    // 如果 StpUtil 只能获取 LoginId，那么可能需要额外的机制获取昵称
+                    // 为了简化，这里尝试获取 session 中的 nickname 属性，如果获取不到则使用 loginId
+                    String nickname = (String) StpUtil.getSession().get("nickname");
+                    if (StrUtil.isNotBlank(nickname)) {
+                        operLog.setOperName(nickname);
+                    } else {
+                        operLog.setOperName(StpUtil.getLoginIdAsString());
+                    }
                 }
             } catch (Exception ignored) {
             }

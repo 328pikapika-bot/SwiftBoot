@@ -1,410 +1,388 @@
 <template>
-  <div class="dashboard-container">
-    <!-- 欢迎区域 -->
-    <div class="welcome-section">
-      <div class="welcome-banner">
-        <div class="banner-content">
-          <h1>{{ $t('dashboard.hello') }}, {{ userStore.userInfo?.nickname || 'Admin' }}! </h1>
-          <p>{{ $t('dashboard.subtitle') }}</p>
-          <div class="quick-stats">
-            <div class="stat-badge">
-              <span class="dot online"></span>
-              {{ $t('dashboard.systemOnline') }}
-            </div>
-            <div class="stat-badge">
-              <span class="dot update"></span>
-              {{ $t('dashboard.version') }} v1.0.0
-            </div>
-          </div>
-        </div>
-        <div class="banner-illustration">
-          <!-- Abstract shapes matching login mesh -->
-          <div class="shape shape-1"></div>
-          <div class="shape shape-2"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 核心指标卡片 -->
-    <div class="stats-grid">
-      <div v-for="item in statCards" :key="item.key" class="stat-card-modern">
-        <div class="card-icon-wrapper" :style="{ background: `rgba(${item.rgb}, 0.1)`, color: `rgb(${item.rgb})` }">
-          <el-icon :size="24"><component :is="item.icon" /></el-icon>
-        </div>
-        <div class="card-info">
-          <span class="stat-label">{{ $t(item.title) }}</span>
-          <div class="stat-value-group">
-            <span class="stat-number">{{ item.value }}</span>
-            <span class="stat-trend positive" v-if="true">
-              +12% <el-icon><Top /></el-icon>
+  <div class="flex-1 overflow-y-auto p-8 font-display">
+    <!-- Hero Section -->
+    <div class="mb-10 relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 lg:p-12 shadow-sm">
+      <!-- Background Decorations -->
+      <div class="absolute top-0 right-0 -mt-20 -mr-20 h-80 w-80 rounded-full bg-blue-500/5 blur-3xl pointer-events-none"></div>
+      <div class="absolute bottom-0 left-0 -mb-20 -ml-20 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none"></div>
+      
+      <div class="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
+        <div class="flex-1">
+          <div class="flex flex-wrap items-center gap-3 mb-6">
+            <span class="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-300 text-xs font-bold tracking-wider uppercase flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+              v1.0.0 Release
+            </span>
+            <span class="px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800 text-emerald-600 dark:text-emerald-300 text-xs font-bold tracking-wider uppercase flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              AI Native
             </span>
           </div>
+          
+          <h1 class="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight mb-6 text-slate-900 dark:text-white leading-tight">
+            Swift<span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-emerald-500">Boot</span>
+            <br/>
+            <span class="text-2xl md:text-3xl font-light text-slate-400 dark:text-slate-500 block mt-2">下一代 AI 原生全栈框架</span>
+          </h1>
+          
+          <p class="text-slate-600 dark:text-slate-300 text-lg max-w-2xl leading-relaxed mb-8">
+            重塑企业级开发体验。深度融合 <strong class="text-slate-900 dark:text-white">Spring Boot 3</strong> 与 <strong class="text-slate-900 dark:text-white">Vue 3</strong>，
+            内置 <strong class="text-emerald-600 dark:text-emerald-400">本地 RAG 知识引擎</strong>，让每一行代码都充满智慧。
+          </p>
+          
+          <div class="flex flex-wrap gap-6">
+            <div class="flex items-center gap-2.5">
+              <div class="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                <span class="material-icons-round text-sm">check_circle</span>
+              </div>
+              <span class="text-sm font-medium text-slate-700 dark:text-slate-200">开箱即用工程模板</span>
+            </div>
+            <div class="flex items-center gap-2.5">
+              <div class="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                <span class="material-icons-round text-sm">psychology</span>
+              </div>
+              <span class="text-sm font-medium text-slate-700 dark:text-slate-200">私有化 AI 知识库</span>
+            </div>
+            <div class="flex items-center gap-2.5">
+              <div class="p-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
+                <span class="material-icons-round text-sm">speed</span>
+              </div>
+              <span class="text-sm font-medium text-slate-700 dark:text-slate-200">极致性能调优</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Visual Element -->
+        <div class="hidden lg:block relative mr-8">
+           <div class="relative w-32 h-32">
+             <div class="absolute inset-0 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-3xl rotate-6 opacity-20 blur-sm"></div>
+             <div class="absolute inset-0 bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-xl flex items-center justify-center transform -rotate-3 transition-transform hover:rotate-0 duration-500">
+               <span class="text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-blue-600 to-emerald-500">SB</span>
+             </div>
+             <!-- Orbiting Elements -->
+             <div class="absolute -top-4 -right-4 p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-700 animate-bounce" style="animation-duration: 3s;">
+                <span class="material-icons-round text-emerald-500 text-xl">smart_toy</span>
+             </div>
+             <div class="absolute -bottom-4 -left-4 p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-700 animate-bounce" style="animation-duration: 4s; animation-delay: 1s;">
+                <span class="material-icons-round text-blue-500 text-xl">code</span>
+             </div>
+           </div>
         </div>
       </div>
     </div>
 
-    <div class="content-grid">
-      <!-- 快捷入口 -->
-      <div class="grid-section quick-access">
-        <div class="section-header">
-          <h3>{{ $t('dashboard.quickAccess') }}</h3>
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
+        <div class="flex justify-between items-start mb-4">
+          <div class="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+            <span class="material-icons-round text-blue-500">memory</span>
+          </div>
         </div>
-        <div class="quick-links-grid">
-          <router-link
-            v-for="link in quickLinks"
-            :key="link.path"
-            :to="link.path"
-            class="quick-link-item"
-          >
-            <div class="icon-box" :style="{ background: link.bg }">
-              <el-icon :size="24" color="#fff"><component :is="link.icon" /></el-icon>
-            </div>
-            <span>{{ link.title }}</span>
-          </router-link>
+        <div class="text-sm text-slate-500 dark:text-slate-400">内存使用</div>
+        <div class="text-2xl font-bold mt-1 text-slate-900 dark:text-white">
+          {{ serverStats.mem?.total ? ((serverStats.mem.used / serverStats.mem.total) * 100).toFixed(0) + '%' : 'Loading...' }}
+          <span class="text-xs text-slate-400 font-normal ml-1" v-if="serverStats.mem?.total">
+            {{ Number(serverStats.mem.used).toFixed(1) }}G / {{ Number(serverStats.mem.total).toFixed(1) }}G
+          </span>
         </div>
       </div>
 
-      <!-- 技术栈展示 -->
-      <div class="grid-section tech-stack">
-        <div class="section-header">
-          <h3>{{ $t('dashboard.techStack') }}</h3>
-        </div>
-        <div class="tech-groups">
-          <div class="tech-group">
-            <span class="group-label">{{ $t('dashboard.backend') }}</span>
-            <div class="tags-flow">
-              <span class="tech-tag">Java 17</span>
-              <span class="tech-tag">Spring Boot 3</span>
-              <span class="tech-tag">MyBatis Plus</span>
-              <span class="tech-tag">Sa-Token</span>
-            </div>
+      <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
+        <div class="flex justify-between items-start mb-4">
+          <div class="p-2 bg-orange-50 dark:bg-orange-900/30 rounded-lg">
+            <span class="material-icons-round text-orange-500">speed</span>
           </div>
-          <div class="tech-group">
-            <span class="group-label">{{ $t('dashboard.frontend') }}</span>
-            <div class="tags-flow">
-              <span class="tech-tag">Vue 3.4</span>
-              <span class="tech-tag">Vite 5</span>
-              <span class="tech-tag">TypeScript</span>
-              <span class="tech-tag">UnoCSS</span>
+          <span class="text-xs font-medium text-slate-400">实时</span>
+        </div>
+        <div class="text-sm text-slate-500 dark:text-slate-400">JVM负载</div>
+        <div class="text-2xl font-bold mt-1 text-slate-900 dark:text-white">
+          {{ serverStats.jvm?.total ? ((serverStats.jvm.total - serverStats.jvm.free) / serverStats.jvm.total * 100).toFixed(1) + '%' : 'Loading...' }}
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
+        <div class="flex justify-between items-start mb-4">
+          <div class="p-2 bg-purple-50 dark:bg-purple-900/30 rounded-lg">
+            <span class="material-icons-round text-purple-500">auto_awesome</span>
+          </div>
+          <span class="text-xs font-medium text-purple-500">RAG Ready</span>
+        </div>
+        <div class="text-sm text-slate-500 dark:text-slate-400">智能索引</div>
+        <div class="text-2xl font-bold mt-1 text-slate-900 dark:text-white">{{ aiStats.knowledge_count ? aiStats.knowledge_count.toLocaleString() : '...' }} 件</div>
+      </div>
+
+      <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
+        <div class="flex justify-between items-start mb-4">
+          <div class="p-2 bg-emerald-50 dark:bg-emerald-900/30 rounded-lg">
+            <span class="material-icons-round text-emerald-500">public</span>
+          </div>
+          <span class="text-xs font-medium text-emerald-500">正常</span>
+        </div>
+        <div class="text-sm text-slate-500 dark:text-slate-400">系统运行时间</div>
+        <div class="text-2xl font-bold mt-1 text-slate-900 dark:text-white">{{ uptime || 'Loading...' }}</div>
+      </div>
+    </div>
+
+    <!-- Quick Access -->
+    <div class="mb-8">
+      <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-4 uppercase tracking-wider">基础模块快捷入口</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
+        <router-link 
+          v-for="item in quickLinks" 
+          :key="item.path" 
+          :to="item.path"
+          class="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl flex flex-col items-center justify-center gap-3 hover:border-blue-500/50 hover:shadow-md transition-all"
+        >
+          <div class="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center group-hover:bg-blue-500/10 transition-colors">
+            <span class="material-symbols-outlined text-slate-600 dark:text-slate-300 group-hover:text-blue-500 transition-colors">{{ item.icon }}</span>
+          </div>
+          <span class="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-blue-500 transition-colors">{{ item.title }}</span>
+        </router-link>
+      </div>
+    </div>
+
+    <!-- Bottom Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+      <!-- RAG Insight Card -->
+      <div class="lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
+        <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+          <div class="flex items-center gap-3">
+            <span class="material-icons-round text-blue-500">psychology</span>
+            <h2 class="text-lg font-bold text-slate-900 dark:text-white">RAG 智能系统洞察</h2>
+          </div>
+          <button class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white text-sm font-bold rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:-translate-y-0.5 border-none outline-none">
+            <span class="material-icons-round text-lg">bolt</span>
+            开启自诊断
+          </button>
+        </div>
+        <div class="flex-1 p-6 flex flex-col justify-center items-center text-center space-y-4">
+          <div class="relative">
+            <div class="absolute -inset-4 bg-blue-500/20 blur-2xl rounded-full"></div>
+            <span class="material-icons-round text-6xl text-blue-500 relative">hub</span>
+          </div>
+          <div class="max-w-md">
+            <h3 class="font-semibold text-lg text-slate-900 dark:text-white">正在监控系统语境...</h3>
+            <p class="text-slate-500 dark:text-slate-400 mt-2 text-sm leading-relaxed">
+              SwiftBoot 已通过内置 RAG 引擎分析了 20,491 条 system 日志。目前发现 2 个潜在的连接池配置优化点，可提升 15% 的查询性能。
+            </p>
+          </div>
+          <div class="w-full grid grid-cols-3 gap-4 mt-4">
+            <div class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg">
+              <div class="text-blue-500 font-bold text-xl leading-tight">98.2%</div>
+              <div class="text-[11px] text-slate-500 uppercase font-semibold mt-1">理解准确度</div>
+            </div>
+            <div class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg">
+              <div class="text-blue-500 font-bold text-xl leading-tight">1.2s</div>
+              <div class="text-[11px] text-slate-500 uppercase font-semibold mt-1">平均检索速度</div>
+            </div>
+            <div class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg">
+              <div class="text-blue-500 font-bold text-xl leading-tight">64MB</div>
+              <div class="text-[11px] text-slate-500 uppercase font-semibold mt-1">向量库占用</div>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- System Dynamics -->
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
+        <div class="p-6 border-b border-slate-100 dark:border-slate-800">
+          <h2 class="text-lg font-bold text-slate-900 dark:text-white">系统动态</h2>
+        </div>
+        <div class="flex-1 p-6 space-y-6">
+          <div v-for="log in operLogs" :key="log.id" class="flex gap-4">
+            <div class="mt-1 w-2 h-2 rounded-full shrink-0" :class="getBusinessTypeColor(log)"></div>
+            <div>
+              <div class="text-sm font-medium text-slate-900 dark:text-white">
+                <span class="font-bold text-slate-700 dark:text-slate-200">{{ log.operName }}</span> 
+                {{ getBusinessTypeAction(log.businessType) }} 
+                {{ log.title }}
+              </div>
+              <div class="text-xs text-slate-500 mt-1">{{ formatTimeAgo(log.operTime) }}</div>
+            </div>
+          </div>
+          <div v-if="operLogs.length === 0" class="text-center text-slate-400 text-sm py-4">
+            暂无动态
+          </div>
+        </div>
+        <router-link to="/monitor/operlog" class="p-4 text-center text-sm font-medium text-blue-500 hover:bg-slate-50 dark:hover:bg-slate-800 border-t border-slate-100 dark:border-slate-800 rounded-b-xl transition-colors">
+          查看全部日志
+        </router-link>
+      </div>
     </div>
+
+    <!-- Floating AI Pulse Effect (Fixed position) -->
+    <!-- Note: Actual interaction is handled by global AiAssistant component -->
+    <div class="fixed bottom-8 right-8 z-0 pointer-events-none">
+       <div class="relative flex items-center justify-center">
+         <div class="absolute w-20 h-20 rounded-full bg-blue-500/20 ai-pulse"></div>
+         <div class="absolute w-16 h-16 rounded-full bg-blue-500/10 ai-pulse" style="animation-delay: 1.5s;"></div>
+       </div>
+    </div>
+
+    <!-- Background Decoration -->
+    <div class="fixed top-0 right-0 -z-10 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none"></div>
+    <div class="fixed bottom-0 left-0 -z-10 w-[400px] h-[400px] bg-blue-400/5 rounded-full blur-[80px] pointer-events-none"></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useUserStore } from '@/stores/user'
-import SwiftLogo from '@/components/SwiftLogo/index.vue'
-import { getIndexStats } from '@/api/index'
-import { Top } from '@element-plus/icons-vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { getServer } from '@/api/monitor/server'
+import { list as getOperLogs } from '@/api/monitor/operlog'
+import request, { ApiResponse } from '@/utils/request'
 
-const userStore = useUserStore()
+const serverStats = ref<any>({})
+const responseTime = ref(0)
+const uptime = ref('')
+const aiStats = ref({ knowledge_count: 0, memory_count: 0 })
+const operLogs = ref<any[]>([])
+let timer: any = null
+let statsTimer: any = null
 
-const statCards = ref([
-  { title: 'dashboard.stats.users', value: '0', icon: 'User', rgb: '64, 158, 255', key: 'userCount' },
-  { title: 'dashboard.stats.roles', value: '0', icon: 'UserFilled', rgb: '103, 194, 58', key: 'roleCount' },
-  { title: 'dashboard.stats.menus', value: '0', icon: 'Menu', rgb: '230, 162, 60', key: 'menuCount' },
-  { title: 'dashboard.stats.depts', value: '0', icon: 'OfficeBuilding', rgb: '245, 108, 108', key: 'deptCount' }
-])
+const quickLinks = [
+  { title: '用户管理', path: '/system/user', icon: 'person' },
+  { title: '角色管理', path: '/system/role', icon: 'manage_accounts' },
+  { title: '菜单管理', path: '/system/menu', icon: 'menu' },
+  { title: '部门管理', path: '/system/dept', icon: 'corporate_fare' },
+  { title: '字典管理', path: '/system/dict', icon: 'book' },
+  { title: '代码生成', path: '/tool/gen', icon: 'terminal' },
+  { title: '监控大屏', path: '/monitor/server', icon: 'monitoring' }
+]
 
-const quickLinks = ref([
-  { title: '用户管理', path: '/system/user', icon: 'User', bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-  { title: '角色管理', path: '/system/role', icon: 'UserFilled', bg: 'linear-gradient(135deg, #6a11cb 0%, #2575fc 100%)' },
-  { title: '菜单管理', path: '/system/menu', icon: 'Menu', bg: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%)' },
-  { title: '部门管理', path: '/system/dept', icon: 'OfficeBuilding', bg: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)' },
-  { title: '字典管理', path: '/system/dict', icon: 'Collection', bg: 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)' },
-  { title: '代码生成', path: '/tool/gen', icon: 'Document', bg: 'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)' }
-])
-
-const getStats = async () => {
+const loadOperLogs = async () => {
   try {
-    const res = await getIndexStats()
-    statCards.value.forEach(item => {
-      if (res.data[item.key]) {
-        item.value = res.data[item.key].toString()
-      }
-    })
-  } catch (error) {
-    console.error('获取首页统计失败', error)
+    const res = await getOperLogs({ pageNum: 1, pageSize: 5 }) as unknown as ApiResponse
+    if (res.code === 200) {
+      // 兼容 PageResult 的 list 或 rows 字段
+      operLogs.value = res.data?.list || (res as any).rows || []
+    }
+  } catch (e) {
+    console.error('Failed to load oper logs', e)
   }
+}
+
+const formatTimeAgo = (time: string) => {
+  if (!time) return ''
+  const date = new Date(time)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  
+  const seconds = Math.floor(diff / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+  
+  if (days > 0) return `${days} 天前`
+  if (hours > 0) return `${hours} 小时前`
+  if (minutes > 0) return `${minutes} 分钟前`
+  return '刚刚'
+}
+
+const getBusinessTypeColor = (log: any) => {
+  if (log.title && log.title.includes('RAG 向量索引更新')) {
+    return 'bg-purple-500' // RAG 更新显示紫色
+  }
+  // 超级管理员操作显示绿色 (假设 admin 的 operName 为 'admin' 或 '超级管理员')
+  // 也可以根据 log.operName === 'admin' 来判断
+  if (log.operName === 'admin' || log.operName === '超级管理员') {
+    return 'bg-green-500'
+  }
+  
+  return 'bg-slate-400' // 其他默认为灰色
+}
+
+const getBusinessTypeAction = (type: number) => {
+  switch (type) {
+    case 1: return '新增了'
+    case 2: return '修改了'
+    case 3: return '删除了'
+    default: return '操作了'
+  }
+}
+
+const loadAiStats = async () => {
+  try {
+    const res = await request({
+      url: '/system/ai/stats',
+      method: 'get'
+    }) as unknown as ApiResponse
+    if (res.code === 200) {
+      aiStats.value = res.data
+    }
+  } catch (e) {
+    console.error('Failed to load AI stats', e)
+  }
+}
+
+const updateUptime = () => {
+  if (!serverStats.value.jvm?.startTimeLong) return
+  
+  const startTime = serverStats.value.jvm.startTimeLong
+  const now = Date.now()
+  const diff = now - startTime
+  
+  const seconds = Math.floor(diff / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+  
+  if (days > 0) uptime.value = `${days}天 ${hours % 24}小时`
+  else if (hours > 0) uptime.value = `${hours}小时 ${minutes % 60}分`
+  else uptime.value = `${minutes}分 ${seconds % 60}秒`
+}
+
+const isStatsLoading = ref(false)
+
+const loadServerStats = async () => {
+  if (isStatsLoading.value) return
+  isStatsLoading.value = true
+  const start = Date.now()
+  try {
+    const res = await getServer() as unknown as ApiResponse
+    const end = Date.now()
+    responseTime.value = end - start
+    
+    if (res.code === 200) {
+      serverStats.value = res.data
+      updateUptime()
+    }
+  } catch (error) {
+    console.error('Failed to load server stats:', error)
+  } finally {
+    isStatsLoading.value = false
+  }
+}
+
+const pollStats = async () => {
+  if (statsTimer) clearTimeout(statsTimer)
+  
+  await loadServerStats()
+  
+  // 使用 setTimeout 确保上一次请求完成后再等待 3 秒发起下一次请求
+  statsTimer = setTimeout(pollStats, 3000)
 }
 
 onMounted(() => {
-  getStats()
+  loadAiStats()
+  loadOperLogs()
+  pollStats()
+  timer = setInterval(updateUptime, 1000)
+})
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+  if (statsTimer) clearTimeout(statsTimer)
 })
 </script>
 
-<style lang="scss" scoped>
-.dashboard-container {
-  max-width: 1400px;
-  margin: 0 auto;
+<style>
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 0.3; }
+  100% { transform: scale(0.95); opacity: 0.5; }
 }
-
-/* Welcome Section */
-.welcome-section {
-  margin-bottom: 32px;
-}
-
-.welcome-banner {
-  background: #0f172a;
-  border-radius: 24px;
-  padding: 48px;
-  position: relative;
-  overflow: hidden;
-  color: white;
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
-  
-  .banner-content {
-    position: relative;
-    z-index: 2;
-    max-width: 600px;
-    
-    h1 {
-      font-size: 32px;
-      font-weight: 700;
-      margin-bottom: 12px;
-      letter-spacing: -1px;
-    }
-    
-    p {
-      color: #94a3b8;
-      font-size: 16px;
-      margin-bottom: 24px;
-      line-height: 1.6;
-    }
-    
-    .quick-stats {
-      display: flex;
-      gap: 16px;
-      
-      .stat-badge {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
-        padding: 8px 16px;
-        border-radius: 30px;
-        font-size: 13px;
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        
-        .dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          
-          &.online { background-color: #4ade80; box-shadow: 0 0 10px rgba(74, 222, 128, 0.5); }
-          &.update { background-color: #60a5fa; box-shadow: 0 0 10px rgba(96, 165, 250, 0.5); }
-        }
-      }
-    }
-  }
-  
-  .banner-illustration {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1;
-    pointer-events: none;
-    
-    .shape {
-      position: absolute;
-      border-radius: 50%;
-      filter: blur(80px);
-      opacity: 0.6;
-    }
-    
-    .shape-1 {
-      width: 300px;
-      height: 300px;
-      background: #4f46e5;
-      top: -100px;
-      right: -50px;
-    }
-    
-    .shape-2 {
-      width: 250px;
-      height: 250px;
-      background: #ec4899;
-      bottom: -50px;
-      right: 20%;
-    }
-  }
-}
-
-/* Stats Grid */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 24px;
-  margin-bottom: 32px;
-}
-
-.stat-card-modern {
-  background: white;
-  border-radius: 20px;
-  padding: 24px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
-  transition: transform 0.2s, box-shadow 0.2s;
-  border: 1px solid #f1f5f9;
-  
-  &:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-  }
-  
-  .card-icon-wrapper {
-    width: 56px;
-    height: 56px;
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .card-info {
-    flex: 1;
-    
-    .stat-label {
-      font-size: 14px;
-      color: #64748b;
-      margin-bottom: 4px;
-      display: block;
-      font-weight: 500;
-    }
-    
-    .stat-value-group {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-      
-      .stat-number {
-        font-size: 24px;
-        font-weight: 700;
-        color: #1e293b;
-      }
-      
-      .stat-trend {
-        font-size: 12px;
-        color: #10b981;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 2px;
-      }
-    }
-  }
-}
-
-/* Content Grid */
-.content-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 24px;
-  
-  @media (max-width: 1024px) {
-    grid-template-columns: 1fr;
-  }
-}
-
-.grid-section {
-  background: white;
-  border-radius: 20px;
-  padding: 24px;
-  border: 1px solid #f1f5f9;
-  
-  .section-header {
-    margin-bottom: 24px;
-    
-    h3 {
-      font-size: 18px;
-      font-weight: 600;
-      color: #1e293b;
-    }
-  }
-}
-
-.quick-links-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 16px;
-  
-  .quick-link-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    padding: 16px;
-    border-radius: 16px;
-    transition: all 0.2s;
-    
-    &:hover {
-      background: #f8fafc;
-      
-      .icon-box {
-        transform: scale(1.1);
-      }
-    }
-    
-    .icon-box {
-      width: 48px;
-      height: 48px;
-      border-radius: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-    }
-    
-    span {
-      font-size: 13px;
-      font-weight: 500;
-      color: #475569;
-    }
-  }
-}
-
-.tech-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  
-  .tech-group {
-    .group-label {
-      display: block;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: #94a3b8;
-      margin-bottom: 12px;
-      font-weight: 600;
-    }
-    
-    .tags-flow {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      
-      .tech-tag {
-        background: #f1f5f9;
-        color: #475569;
-        padding: 6px 12px;
-        border-radius: 8px;
-        font-size: 13px;
-        font-weight: 500;
-        border: 1px solid #e2e8f0;
-      }
-    }
-  }
+.ai-pulse {
+  animation: pulse-ring 3s infinite ease-in-out;
 }
 </style>

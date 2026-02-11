@@ -29,6 +29,8 @@ public class SaTokenConfig implements WebMvcConfigurer {
                     .notMatch("/doc.html", "/webjars/**", "/swagger-resources/**", "/v3/api-docs/**")
                     // 排除文件访问
                     .notMatch("/files/**")
+                    // 排除 Python 引擎回调的内部接口
+                    .notMatch("/monitor/operlog/inner/add")
                     // 检查是否登录
                     .check(r -> StpUtil.checkLogin());
         })).addPathPatterns("/**");
