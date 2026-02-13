@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import com.swiftboot.admin.event.OperLogEvent;
+import org.springframework.context.ApplicationEventPublisher;
+
 /**
  * 操作日志控制器
  */
@@ -26,6 +29,7 @@ import java.util.List;
 public class SysOperLogController {
 
     private final SysOperLogService operLogService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Operation(summary = "分页查询操作日志列表")
     @SaCheckPermission("monitor:operlog:list")
@@ -44,6 +48,7 @@ public class SysOperLogController {
         operLogService.deleteOperLogByIds(operLogIds);
         return R.ok();
     }
+
 
     @Operation(summary = "清空操作日志")
     @SaCheckPermission("monitor:operlog:remove")
@@ -65,6 +70,7 @@ public class SysOperLogController {
     @PostMapping("/inner/add")
     public R<Void> innerAdd(@RequestBody SysOperLog operLog) {
         operLogService.save(operLog);
+        eventPublisher.publishEvent(new OperLogEvent(this, operLog));
         return R.ok();
     }
 }

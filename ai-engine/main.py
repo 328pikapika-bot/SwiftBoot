@@ -144,6 +144,9 @@ def get_stats():
             "memory_count": memory_db.count()
         }
     except Exception as e:
+        print(f"Error in /stats: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 class MemoryDeleteRequest(BaseModel):

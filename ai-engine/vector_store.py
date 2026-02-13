@@ -172,7 +172,11 @@ class VectorStore:
         """
         获取向量库中的文档总数
         """
-        return self.collection.count()
+        try:
+            return self.collection.count()
+        except Exception as e:
+            print(f"[{self._now()}]获取数量失败: {e}")
+            return 0
 
     def delete_by_source(self, source_path: str):
         """
@@ -266,7 +270,11 @@ class ChatMemoryStore:
         """
         获取记忆库中的文档总数
         """
-        return self.collection.count()
+        try:
+            return self.collection.count()
+        except Exception as e:
+            print(f"[{self._now()}]获取记忆数量失败: {e}")
+            return 0
 
     def delete_by_user(self, user_id: str, messages: List[str] = None):
         """

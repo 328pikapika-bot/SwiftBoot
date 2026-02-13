@@ -8,15 +8,27 @@ import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.swiftboot.admin.domain.entity.SysAiSession;
+import com.swiftboot.admin.domain.entity.SysOperLog;
+import com.swiftboot.admin.event.OperLogEvent;
 import com.swiftboot.admin.service.SysAiSessionService;
+import com.swiftboot.admin.service.SysOperLogService;
+import com.swiftboot.common.core.domain.PageQuery;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.swiftboot.common.core.result.R;
 import com.swiftboot.common.log.annotation.Log;
 import com.swiftboot.common.log.enums.BusinessType;
+import com.swiftboot.common.security.utils.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.Resource;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.EventListener;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
+import org.springframework.util.StreamUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -25,19 +37,15 @@ import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import com.swiftboot.common.security.utils.SecurityUtils;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import jakarta.annotation.Resource;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.util.StreamUtils;
-
 /**
- * AI 智能助手控制器 - Agent 模式
+ * AI 智能助手控制器 - Agent -模式
  * 负责处理前端 AI 助手的对话请求，集成 Agent Function Calling 支持。
  * 
  * 【Agent 工具调用流程】：
@@ -58,6 +66,9 @@ public class SysAiController {
 
     @Resource
     private SysAiSessionService aiSessionService;
+    
+    @Resource
+    private SysOperLogService operLogService;
 
     // Redis 历史记录 Key 前缀
     private static final String HISTORY_KEY_PREFIX = "ai:history:";
@@ -84,6 +95,9 @@ public class SysAiController {
     // 缓存工具搜索规则
     private String toolSearchRuleContext = "";
     
+    // 实时日志流连接池
+    private final List<SseEmitter> logEmitters = new CopyOnWriteArrayList<>();
+
     // Agent 工具定义 (Function Calling)
     // 关键在于 description 的引导性，让 LLM 主动调用工具
     private JSONArray agentTools;
@@ -145,6 +159,108 @@ public class SysAiController {
     private static final String MEMORY_DELETE_URL = "http://localhost:8001/memory/delete";
     private static final String NLP_TOPIC_URL = "http://localhost:8001/nlp/topic";
     private static final String STATS_URL = "http://localhost:8001/stats";
+
+    /**
+     * 实时索引日志流 (SSE)
+     * 用于前端监控页面 (Neural Stream)
+     */
+    @GetMapping(value = "/index/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter indexStream(@RequestParam(defaultValue = "100") int limit) {
+        SseEmitter emitter = new SseEmitter(0L); // 永不超时
+        logEmitters.add(emitter);
+        
+        // 发送历史日志
+        try {
+            // 查询最新的 limit 条 AI 引擎日志
+            Page<SysOperLog> page = new Page<>(1, limit);
+            LambdaQueryWrapper<SysOperLog> queryWrapper = new LambdaQueryWrapper<>();
+            queryWrapper.eq(SysOperLog::getOperName, "AI Engine")
+                        .orderByDesc(SysOperLog::getOperTime);
+            
+            Page<SysOperLog> result = operLogService.page(page, queryWrapper);
+            List<SysOperLog> logs = result.getRecords();
+            
+            // 反转顺序，按时间正序发送（旧 -> 新）
+            Collections.reverse(logs);
+            
+            for (SysOperLog log : logs) {
+                JSONObject msg = new JSONObject();
+                if (log.getOperTime() != null) {
+                    msg.set("time", cn.hutool.core.date.DateUtil.format(log.getOperTime(), "HH:mm:ss"));
+                }
+                msg.set("msg", log.getTitle());
+                // 根据日志内容简单的着色逻辑
+                if (log.getTitle() != null) {
+                    if (log.getTitle().contains("检测到")) {
+                        msg.set("color", "text-blue-400");
+                    } else if (log.getTitle().contains("完成") || log.getTitle().contains("成功")) {
+                        msg.set("color", "text-emerald-400");
+                    } else if (log.getTitle().contains("失败") || log.getTitle().contains("错误")) {
+                        msg.set("color", "text-red-400");
+                    } else {
+                        msg.set("color", "text-slate-400");
+                    }
+                } else {
+                     msg.set("color", "text-slate-400");
+                }
+                
+                emitter.send(SseEmitter.event().data(msg.toString()));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        emitter.onCompletion(() -> logEmitters.remove(emitter));
+        emitter.onTimeout(() -> logEmitters.remove(emitter));
+        emitter.onError((e) -> logEmitters.remove(emitter));
+        
+        return emitter;
+    }
+
+    /**
+     * 监听操作日志事件，并推送到 SSE 流
+     */
+    @EventListener
+    public void handleOperLogEvent(OperLogEvent event) {
+        if (logEmitters.isEmpty()) {
+            return;
+        }
+        
+        SysOperLog log = event.getOperLog();
+        // 仅推送 AI 引擎产生的日志
+        if ("AI Engine".equals(log.getOperName()) || 
+            (log.getTitle() != null && log.getTitle().contains("检测到"))) {
+            
+            JSONObject msg = new JSONObject();
+            if (log.getOperTime() != null) {
+                msg.set("time", cn.hutool.core.date.DateUtil.format(log.getOperTime(), "HH:mm:ss"));
+            }
+            msg.set("msg", log.getTitle());
+            // 根据日志内容简单的着色逻辑
+            if (log.getTitle().contains("检测到")) {
+                msg.set("color", "text-blue-400");
+            } else if (log.getTitle().contains("完成") || log.getTitle().contains("成功")) {
+                msg.set("color", "text-emerald-400");
+            } else if (log.getTitle().contains("失败") || log.getTitle().contains("错误")) {
+                msg.set("color", "text-red-400");
+            } else {
+                msg.set("color", "text-slate-400");
+            }
+            
+            String jsonStr = msg.toString();
+            List<SseEmitter> deadEmitters = new java.util.ArrayList<>();
+            
+            for (SseEmitter emitter : logEmitters) {
+                try {
+                    emitter.send(SseEmitter.event().data(jsonStr));
+                } catch (Exception e) {
+                    deadEmitters.add(emitter);
+                }
+            }
+            
+            logEmitters.removeAll(deadEmitters);
+        }
+    }
 
     /**
      * 获取 AI 引擎统计信息
@@ -716,7 +832,7 @@ public class SysAiController {
         } catch (Exception e) {
             System.err.println("Redis save failed: " + e.getMessage());
         }
-        
+
         // 2. 存入 Vector DB 长期记忆
         try {
             JSONObject memoryAdd = new JSONObject();

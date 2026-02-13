@@ -45,17 +45,17 @@
               <!-- No.1 -->
               <div class="flex items-center gap-2">
                  <span class="material-icons-round text-yellow-500 text-2xl drop-shadow-sm animate-pulse">emoji_events</span>
-                 <span class="text-base font-bold text-slate-800 dark:text-slate-100 max-w-[80px] truncate">{{ topUsers[0]?.deptName || topUsers[0]?.nickname || topUsers[0]?.username }}</span>
+                 <span class="text-base font-bold text-slate-800 dark:text-slate-100 max-w-[80px] truncate">{{ dashboardRankType === 'user' ? (topUsers[0]?.nickname || topUsers[0]?.username) : topUsers[0]?.deptName }}</span>
               </div>
               <!-- No.2 -->
               <div class="flex items-center gap-2 opacity-90">
                  <span class="material-icons-round text-slate-400 text-xl">emoji_events</span>
-                 <span class="text-sm font-bold text-slate-600 dark:text-slate-300 max-w-[80px] truncate">{{ topUsers[1]?.deptName || topUsers[1]?.nickname || topUsers[1]?.username }}</span>
+                 <span class="text-sm font-bold text-slate-600 dark:text-slate-300 max-w-[80px] truncate">{{ dashboardRankType === 'user' ? (topUsers[1]?.nickname || topUsers[1]?.username) : topUsers[1]?.deptName }}</span>
               </div>
               <!-- No.3 -->
               <div class="flex items-center gap-2 opacity-80">
                  <span class="material-icons-round text-amber-700 text-xl">emoji_events</span>
-                 <span class="text-sm font-bold text-slate-600 dark:text-slate-300 max-w-[80px] truncate">{{ topUsers[2]?.deptName || topUsers[2]?.nickname || topUsers[2]?.username }}</span>
+                 <span class="text-sm font-bold text-slate-600 dark:text-slate-300 max-w-[80px] truncate">{{ dashboardRankType === 'user' ? (topUsers[2]?.nickname || topUsers[2]?.username) : topUsers[2]?.deptName }}</span>
               </div>
            </div>
         </div>
@@ -270,27 +270,27 @@
 
     <!-- Layer 3: Neural Stream (实时神经流) -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[600px]">
-       <!-- 索引构建日志 -->
-       <div class="rounded-2xl bg-[#1e293b] text-slate-300 border border-slate-700 shadow-inner overflow-hidden flex flex-col">
-          <div class="p-4 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
-             <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                <span class="material-icons-round text-emerald-400 text-sm animate-pulse">terminal</span>
-                索引构建流
-             </h3>
-             <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Live</span>
-          </div>
-          <div class="flex-1 p-4 overflow-y-auto font-mono text-xs space-y-3 custom-scrollbar">
-             <div v-for="(log, i) in indexLogs" :key="i" class="flex gap-3 opacity-80 hover:opacity-100 transition-opacity">
-                <span class="text-slate-500 shrink-0">[{{ log.time }}]</span>
-                <span :class="log.color">{{ log.msg }}</span>
-             </div>
-             <!-- Typing cursor -->
-             <div class="flex gap-2 items-center text-slate-500">
-                <span>>_</span>
-                <span class="w-2 h-4 bg-slate-500 animate-blink"></span>
-             </div>
-          </div>
-       </div>
+      <!-- 索引构建日志 -->
+      <div class="rounded-2xl bg-[#1e293b] text-slate-300 border border-slate-700 shadow-inner overflow-hidden flex flex-col">
+         <div class="p-4 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+               <span class="material-icons-round text-emerald-400 text-sm animate-pulse">terminal</span>
+               索引构建流
+            </h3>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Live</span>
+         </div>
+         <div ref="logContainerRef" class="flex-1 p-4 overflow-y-auto font-mono text-xs space-y-3 custom-scrollbar scroll-smooth">
+            <div v-for="(log, i) in indexLogs" :key="i" class="flex gap-3 opacity-80 hover:opacity-100 transition-opacity">
+               <span class="text-slate-500 shrink-0">[{{ log.time }}]</span>
+               <span :class="log.color">{{ log.msg }}</span>
+            </div>
+            <!-- Typing cursor -->
+            <div class="flex gap-2 items-center text-slate-500">
+               <span>>_</span>
+               <span class="w-2 h-4 bg-slate-500 animate-blink"></span>
+            </div>
+         </div>
+      </div>
 
        <!-- 实时问答流 -->
        <div class="lg:col-span-2 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 shadow-sm flex flex-col overflow-hidden">
@@ -757,14 +757,47 @@ const clearUserSelect = () => {
   fetchData()
 }
 
-// Mock Logs
-const indexLogs = ref([
-   { time: '10:42:01', msg: '检测到变更: SysUserController.java', color: 'text-blue-400' },
-   { time: '10:42:02', msg: '正在解析 AST 语法树...', color: 'text-slate-400' },
-   { time: '10:42:03', msg: '向量化完成: 提取 3 个方法，新增 12 个向量切片', color: 'text-emerald-400' },
-   { time: '10:45:12', msg: '检测到变更: index.vue', color: 'text-blue-400' },
-   { time: '10:45:15', msg: '索引更新完毕', color: 'text-emerald-400' }
-])
+// Log Stream
+const indexLogs = ref<{time: string, msg: string, color?: string}[]>([])
+let logEventSource: EventSource | null = null
+const logContainerRef = ref<HTMLElement | null>(null)
+
+// 自动滚动到底部
+const scrollToBottom = () => {
+  if (logContainerRef.value) {
+    nextTick(() => {
+      logContainerRef.value!.scrollTop = logContainerRef.value!.scrollHeight
+    })
+  }
+}
+
+const initLogStream = () => {
+  // 连接到后端 SSE 接口，请求 100 条历史记录
+  logEventSource = new EventSource('/api/system/ai/index/stream?limit=100')
+  
+  logEventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      // 使用 push 将新日志添加到末尾
+      indexLogs.value.push(data)
+      
+      // 保持最新的 500 条日志 (避免前端内存溢出)
+      if (indexLogs.value.length > 500) {
+        indexLogs.value.shift()
+      }
+      
+      // 收到消息后自动滚动到底部
+      scrollToBottom()
+    } catch (e) {
+      console.error('Failed to parse log message:', e)
+    }
+  }
+  
+  logEventSource.onerror = (err) => {
+    console.error('Log stream error:', err)
+    logEventSource?.close()
+  }
+}
 
 // Refs
 const radarRef = ref<HTMLElement>()
@@ -1336,6 +1369,7 @@ onMounted(() => {
   fetchData()
   nextTick(() => {
      initCharts()
+     initLogStream()
      window.addEventListener('resize', handleResize)
   })
 })
@@ -1345,6 +1379,10 @@ onUnmounted(() => {
    if (animationId) {
      cancelAnimationFrame(animationId)
      animationId = null
+   }
+   if (logEventSource) {
+     logEventSource.close()
+     logEventSource = null
    }
   if (radarZr) {
     radarZr.off('mousedown', onRadarDown)
