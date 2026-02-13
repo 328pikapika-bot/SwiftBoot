@@ -59,4 +59,12 @@ public class SysAiSession implements Serializable {
     @Schema(description = "用户名称")
     @TableField(exist = false)
     private String username;
+
+    @Schema(description = "用户昵称")
+    @TableField(exist = false)
+    private String nickname;
+
+    @Schema(description = "搜索关键字")
+    @TableField(exist = false)
+    private String keyword;
 }

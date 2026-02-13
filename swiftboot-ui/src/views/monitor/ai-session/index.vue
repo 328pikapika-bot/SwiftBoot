@@ -269,7 +269,7 @@
     </div>
 
     <!-- Layer 3: Neural Stream (实时神经流) -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[400px]">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[600px]">
        <!-- 索引构建日志 -->
        <div class="rounded-2xl bg-[#1e293b] text-slate-300 border border-slate-700 shadow-inner overflow-hidden flex flex-col">
           <div class="p-4 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
@@ -293,59 +293,90 @@
        </div>
 
        <!-- 实时问答流 -->
-       <div class="lg:col-span-2 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 shadow-sm flex flex-col">
-          <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
-             <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <span class="material-icons-round text-indigo-500">question_answer</span>
-                实时问答监控
-             </h3>
-             <div class="flex gap-2">
-                <input placeholder="搜索会话..." class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1 text-xs outline-none focus:border-blue-500 transition-colors" />
+       <div class="lg:col-span-2 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 shadow-sm flex flex-col overflow-hidden">
+          <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-wrap justify-between items-center gap-4">
+             <div class="flex flex-wrap items-center gap-4 flex-1">
+                <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 shrink-0">
+                   <span class="material-icons-round text-indigo-500">question_answer</span>
+                   实时问答监控
+                </h3>
+             </div>
+             <div class="flex gap-2 shrink-0">
+                <input 
+                  v-model="searchKeyword" 
+                  @keyup.enter="handleSearch"
+                  placeholder="搜索关键字 (提问/模型)..." 
+                  class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1 text-xs outline-none focus:border-blue-500 transition-colors w-48" 
+                />
              </div>
           </div>
           
-          <div class="flex-1 overflow-hidden" v-loading="loading">
+          <div class="flex-1 min-h-0 overflow-hidden" v-loading="loading">
              <div class="h-full overflow-y-auto custom-scrollbar">
                 <table class="w-full text-sm text-left">
                    <thead class="text-xs text-slate-500 bg-slate-50 dark:bg-slate-900/50 uppercase sticky top-0 backdrop-blur-sm z-10">
                       <tr>
-                         <th class="px-6 py-3 font-medium">用户</th>
-                         <th class="px-6 py-3 font-medium">提问摘要</th>
-                         <th class="px-6 py-3 font-medium">模型</th>
-                         <th class="px-6 py-3 font-medium text-center">耗时</th>
-                         <th class="px-6 py-3 font-medium text-right">时间</th>
+                         <th class="px-6 py-2.5 font-medium w-32">用户</th>
+                         <th class="px-6 py-2.5 font-medium">提问摘要</th>
+                         <th class="px-6 py-2.5 font-medium w-24">模型</th>
+                         <th class="px-6 py-2.5 font-medium text-center w-20">耗时</th>
+                         <th class="px-6 py-2.5 font-medium text-center w-20">Tokens</th>
+                         <th class="px-6 py-2.5 font-medium text-right w-32">时间</th>
+                         <th class="px-6 py-2.5 font-medium text-center w-20">操作</th>
                       </tr>
                    </thead>
                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
-                      <tr v-for="row in tableData" :key="row.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors group cursor-pointer">
-                         <td class="px-6 py-4">
-                            <div class="flex items-center gap-3">
-                               <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-indigo-500/20">
-                                  {{ (row.username || 'U').charAt(0).toUpperCase() }}
-                               </div>
-                               <span class="font-medium text-slate-700 dark:text-slate-200">{{ row.username }}</span>
-                            </div>
+                      <tr v-for="row in tableData" :key="row.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors group">
+                         <td class="px-6 py-3">
+                            <span class="font-medium text-slate-700 dark:text-slate-200">{{ row.nickname || row.username }}</span>
                          </td>
-                         <td class="px-6 py-4">
-                            <div class="max-w-xs truncate text-slate-600 dark:text-slate-400 group-hover:text-blue-500 transition-colors">{{ row.question }}</div>
+                         <td class="px-6 py-3">
+                            <div class="max-w-xs truncate text-slate-600 dark:text-slate-400 group-hover:text-blue-500 transition-colors" :title="row.question">{{ row.question }}</div>
                          </td>
-                         <td class="px-6 py-4">
+                         <td class="px-6 py-3">
                             <span class="px-2 py-1 rounded text-[10px] font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800">
-                               {{ row.model }}
+                               {{ formatModelName(row.model) }}
                             </span>
                          </td>
-                         <td class="px-6 py-4 text-center">
+                         <td class="px-6 py-3 text-center">
                             <span class="font-mono text-xs font-medium" :class="row.duration > 3000 ? 'text-orange-500' : 'text-emerald-500'">
                                {{ row.duration }}ms
                             </span>
                          </td>
-                         <td class="px-6 py-4 text-right text-slate-400 text-xs">
+                         <td class="px-6 py-3 text-center">
+                            <span class="font-mono text-xs font-medium text-slate-600 dark:text-slate-400">
+                               {{ row.tokens }}
+                            </span>
+                         </td>
+                         <td class="px-6 py-3 text-right text-slate-400 text-xs">
                             {{ row.createTime }}
+                         </td>
+                         <td class="px-6 py-3 text-center">
+                            <span 
+                               @click="openDetail(row)" 
+                               class="text-xs text-blue-500 hover:text-blue-600 font-medium hover:underline cursor-pointer whitespace-nowrap"
+                            >
+                               详情
+                            </span>
                          </td>
                       </tr>
                    </tbody>
                 </table>
              </div>
+          </div>
+          <!-- Pagination -->
+          <div class="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex justify-end">
+             <el-pagination
+                v-model:current-page="sessionPage.pageNum"
+                v-model:page-size="sessionPage.pageSize"
+                :page-sizes="[10, 15, 20, 50]"
+                :total="sessionPage.total"
+                layout="total, sizes, prev, pager, next, jumper"
+                size="small"
+                background
+                @size-change="fetchData"
+                @current-change="fetchData"
+             />
           </div>
        </div>
     </div>
@@ -525,6 +556,49 @@
       </div>
     </el-dialog>
 
+    <!-- 问答详情弹窗 -->
+    <el-dialog 
+      v-model="detailVisible" 
+      title="问答详情" 
+      width="800px" 
+      class="glass-dialog"
+      align-center
+      destroy-on-close
+    >
+      <div class="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar" v-if="currentDetail">
+         <!-- Question -->
+         <div class="flex gap-4">
+            <div class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+               <span class="material-icons-round text-slate-500">person</span>
+            </div>
+            <div class="flex-1 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl rounded-tl-none border border-slate-100 dark:border-slate-700/50">
+               <div class="text-xs text-slate-400 mb-1 flex justify-between">
+                  <span>{{ currentDetail.nickname || currentDetail.username }}</span>
+                  <span>{{ currentDetail.createTime }}</span>
+               </div>
+               <div class="text-sm text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">{{ currentDetail.question }}</div>
+            </div>
+         </div>
+
+         <!-- Answer -->
+         <div class="flex gap-4">
+            <div class="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
+               <span class="material-icons-round text-blue-500">smart_toy</span>
+            </div>
+            <div class="flex-1 bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-2xl rounded-tl-none border border-blue-100 dark:border-blue-800/30">
+               <div class="text-xs text-blue-400 mb-1 flex justify-between items-center">
+                  <span class="font-bold">AI 回答 ({{ currentDetail.model }})</span>
+                  <div class="flex gap-2">
+                     <span class="flex items-center gap-1"><span class="material-icons-round text-[10px]">schedule</span> {{ currentDetail.duration }}ms</span>
+                     <span class="flex items-center gap-1"><span class="material-icons-round text-[10px]">token</span> {{ currentDetail.tokens }}</span>
+                  </div>
+               </div>
+               <div class="text-sm text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap markdown-body">{{ currentDetail.answer }}</div>
+            </div>
+         </div>
+      </div>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -569,6 +643,31 @@ const stats = ref({
 
 const tableData = ref<any[]>([])
 const loading = ref(false)
+const searchKeyword = ref('')
+const detailVisible = ref(false)
+const currentDetail = ref<any>(null)
+
+const handleSearch = () => {
+  fetchData()
+}
+
+const openDetail = (row: any) => {
+  currentDetail.value = row
+  detailVisible.value = true
+}
+
+const formatModelName = (model: string) => {
+  if (!model) return '-'
+  model = model.toLowerCase()
+  if (model.includes('deepseek')) return 'DeepSeek'
+  if (model.includes('gemini') && model.includes('pro')) return 'Gemini Pro'
+  if (model.includes('gemini') && model.includes('flash')) return 'Gemini Flash'
+  if (model.includes('gemini')) return 'Gemini'
+  if (model.includes('gpt-4')) return 'GPT-4'
+  if (model.includes('gpt-3.5')) return 'GPT-3.5'
+  if (model.includes('claude')) return 'Claude'
+  return model.split('-')[0] // Fallback: take first part
+}
 
 // User Selection Logic
 const userSelectVisible = ref(false)
@@ -579,6 +678,12 @@ const timeRange = ref('week')
 const rankType = ref('user')
 const dashboardTimeRange = ref('week')
 const dashboardRankType = ref('user')
+
+const sessionPage = reactive({
+  pageNum: 1,
+  pageSize: 10,
+  total: 0
+})
 
 const userPage = reactive({
   pageNum: 1,
@@ -1201,15 +1306,20 @@ const fetchData = async () => {
       }
     }
     
-    const listQuery = { pageNum: 1, pageSize: 10 } as any
+    const listQuery = { pageNum: sessionPage.pageNum, pageSize: sessionPage.pageSize } as any
     if (selectedUserId.value) {
        listQuery.userId = selectedUserId.value
+    }
+    if (searchKeyword.value) {
+       listQuery.keyword = searchKeyword.value
     }
     const listRes = await listAiSession(listQuery)
     // @ts-ignore
     if (listRes.code === 200) {
       // @ts-ignore
-      tableData.value = listRes.rows || []
+      tableData.value = listRes.data?.list || []
+      // @ts-ignore
+      sessionPage.total = listRes.data?.total || 0
     }
   } catch (e) {
     console.error(e)
@@ -1263,17 +1373,24 @@ onUnmounted(() => {
 
 /* Custom Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+  width: 10px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(0,0,0,0.05);
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
+  background: #cbd5e1;
   border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #475569;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.dark .custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.05);
 }
 
 .toggle-switch {

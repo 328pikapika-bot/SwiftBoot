@@ -14,15 +14,14 @@
         <result property="duration" column="duration"/>
         <result property="createTime" column="create_time"/>
         <result property="username" column="username"/>
+        <result property="nickname" column="nickname"/>
     </resultMap>
 
-    <select id="selectAiSessionList" resultMap="SysAiSessionResult">
-        SELECT s.*, 
-               CASE WHEN s.user_id = 1 THEN '超级管理员' ELSE u.username END as username
+    <select id="selectAiSessionList" resultType="com.swiftboot.admin.domain.entity.SysAiSession">
+        SELECT s.*, u.nickname, u.username
         FROM sys_ai_session s
         LEFT JOIN sys_user u ON s.user_id = u.id
         <where>
-            AND s.deleted = 0
             <if test="userId != null">
                 AND s.user_id = #{userId}
             </if>
@@ -34,6 +33,9 @@
             </if>
             <if test="model != null and model != ''">
                 AND s.model LIKE concat('%', #{model}, '%')
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (s.question LIKE concat('%', #{keyword}, '%') OR s.model LIKE concat('%', #{keyword}, '%'))
             </if>
         </where>
         ORDER BY s.create_time DESC

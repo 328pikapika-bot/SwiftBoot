@@ -42,7 +42,7 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
     @Override
     public Page<SysAiSession> selectAiSessionPage(SysAiSession session, PageQuery pageQuery) {
         Page<SysAiSession> page = new Page<>(pageQuery.getPageNum(), pageQuery.getPageSize());
-        return baseMapper.selectAiSessionList(page, session.getUserId(), session.getUsername(), session.getQuestion(), session.getModel());
+        return baseMapper.selectAiSessionList(page, session.getUserId(), session.getUsername(), session.getQuestion(), session.getModel(), session.getKeyword());
     }
 
     @Override

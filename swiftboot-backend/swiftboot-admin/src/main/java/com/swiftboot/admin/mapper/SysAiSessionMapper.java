@@ -22,7 +22,8 @@ public interface SysAiSessionMapper extends BaseMapper<SysAiSession> {
     Page<SysAiSession> selectAiSessionList(Page<SysAiSession> page, @Param("userId") Long userId, 
                                          @Param("username") String username, 
                                          @Param("question") String question, 
-                                         @Param("model") String model);
+                                         @Param("model") String model,
+                                         @Param("keyword") String keyword);
 
     /**
      * 统计范围数据
