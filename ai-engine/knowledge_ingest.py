@@ -554,6 +554,112 @@ class JavaParser:
         return chunks
 
 
+class MarkdownParser:
+    """
+    Markdown 文档解析器
+    负责解析 .md 文件，按标题层级进行切片。
+    """
+    def parse_file(self, file_path: str) -> List[Dict]:
+        if not os.path.exists(file_path):
+            return []
+            
+        chunks = []
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            lines = content.split('\n')
+            current_chunk = []
+            current_header = "Intro"
+            file_name = os.path.basename(file_path)
+            
+            for line in lines:
+                if line.strip().startswith('#'):
+                    # 保存上一个块
+                    if current_chunk:
+                        text = "\n".join(current_chunk).strip()
+                        if text:
+                            chunks.append({
+                                "type": "markdown_section",
+                                "name": f"{file_name}#{current_header}",
+                                "content": f"File: {file_name}\nSection: {current_header}\n\n{text}",
+                                "file_path": file_path
+                            })
+                    
+                    # 开始新块
+                    current_header = line.strip().lstrip('#').strip()
+                    current_chunk = [line]
+                else:
+                    current_chunk.append(line)
+            
+            # 保存最后一个块
+            if current_chunk:
+                text = "\n".join(current_chunk).strip()
+                if text:
+                    chunks.append({
+                        "type": "markdown_section",
+                        "name": f"{file_name}#{current_header}",
+                        "content": f"File: {file_name}\nSection: {current_header}\n\n{text}",
+                        "file_path": file_path
+                    })
+                    
+        except Exception as e:
+            print(f"Error parsing Markdown {file_path}: {e}")
+            
+        return chunks
+
+class TypeScriptParser:
+    """
+    TypeScript/JavaScript 代码解析器
+    """
+    def parse_file(self, file_path: str) -> List[Dict]:
+        if not os.path.exists(file_path):
+            return []
+            
+        chunks = []
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            file_name = os.path.basename(file_path)
+            
+            # 简单提取 export const/function/class
+            # 1. Exported Functions
+            func_pattern = re.compile(r'export\s+(?:async\s+)?function\s+(\w+)\s*\(', re.MULTILINE)
+            for match in func_pattern.finditer(content):
+                func_name = match.group(1)
+                chunks.append({
+                    "type": "ts_function",
+                    "name": func_name,
+                    "content": f"File: {file_name}\nFunction: {func_name}\n\n(See file content for implementation)", # 简化，避免正则匹配括号的复杂性
+                    "file_path": file_path
+                })
+                
+            # 2. Exported Interfaces/Types
+            type_pattern = re.compile(r'export\s+(?:interface|type)\s+(\w+)', re.MULTILINE)
+            for match in type_pattern.finditer(content):
+                type_name = match.group(1)
+                chunks.append({
+                    "type": "ts_type",
+                    "name": type_name,
+                    "content": f"File: {file_name}\nType: {type_name}",
+                    "file_path": file_path
+                })
+
+            # 如果没有提取到特定结构，整个文件作为一个块
+            if not chunks:
+                 chunks.append({
+                    "type": "ts_code",
+                    "name": file_name,
+                    "content": f"File: {file_name}\n\n{content}",
+                    "file_path": file_path
+                })
+                
+        except Exception as e:
+            print(f"Error parsing TS file {file_path}: {e}")
+            
+        return chunks
+
 class VueComponentParser:
     """
     Vue 组件解析器

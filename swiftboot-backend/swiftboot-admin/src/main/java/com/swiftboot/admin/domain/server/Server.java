@@ -137,16 +137,23 @@ public class Server {
         mem.setFree(memory.getAvailable());
     }
 
+    // 系统信息缓存（IP、Hostname等基本不变的信息）
+    private static Sys cachedSys = null;
+    
     /**
-     * 设置服务器信息
+     * 设置服务器信息（带缓存）
      */
     private void setSysInfo() {
-        Properties props = System.getProperties();
-        sys.setComputerName(getComputerName());
-        sys.setComputerIp(getHostIp());
-        sys.setOsName(props.getProperty("os.name"));
-        sys.setOsArch(props.getProperty("os.arch"));
-        sys.setUserDir(props.getProperty("user.dir"));
+        if (cachedSys == null) {
+            Properties props = System.getProperties();
+            cachedSys = new Sys();
+            cachedSys.setComputerName(getComputerName());
+            cachedSys.setComputerIp(getHostIp());
+            cachedSys.setOsName(props.getProperty("os.name"));
+            cachedSys.setOsArch(props.getProperty("os.arch"));
+            cachedSys.setUserDir(props.getProperty("user.dir"));
+        }
+        this.sys = cachedSys;
     }
 
     /**

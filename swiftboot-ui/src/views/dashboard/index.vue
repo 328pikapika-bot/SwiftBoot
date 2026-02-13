@@ -141,9 +141,9 @@
     </div>
 
     <!-- Bottom Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
       <!-- RAG Insight Card -->
-      <div class="lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
+      <div class="lg:col-span-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
         <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
           <div class="flex items-center gap-3">
             <span class="material-icons-round text-blue-500">psychology</span>
@@ -199,20 +199,20 @@
             </span>
           </button>
         </div>
-        <div class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- Left: Vector Logs -->
           <div class="space-y-6">
              <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                 <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
                 向量索引更新
              </h3>
-             <div v-for="log in vectorLogs" :key="log.id" class="flex gap-4">
+             <div v-for="log in vectorLogs" :key="log.id" class="flex gap-3">
                 <div class="mt-1 w-2 h-2 rounded-full shrink-0" :class="getBusinessTypeColor(log)"></div>
                 <div>
-                  <div class="text-sm font-medium text-slate-900 dark:text-white">
-                    <span class="font-bold text-slate-700 dark:text-slate-200">{{ log.operName }}</span> 
+                  <div class="text-sm font-medium text-slate-900 dark:text-white truncate max-w-[280px]">
+                    <span class="font-bold text-slate-700 dark:text-slate-200">{{ getDisplayOperName(log) }}</span> 
                     {{ getLogAction(log) }} 
-                    {{ log.title.replace(/完成$/, '') }}
+                    <span v-html="formatLogTitle(log.title)"></span>
                   </div>
                   <div class="text-xs text-slate-500 mt-1">{{ formatTimeAgo(log.operTime) }}</div>
                 </div>
@@ -223,18 +223,18 @@
           </div>
 
           <!-- Right: User Logs -->
-          <div class="space-y-6 border-l border-slate-100 dark:border-slate-800 pl-8 lg:block hidden">
+          <div class="space-y-6 border-l border-slate-100 dark:border-slate-800 pl-6 lg:block hidden">
              <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                 用户操作动态
              </h3>
-             <div v-for="log in operLogs" :key="log.id" class="flex gap-4">
+             <div v-for="log in operLogs" :key="log.id" class="flex gap-3">
                 <div class="mt-1 w-2 h-2 rounded-full shrink-0" :class="getBusinessTypeColor(log)"></div>
                 <div>
-                  <div class="text-sm font-medium text-slate-900 dark:text-white">
-                    <span class="font-bold text-slate-700 dark:text-slate-200">{{ log.operName }}</span> 
+                  <div class="text-sm font-medium text-slate-900 dark:text-white truncate max-w-[280px]">
+                    <span class="font-bold text-slate-700 dark:text-slate-200">{{ getDisplayOperName(log) }}</span> 
                     {{ getLogAction(log) }} 
-                    {{ log.title.replace(/完成$/, '') }}
+                    <span v-html="formatLogTitle(log.title)"></span>
                   </div>
                   <div class="text-xs text-slate-500 mt-1">{{ formatTimeAgo(log.operTime) }}</div>
                 </div>
@@ -341,6 +341,17 @@ const getBusinessTypeColor = (log: any) => {
   if (log.title && log.title.includes('RAG 向量索引更新')) {
     return 'bg-purple-500' // RAG 更新显示紫色
   }
+  
+  if (log.title) {
+      if (log.title.includes('后端变更')) return 'bg-blue-500'
+      if (log.title.includes('前端变更')) return 'bg-orange-500'
+      if (log.title.includes('文件变更')) return 'bg-slate-400'
+  }
+  
+  // 兼容旧数据：如果 operName 是 '前端'/'后端'
+  if (log.operName === '后端') return 'bg-blue-500'
+  if (log.operName === '前端') return 'bg-orange-500'
+  
   // 超级管理员操作显示绿色 (假设 admin 的 operName 为 'admin' 或 '超级管理员')
   // 也可以根据 log.operName === 'admin' 来判断
   if (log.operName === 'admin' || log.operName === '超级管理员') {
@@ -354,8 +365,32 @@ const getLogAction = (log: any) => {
   if (log.title && log.title.includes('RAG 向量索引更新')) {
     return '完成'
   }
+  // AI Engine 或 兼容旧的 前端/后端 operName，都不显示动作（因为动作在 title 里或不需要）
+  if (log.operName === 'AI Engine' || log.operName === '前端' || log.operName === '后端') {
+      return ''
+  }
   return getBusinessTypeAction(log.businessType)
 }
+
+const formatLogTitle = (title: string) => {
+    if (!title) return ''
+    let res = title.replace(/完成$/, '')
+    
+    // Replace keywords with colored spans
+    res = res.replace(/(后端)/g, '<span class="text-blue-500 font-bold">$1</span>')
+    res = res.replace(/(前端)/g, '<span class="text-orange-500 font-bold">$1</span>')
+    res = res.replace(/(文件)/g, '<span class="text-slate-500 font-bold">$1</span>')
+    
+    return res
+}
+
+const getDisplayOperName = (log: any) => {
+    if (log.operName === '前端' || log.operName === '后端') {
+        return 'AI Engine'
+    }
+    return log.operName
+}
+
 
 const getBusinessTypeAction = (type: number) => {
   switch (type) {

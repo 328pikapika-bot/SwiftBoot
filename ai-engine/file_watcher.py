@@ -4,7 +4,7 @@ import json
 import threading
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from knowledge_ingest import JavaParser, PythonParser, VueComponentParser
+from knowledge_ingest import JavaParser, PythonParser, VueComponentParser, MarkdownParser, TypeScriptParser
 from vector_store import VectorStore
 
 # ==========================================
@@ -13,8 +13,23 @@ from vector_store import VectorStore
 # 监听的目录（递归监听）
 # 使用相对路径：当前脚本所在目录(ai-engine)的上一级目录(SwiftBoot)
 WATCH_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-# 忽略的目录（可选）
-IGNORE_DIRS = [".git", "target", "build", "node_modules", "dist", ".idea", ".vscode", "__pycache__", "chroma_db"]
+
+# 白名单配置
+ALLOWED_ROOT_DIRS = [
+    "swiftboot-backend",
+    "swiftboot-ui",
+    "devDoc",
+    "project-skills",
+    "ai-engine",
+    "快速启动",
+    "release_notes"
+]
+ALLOWED_ROOT_FILES = ["README.md"]
+
+# 黑名单配置 (子目录/文件)
+IGNORE_DIRS = [".git", "target", "build", "node_modules", "dist", ".idea", ".vscode", "__pycache__", "chroma_db", "logs", "javadoc", "classes", "generated-sources", "public"]
+IGNORE_FILENAMES = ["auto-imports.d.ts", "components.d.ts", "tsconfig.tsbuildinfo", "vite-env.d.ts", "typed-router.d.ts"]
+
 # 状态文件路径
 STATE_FILE = os.path.join(os.path.dirname(__file__), "file_state.json")
 
@@ -22,19 +37,23 @@ def load_state():
     if os.path.exists(STATE_FILE):
         try:
             with open(STATE_FILE, 'r', encoding='utf-8') as f:
-                state = json.load(f)
+                content = f.read().strip()
+                if not content:
+                    return {}
+                state = json.loads(content)
                 print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 成功加载状态文件，共 {len(state)} 条记录。")
                 return state
         except Exception as e:
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 加载状态文件失败: {e}")
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 状态文件解析异常 (将重新生成): {e}")
             return {}
-    return {}
+    else:
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 状态文件不存在，将执行全量扫描。")
+        return {}
 
 def save_state(state):
     try:
         with open(STATE_FILE, 'w', encoding='utf-8') as f:
             json.dump(state, f, ensure_ascii=False, indent=2)
-            # print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 状态已保存。") 
     except Exception as e:
         print(f"保存状态失败: {e}")
 
@@ -48,6 +67,8 @@ class CodeChangeHandler(FileSystemEventHandler):
         self.java_parser = JavaParser()
         self.py_parser = PythonParser()
         self.vue_parser = VueComponentParser()
+        self.md_parser = MarkdownParser()
+        self.ts_parser = TypeScriptParser()
         self.db = VectorStore()
         self.last_processed = {}  # 简单的防抖动机制 {path: timestamp}
         self.file_state = file_state
@@ -88,8 +109,7 @@ class CodeChangeHandler(FileSystemEventHandler):
         self._process_event(event)
     
     def on_moved(self, event):
-        # 如果文件移动了，旧路径的记录应该删除，新路径的记录应该添加
-        if not event.is_directory and (event.src_path.endswith(".java") or event.src_path.endswith(".py") or event.src_path.endswith(".vue")):
+        if not event.is_directory and self._is_allowed_path(event.src_path):
              print(f"\n[{self._now()}][检测到文件移动] {event.src_path} -> {event.dest_path}")
              # 1. 删除旧文件的向量数据
              self.db.delete_by_source(os.path.basename(event.src_path))
@@ -99,7 +119,6 @@ class CodeChangeHandler(FileSystemEventHandler):
                  del self.file_state[norm_src]
                  save_state(self.file_state)
                  
-                 
              # 2. 处理新文件（模拟一个 created 事件）
              class MockEvent:
                  is_directory = False
@@ -107,7 +126,7 @@ class CodeChangeHandler(FileSystemEventHandler):
              self._process_event(MockEvent())
 
     def on_deleted(self, event):
-        if not event.is_directory and (event.src_path.endswith(".java") or event.src_path.endswith(".py") or event.src_path.endswith(".vue")):
+        if not event.is_directory and self._is_allowed_path(event.src_path):
             file_name = os.path.basename(event.src_path)
             print(f"\n[{self._now()}][检测到文件删除] {file_name}")
             # 从向量库中移除该文件的所有切片
@@ -118,6 +137,44 @@ class CodeChangeHandler(FileSystemEventHandler):
                 del self.file_state[norm_src]
                 save_state(self.file_state)
 
+    def _is_valid_ext(self, filename):
+        valid_exts = (".java", ".py", ".md", ".doc", ".vue", ".ts")
+        return filename.lower().endswith(valid_exts)
+
+    def _is_allowed_path(self, filename):
+        """
+        基于白名单和黑名单检查文件是否允许被处理
+        """
+        rel_path = os.path.relpath(filename, WATCH_DIR)
+        path_parts = rel_path.split(os.sep)
+        
+        # 1. 检查是否在允许的根目录中
+        top_dir = path_parts[0]
+        
+        # 如果是根目录下的文件
+        if len(path_parts) == 1:
+            return top_dir in ALLOWED_ROOT_FILES
+            
+        # 如果是目录中的文件
+        if top_dir not in ALLOWED_ROOT_DIRS:
+            return False
+            
+        # 2. 检查黑名单 (子目录)
+        for part in path_parts:
+            if part in IGNORE_DIRS:
+                return False
+                
+        # 3. 检查黑名单 (文件名)
+        if os.path.basename(filename).lower() in [f.lower() for f in IGNORE_FILENAMES]:
+            return False
+            
+        # 4. 检查扩展名
+        # 排除 .d.ts 定义文件
+        if filename.lower().endswith(".d.ts"):
+            return False
+            
+        return self._is_valid_ext(filename)
+
     def _process_event(self, event):
         """
         统一处理文件变更的核心逻辑
@@ -126,22 +183,35 @@ class CodeChangeHandler(FileSystemEventHandler):
             return
         
         filename = event.src_path
-        if not (filename.endswith(".java") or filename.endswith(".py") or filename.endswith(".vue")):
+        
+        # 使用新的白名单逻辑检查
+        if not self._is_allowed_path(filename):
             return
 
         # 简单的防抖动：1秒内不重复处理同一个文件
-        # 防止编辑器保存时可能触发多次事件
         now = time.time()
         if filename in self.last_processed:
             if now - self.last_processed[filename] < 1:
                 return
         self.last_processed[filename] = now
 
-        # 区分前后端
-        is_frontend = filename.endswith(".vue") or "swiftboot-ui" in filename
-        change_type = "前端" if is_frontend else "后端"
+        # 区分前后端变更类型
+        rel_path = os.path.relpath(filename, WATCH_DIR)
+        top_dir = rel_path.split(os.sep)[0]
         
-        print(f"\n[{self._now()}][检测到{change_type}代码变更] {filename}")
+        change_type = "文件" # 默认类型
+        
+        # 后端规则
+        if top_dir in ["swiftboot-backend", "ai-engine"]:
+            if filename.lower().endswith((".java", ".py", ".md")):
+                change_type = "后端"
+        
+        # 前端规则
+        elif top_dir == "swiftboot-ui":
+            if filename.lower().endswith((".md", ".doc", ".vue", ".ts")):
+                change_type = "前端"
+        
+        print(f"\n[{self._now()}][检测到{change_type}变更] {filename}")
         
         try:
             # 1. 提取文件名作为 Source ID
@@ -152,14 +222,17 @@ class CodeChangeHandler(FileSystemEventHandler):
 
             # 3. 重新解析代码文件
             print(f"[{self._now()}]正在重新解析代码...")
+            chunks = []
             if filename.endswith(".java"):
                 chunks = self.java_parser.parse_file(filename)
             elif filename.endswith(".py"):
                 chunks = self.py_parser.parse_file(filename)
             elif filename.endswith(".vue"):
                 chunks = self.vue_parser.parse_file(filename)
-            else:
-                chunks = []
+            elif filename.endswith((".md", ".doc")):
+                chunks = self.md_parser.parse_file(filename)
+            elif filename.endswith((".ts", ".js")):
+                chunks = self.ts_parser.parse_file(filename)
             
             if chunks:
                 # 补充 source 字段
@@ -172,8 +245,8 @@ class CodeChangeHandler(FileSystemEventHandler):
                 
                 # 5. 记录到后端操作日志 (通过 HTTP 调用)
                 try:
-                    msg = f"检测到变更: {os.path.basename(filename)}"
-                    self.db._log_to_backend(msg, change_type)
+                    msg = f"检测到{change_type}变更: {os.path.basename(filename)}"
+                    self.db._log_to_backend(msg, "AI Engine")
                     
                     # 累加更新计数
                     with self.update_lock:
@@ -203,19 +276,25 @@ if __name__ == "__main__":
         exit(1)
 
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]启动代码监听服务 (Watchdog)...")
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]正在监控目录: {WATCH_DIR}")
     
     # ==========================================
     # 启动时增量代码扫描
     # ==========================================
-    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]正在执行代码扫描 (增量模式): {WATCH_DIR} ...")
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]正在执行代码扫描 (增量模式)...")
+    
+    # 实例化所有解析器
     java_parser = JavaParser()
     py_parser = PythonParser()
     vue_parser = VueComponentParser()
+    md_parser = MarkdownParser()
+    ts_parser = TypeScriptParser()
+    
     db = VectorStore()
     
     # 加载上次的文件状态
     file_state = load_state()
-    # 如果加载出来的状态 key 不是全小写，做一次规范化
+    is_first_run = len(file_state) == 0
     if file_state:
         file_state = {os.path.normpath(k).lower(): v for k, v in file_state.items()}
         
@@ -223,85 +302,112 @@ if __name__ == "__main__":
     
     count = 0
     skip_count = 0
-    
-    # 批量更新计数器
     batch_update_count = 0
     
+    # 使用 os.walk 遍历，但进行剪枝优化
     for root, dirs, files in os.walk(WATCH_DIR):
-        # 过滤忽略目录
-        dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
-        
+        # 1. 剪枝：只允许特定的根目录
+        if os.path.normpath(root) == os.path.normpath(WATCH_DIR):
+            # 只保留白名单中的目录
+            dirs[:] = [d for d in dirs if d in ALLOWED_ROOT_DIRS]
+        else:
+            # 2. 剪枝：排除黑名单中的子目录
+            dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
+            
         for file in files:
-            if file.endswith(".java") or file.endswith(".py") or file.endswith(".vue"):
-                file_path = os.path.join(root, file)
-                # 统一路径格式（Windows下不区分大小写，统一转小写以避免盘符差异）
-                norm_path = os.path.normpath(file_path).lower()
+            file_path = os.path.join(root, file)
+            
+            # 使用统一的路径检查逻辑
+            # 注意：我们需要实例化 CodeChangeHandler 才能调用 _is_allowed_path，或者提取为静态方法
+            # 这里简单重写一下逻辑以保持独立性
+            
+            # 检查扩展名
+            valid_exts = (".java", ".py", ".md", ".doc", ".vue", ".ts")
+            if not file.lower().endswith(valid_exts):
+                continue
                 
-                try:
-                    # 获取当前修改时间
-                    mtime = os.path.getmtime(file_path)
-                    new_file_state[norm_path] = mtime
-                    
-                    # 检查是否需要更新
-                    # 注意：如果 file_state 为空（首次运行或状态丢失），则不跳过，执行全量同步
-                    if norm_path in file_state and abs(file_state[norm_path] - mtime) < 0.001:
-                        skip_count += 1
-                        # 确保旧状态也被保留到新状态中（虽然上面已经赋值了，这里逻辑是正确的）
-                        continue
+            # 检查黑名单文件名
+            if file.lower() in [f.lower() for f in IGNORE_FILENAMES]:
+                continue
+                
+            # 排除 .d.ts
+            if file.lower().endswith(".d.ts"):
+                continue
+                
+            # 检查是否是根目录下的允许文件
+            if os.path.normpath(root) == os.path.normpath(WATCH_DIR):
+                if file not in ALLOWED_ROOT_FILES:
+                    continue
+            
+            # 统一路径格式
+            norm_path = os.path.normpath(file_path).lower()
+            
+            try:
+                mtime = os.path.getmtime(file_path)
+                new_file_state[norm_path] = mtime
+                
+                if norm_path in file_state and abs(file_state[norm_path] - mtime) < 0.1:
+                    skip_count += 1
+                    continue
 
-                    source_id = os.path.basename(file_path)
-                    # 先清理旧数据
-                    db.delete_by_source(source_id)
+                source_id = os.path.basename(file_path)
+                db.delete_by_source(source_id)
+                
+                chunks = []
+                if file.endswith(".java"):
+                    chunks = java_parser.parse_file(file_path)
+                elif file.endswith(".py"):
+                    chunks = py_parser.parse_file(file_path)
+                elif file.endswith(".vue"):
+                    chunks = vue_parser.parse_file(file_path)
+                elif file.endswith((".md", ".doc")):
+                    chunks = md_parser.parse_file(file_path)
+                elif file.endswith((".ts", ".js")):
+                    chunks = ts_parser.parse_file(file_path)
                     
-                    if file_path.endswith(".java"):
-                        chunks = java_parser.parse_file(file_path)
-                    elif file_path.endswith(".py"):
-                        chunks = py_parser.parse_file(file_path)
-                    elif file_path.endswith(".vue"):
-                        chunks = vue_parser.parse_file(file_path)
-                    else:
-                        chunks = []
-                        
-                    if chunks:
-                        for chunk in chunks:
-                            chunk['source'] = source_id
-                        db.add_documents(chunks)
-                        batch_update_count += len(chunks)
-                        count += 1
-                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{count}] 已同步变更: {source_id} ({len(chunks)} 块)")
-                except Exception as e:
-                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]索引文件失败 {file}: {e}")
+                if chunks:
+                    for chunk in chunks:
+                        chunk['source'] = source_id
+                    db.add_documents(chunks)
+                    batch_update_count += len(chunks)
+                    count += 1
+                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{count}] 已同步变更: {source_id} ({len(chunks)} 块)")
+            except Exception as e:
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]索引文件失败 {file}: {e}")
 
-    # 处理在停止期间被删除的文件
+    # 处理删除文件
     deleted_count = 0
-    # 注意：这里加载出来的 file_state 的 key 应该是已经 norm_path 处理过的（如果是从上次保存读取的）
-    # 但为了保险，我们在读取 load_state 后可以做一次规范化，或者假设它是规范的
     for old_path in file_state:
         if old_path not in new_file_state:
+            # 额外检查：只有当旧文件路径属于我们现在的关注范围时，才去尝试删除
+            # 这样可以避免因为更改了白名单规则而误删之前索引的数据（虽然清理一下也好，但为了稳妥）
+            # 这里简单起见，只要不在新状态里，就认为是删除了（或者不再被监控了），直接清理
             try:
                 source_id = os.path.basename(old_path)
-                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 检测到文件已删除: {old_path}")
+                # print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 检测到文件已删除或不再监控: {old_path}")
                 db.delete_by_source(source_id)
                 deleted_count += 1
             except Exception as e:
                 print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 删除失效索引失败: {e}")
 
-    # 保存最新状态
     save_state(new_file_state)
-                    
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]扫描完成！同步 {count} 个文件，跳过 {skip_count} 个文件，移除 {deleted_count} 个失效文件。")
 
-    # 启动时如果有更新，统一记录一次日志
-    if batch_update_count > 0:
+    if is_first_run:
         try:
-            db._log_to_backend(f"{batch_update_count}条RAG 向量索引更新完成", "AI Engine")
+            msg = f"初始化切片库完成，同步 {count} 个文件，跳过 {skip_count} 个文件，移除 {deleted_count} 个失效文件。"
+            db._log_to_backend(msg, "AI Engine")
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]已触发初始化完成日志同步。")
+        except Exception as e:
+            print(f"日志同步失败: {e}")
+    elif batch_update_count > 0:
+        try:
+            msg = f"{batch_update_count}条RAG 向量索引更新完成"
+            db._log_to_backend(msg, "AI Engine")
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]已触发启动时批量更新日志同步。")
         except Exception as e:
             print(f"日志同步失败: {e}")
-    # ==========================================
-
-    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]正在监控目录: {WATCH_DIR}")
-    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]当你修改、保存 .java 文件时，系统会自动更新向量数据库。")
+            
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]按 Ctrl+C 停止服务。")
 
     event_handler = CodeChangeHandler(new_file_state)

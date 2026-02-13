@@ -19,8 +19,15 @@
         <module name="common-redis" />
         <module name="common-core" />
       </profile>
+      <profile name="Annotation profile for Unknown" enabled="true">
+        <sourceOutputDir name="../target/generated-sources/annotations" />
+        <sourceTestOutputDir name="../target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name=".mvn" />
+      </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
+      <module name=".mvn" target="1.5" />
       <module name="common-core" target="17" />
       <module name="common-log" target="17" />
       <module name="common-redis" target="17" />
