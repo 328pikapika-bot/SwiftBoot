@@ -416,9 +416,11 @@
              <span class="material-icons-round text-slate-400 text-sm absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">expand_more</span>
           </div>
 
-          <button @click="userSelectVisible = false" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400">
-            <span class="material-icons-round">close</span>
-          </button>
+          <div @click="userSelectVisible = false" class="cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
         </div>
       </div>
 
@@ -589,7 +591,7 @@
                      <span class="flex items-center gap-1"><span class="material-icons-round text-[10px]">token</span> {{ currentDetail.tokens }}</span>
                   </div>
                </div>
-               <div class="text-sm text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap markdown-body">{{ currentDetail.answer }}</div>
+               <div class="text-sm text-slate-800 dark:text-slate-200 leading-relaxed markdown-body" v-html="renderMarkdown(currentDetail.answer)"></div>
             </div>
          </div>
       </div>
@@ -717,6 +719,10 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, reactive, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
+import MarkdownIt from 'markdown-it'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/atom-one-dark.css'
+import 'github-markdown-css/github-markdown.css'
 import { getDashboardStats, listAiSession, getUserTokenStats } from '@/api/monitor/ai-session'
 import { changeStatus } from '@/api/system/user'
 import type { User } from '@/api/system/user'
@@ -794,6 +800,28 @@ const radarDetailVisible = ref(false)
 
 const openRadarDetail = () => {
   radarDetailVisible.value = true
+}
+
+// Markdown Renderer
+const md = new MarkdownIt({
+  html: true,
+  linkify: true,
+  typographer: true,
+  highlight: function (str, lang) {
+    if (lang && hljs.getLanguage(lang)) {
+      try {
+        return '<pre class="hljs"><code>' +
+               hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
+               '</code></pre>';
+      } catch (__) {}
+    }
+    return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
+  }
+})
+
+const renderMarkdown = (text: string) => {
+  if (!text) return ''
+  return md.render(text)
 }
 
 const handleSearch = () => {
@@ -1176,16 +1204,23 @@ const initCharts = () => {
      
      if (range === 'month') {
         for (let i = 6; i >= 0; i--) {
-           const d = new Date()
-           d.setMonth(d.getMonth() - i)
-           xAxisData.push(`${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`)
+           if (i === 0) {
+             xAxisData.push('本月')
+           } else if (i === 1) {
+             xAxisData.push('上月')
+           } else {
+             xAxisData.push(`前${i}月`)
+           }
         }
      } else if (range === 'week') {
         for (let i = 6; i >= 0; i--) {
-           const d = new Date()
-           d.setDate(d.getDate() - i * 7)
-           const weekNum = Math.ceil((d.getDate() + 6 - d.getDay()) / 7)
-           xAxisData.push(`${d.getMonth() + 1}月第${weekNum}周`)
+           if (i === 0) {
+             xAxisData.push('本周')
+           } else if (i === 1) {
+             xAxisData.push('上周')
+           } else {
+             xAxisData.push(`前${i}周`)
+           }
         }
      } else {
         // Default to 'day' (last 7 days)
