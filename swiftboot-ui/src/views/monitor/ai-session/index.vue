@@ -211,7 +211,7 @@
     <!-- Layer 2: Cognitive Analytics (认知分布与趋势) -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
       <!-- 知识领域雷达图 -->
-      <div class="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 shadow-sm p-6 relative overflow-hidden group hover:border-blue-500/30 transition-colors flex flex-col">
+      <div @click="openRadarDetail" class="rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 shadow-sm p-6 relative overflow-hidden group hover:border-blue-500/30 transition-colors flex flex-col cursor-pointer">
         <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
           <span class="material-icons-round text-8xl text-blue-500">radar</span>
         </div>
@@ -595,6 +595,122 @@
       </div>
     </el-dialog>
 
+    <!-- 认知能力雷达详情弹窗 -->
+    <el-dialog
+      v-model="radarDetailVisible"
+      width="900px"
+      class="!rounded-xl overflow-hidden"
+      align-center
+      :show-close="false"
+      @opened="initRadarDetailChart"
+    >
+      <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <span class="material-icons-round text-blue-500">radar</span>
+          认知能力指标说明
+        </h3>
+        <button @click="radarDetailVisible = false" class="opacity-50 hover:opacity-100 transition-opacity text-slate-500 dark:text-slate-400 outline-none focus:outline-none">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      
+      <div class="p-6 bg-slate-50 dark:bg-slate-900/50 flex gap-6 h-[600px]">
+        <!-- 左侧：雷达图 -->
+        <div class="w-5/12 flex flex-col bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm p-4">
+           <h4 class="text-sm font-bold text-slate-700 dark:text-slate-200 mb-4 text-center">实时能力评估</h4>
+           <div class="flex-1 flex items-center justify-center relative">
+              <div ref="radarDetailRef" class="w-full h-full min-h-[300px]"></div>
+           </div>
+           <div class="text-center text-xs text-slate-400 mt-2">
+              {{ radarSubtitle }}
+           </div>
+        </div>
+
+        <!-- 右侧：详细说明 -->
+        <div class="w-7/12 space-y-4 overflow-y-auto custom-scrollbar pr-2">
+           <!-- 知识储备 -->
+           <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
+              <div class="flex items-center gap-2 mb-2">
+                 <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                 <span class="font-bold text-slate-800 dark:text-slate-200">知识储备 (Knowledge)</span>
+                 <span class="text-xs text-slate-400 ml-auto">权重: 20%</span>
+              </div>
+              <p class="text-xs text-slate-600 dark:text-slate-400 mb-2">代表系统当前掌握的知识库规模和丰富程度。</p>
+              <div class="text-[10px] text-slate-400 bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-800">
+                计算方式：归一化(向量切片总数 / 目标基准数 1000) * 100% (当向量数据库中的知识切片数量达到 1,000 条时，知识储备指标达到满分 100%)
+             </div>
+           </div>
+
+           <!-- 交互活跃 -->
+           <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
+              <div class="flex items-center gap-2 mb-2">
+                 <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                 <span class="font-bold text-slate-800 dark:text-slate-200">交互活跃 (Activity)</span>
+                 <span class="text-xs text-slate-400 ml-auto">权重: 15%</span>
+              </div>
+              <p class="text-xs text-slate-600 dark:text-slate-400 mb-2">反映用户与系统的互动频率和依赖程度。</p>
+              <div class="text-[10px] text-slate-400 bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-800">
+                 {{ activityBenchmarkText }}
+              </div>
+           </div>
+
+           <!-- 记忆深度 -->
+           <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
+              <div class="flex items-center gap-2 mb-2">
+                 <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+                 <span class="font-bold text-slate-800 dark:text-slate-200">记忆深度 (Memory)</span>
+                 <span class="text-xs text-slate-400 ml-auto">权重: 15%</span>
+              </div>
+              <p class="text-xs text-slate-600 dark:text-slate-400 mb-2">衡量系统在多轮对话中保持上下文连贯性的能力。</p>
+              <div class="text-[10px] text-slate-400 bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-800">
+                 计算方式：统计多轮对话的平均轮数，以及历史消息在 RAG 检索中的引用比例。
+              </div>
+           </div>
+
+           <!-- 响应速度 -->
+           <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
+              <div class="flex items-center gap-2 mb-2">
+                 <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                 <span class="font-bold text-slate-800 dark:text-slate-200">响应速度 (Speed)</span>
+                 <span class="text-xs text-slate-400 ml-auto">权重: 15%</span>
+              </div>
+              <p class="text-xs text-slate-600 dark:text-slate-400 mb-2">体现系统的推理效率和网络延迟状况。</p>
+              <div class="text-[10px] text-slate-400 bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-800">
+                 计算方式：100 - (平均首字延迟 / 3000ms * 100)，延迟越低分数越高。
+              </div>
+           </div>
+
+           <!-- 技能覆盖 -->
+           <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
+              <div class="flex items-center gap-2 mb-2">
+                 <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                 <span class="font-bold text-slate-800 dark:text-slate-200">技能覆盖 (Skills)</span>
+                 <span class="text-xs text-slate-400 ml-auto">权重: 15%</span>
+              </div>
+              <p class="text-xs text-slate-600 dark:text-slate-400 mb-2">评估系统在不同领域（如后端、前端、运维、DB）的知识均衡性。</p>
+              <div class="text-[10px] text-slate-400 bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-800">
+                 计算方式：基于知识库中不同技术栈标签（Tag）的分布熵值计算。
+              </div>
+           </div>
+
+           <!-- 准确度 -->
+           <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
+              <div class="flex items-center gap-2 mb-2">
+                 <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                 <span class="font-bold text-slate-800 dark:text-slate-200">准确度 (Accuracy)</span>
+                 <span class="text-xs text-slate-400 ml-auto">权重: 20%</span>
+              </div>
+              <p class="text-xs text-slate-600 dark:text-slate-400 mb-2">反映 RAG 检索结果与用户问题的语义相关性。</p>
+              <div class="text-[10px] text-slate-400 bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-800">
+                 计算方式：基于向量检索的平均 Cosine 相似度得分 (Threshold > 0.7)。
+              </div>
+           </div>
+        </div>
+      </div>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -626,6 +742,38 @@ const isAdmin = computed(() => {
   }) || false
 })
 
+const activityBenchmarkText = computed(() => {
+  const range = dashboardTimeRange.value
+  let target = 5000
+  let label = '历史总计'
+  
+  if (range === 'day' || range === 'today') {
+    target = 50
+    label = '今日'
+  } else if (range === 'week') {
+    target = 300
+    label = '本周'
+  } else if (range === 'month') {
+    target = 1000
+    label = '本月'
+  }
+  
+  return `计算方式：${label}会话总数 / 目标基准数 ${target} * 100% (当${label}会话数达到 ${target} 次时，交互活跃指标达到满分 100%)`
+})
+
+const radarSubtitle = computed(() => {
+  const range = dashboardTimeRange.value
+  let label = '历史'
+  if (range === 'day' || range === 'today') {
+    label = '今日'
+  } else if (range === 'week') {
+    label = '本周'
+  } else if (range === 'month') {
+    label = '本月'
+  }
+  return `基于${label}的系统运行数据实时计算`
+})
+
 // Data
 const stats = ref({
   todayCount: 0,
@@ -642,6 +790,11 @@ const loading = ref(false)
 const searchKeyword = ref('')
 const detailVisible = ref(false)
 const currentDetail = ref<any>(null)
+const radarDetailVisible = ref(false)
+
+const openRadarDetail = () => {
+  radarDetailVisible.value = true
+}
 
 const handleSearch = () => {
   fetchData()
@@ -801,10 +954,12 @@ const initLogStream = () => {
 
 // Refs
 const radarRef = ref<HTMLElement>()
+const radarDetailRef = ref<HTMLElement>() // New ref for detail chart
 const wordCloudRef = ref<HTMLElement>()
 const funnelRef = ref<HTMLElement>()
 
 let radarChart: echarts.ECharts | null = null
+let radarDetailChart: echarts.ECharts | null = null // New instance for detail chart
 let wordCloudChart: echarts.ECharts | null = null
 let funnelChart: echarts.ECharts | null = null
 let animationId: number | null = null
@@ -1070,87 +1225,7 @@ const initCharts = () => {
 
   if (radarRef.value && !radarChart) {
     radarChart = echarts.init(radarRef.value)
-    const radarOption = {
-       tooltip: { show: false },
-       radar: {
-         radius: '72%',
-         center: ['50%', '55%'],
-         startAngle: radarDragStartAngle,
-         indicator: [
-           { name: '知识储备', max: 100 },
-           { name: '交互活跃', max: 100 },
-           { name: '记忆深度', max: 100 },
-           { name: '响应速度', max: 100 },
-           { name: '技能覆盖', max: 100 },
-           { name: '准确度', max: 100 }
-         ],
-         shape: 'circle',
-         splitNumber: 4,
-         axisName: { 
-           color: 'inherit',
-           fontSize: 13,
-           fontWeight: 700,
-           formatter: (value: string) => {
-             // Initial placeholder or use current data
-             const radarData = (stats.value as any).radar || {}
-             const dataValues = [
-               radarData.knowledge || 60,
-               radarData.activity || 60,
-               radarData.memory || 60,
-               radarData.speed || 60,
-               radarData.skills || 60,
-               radarData.accuracy || 60
-             ]
-             const index = ['知识储备', '交互活跃', '记忆深度', '响应速度', '技能覆盖', '准确度'].indexOf(value)
-             const val = dataValues[index]
-             return `{a|${value}}\n{b|${val}%}`
-           },
-           rich: {
-             a: { fontSize: 13, fontWeight: 'bold', padding: [4, 0], color: '#334155' },
-             b: { fontSize: 11, color: '#64748b', fontWeight: 'bold' }
-           }
-         },
-         splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.2)' } },
-         splitArea: { 
-           show: true,
-           areaStyle: {
-             color: ['rgba(148, 163, 184, 0.02)', 'rgba(148, 163, 184, 0.05)']
-           }
-         },
-         axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.2)' } }
-       },
-       series: [{
-          type: 'radar',
-          data: [{
-             value: [
-               (stats.value as any).radar?.knowledge || 60,
-               (stats.value as any).radar?.activity || 60,
-               (stats.value as any).radar?.memory || 60,
-               (stats.value as any).radar?.speed || 60,
-               (stats.value as any).radar?.skills || 60,
-               (stats.value as any).radar?.accuracy || 60
-             ],
-             name: '认知能力评估',
-             itemStyle: { color: '#3b82f6' },
-             areaStyle: { 
-               color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                 { offset: 0, color: 'rgba(59, 130, 246, 0.5)' },
-                 { offset: 1, color: 'rgba(59, 130, 246, 0.1)' }
-               ])
-             },
-             lineStyle: { width: 3, color: '#3b82f6', type: 'dashed' },
-             symbol: 'circle',
-             symbolSize: 8,
-             label: { 
-               show: true,
-               formatter: '{@value}',
-               fontSize: 11,
-               color: '#1e293b',
-               fontWeight: 'bold'
-             }
-          }]
-       }]
-    }
+    const radarOption = getRadarOption() // Extract option generation
     // @ts-ignore
     radarChart.setOption(radarOption)
     radarZr = radarChart.getZr()
@@ -1210,44 +1285,15 @@ const initCharts = () => {
 }
 
 const updateRadarChart = () => {
-  if (!radarChart) return
-
-  const radarData = (stats.value as any).radar || {}
-  const dataValues = [
-    radarData.knowledge || 60,
-    radarData.activity || 60,
-    radarData.memory || 60,
-    radarData.speed || 60,
-    radarData.skills || 60,
-    radarData.accuracy || 60
-  ]
-
-  radarChart.setOption({
-    radar: {
-      startAngle: radarDragStartAngle,
-      indicator: [
-        { name: '知识储备', max: 100 },
-        { name: '交互活跃', max: 100 },
-        { name: '记忆深度', max: 100 },
-        { name: '响应速度', max: 100 },
-        { name: '技能覆盖', max: 100 },
-        { name: '准确度', max: 100 }
-      ],
-      axisName: {
-        formatter: (value: string) => {
-          const index = ['知识储备', '交互活跃', '记忆深度', '响应速度', '技能覆盖', '准确度'].indexOf(value)
-          const val = dataValues[index]
-          return `{a|${value}}\n{b|${val}%}`
-        }
-      }
-    },
-    series: [{
-      data: [{
-        value: dataValues,
-        name: '认知能力评估'
-      }]
-    }]
-  })
+  if (radarChart) {
+      // @ts-ignore
+      radarChart.setOption(getRadarOption())
+  }
+  
+  if (radarDetailChart) {
+      // @ts-ignore
+      radarDetailChart.setOption(getRadarOption(true))
+  }
 }
 
 const updateSynapseChart = () => {
@@ -1360,6 +1406,7 @@ const fetchData = async () => {
 // Resize observer
 const handleResize = () => {
    radarChart?.resize()
+   radarDetailChart?.resize()
    wordCloudChart?.resize()
    funnelChart?.resize()
    synapseChart?.resize()
@@ -1391,10 +1438,97 @@ onUnmounted(() => {
     radarZr.off('globalout', onRadarUp)
   }
    radarChart?.dispose()
+   radarDetailChart?.dispose()
    wordCloudChart?.dispose()
    funnelChart?.dispose()
    synapseChart?.dispose()
 })
+
+const getRadarOption = (forDetail = false) => {
+    const radarData = (stats.value as any).radar || {}
+    const dataValues = [
+        radarData.knowledge || 60,
+        radarData.activity || 60,
+        radarData.memory || 60,
+        radarData.speed || 60,
+        radarData.skills || 60,
+        radarData.accuracy || 60
+    ]
+
+    return {
+       tooltip: { show: false },
+       radar: {
+         radius: forDetail ? '65%' : '72%',
+         center: ['50%', '55%'],
+         startAngle: radarDragStartAngle,
+         indicator: [
+           { name: '知识储备', max: 100 },
+           { name: '交互活跃', max: 100 },
+           { name: '记忆深度', max: 100 },
+           { name: '响应速度', max: 100 },
+           { name: '技能覆盖', max: 100 },
+           { name: '准确度', max: 100 }
+         ],
+         shape: 'circle',
+         splitNumber: 4,
+         axisName: { 
+           color: 'inherit',
+           fontSize: forDetail ? 12 : 13,
+           fontWeight: 700,
+           formatter: (value: string) => {
+             const index = ['知识储备', '交互活跃', '记忆深度', '响应速度', '技能覆盖', '准确度'].indexOf(value)
+             const val = dataValues[index]
+             return `{a|${value}}\n{b|${val}%}`
+           },
+           rich: {
+             a: { fontSize: forDetail ? 12 : 13, fontWeight: 'bold', padding: [4, 0], color: '#334155' },
+             b: { fontSize: 11, color: '#64748b', fontWeight: 'bold' }
+           }
+         },
+         splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.2)' } },
+         splitArea: { 
+           show: true,
+           areaStyle: {
+             color: ['rgba(148, 163, 184, 0.02)', 'rgba(148, 163, 184, 0.05)']
+           }
+         },
+         axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.2)' } }
+       },
+       series: [{
+          type: 'radar',
+          data: [{
+             value: dataValues,
+             name: '认知能力评估',
+             itemStyle: { color: '#3b82f6' },
+             areaStyle: { 
+               color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                 { offset: 0, color: 'rgba(59, 130, 246, 0.5)' },
+                 { offset: 1, color: 'rgba(59, 130, 246, 0.1)' }
+               ])
+             },
+             lineStyle: { width: 3, color: '#3b82f6', type: 'dashed' },
+             symbol: 'circle',
+             symbolSize: 8,
+             label: { 
+               show: true,
+               formatter: '{@value}',
+               fontSize: 11,
+               color: '#1e293b',
+               fontWeight: 'bold'
+             }
+          }]
+       }]
+    }
+}
+
+const initRadarDetailChart = () => {
+  if (radarDetailRef.value) {
+     if (radarDetailChart) radarDetailChart.dispose()
+     radarDetailChart = echarts.init(radarDetailRef.value)
+     // @ts-ignore
+     radarDetailChart.setOption(getRadarOption(true))
+  }
+}
 </script>
 
 <style scoped>

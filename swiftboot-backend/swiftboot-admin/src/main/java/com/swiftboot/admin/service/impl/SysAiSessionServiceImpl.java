@@ -24,6 +24,11 @@ import com.swiftboot.common.security.utils.SecurityUtils;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.DayOfWeek;
+import java.time.temporal.TemporalAdjusters;
 
 /**
  * 智能会话 Service 实现
@@ -39,7 +44,7 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
     private static final String STATS_URL = "http://localhost:8001/stats";
     private static final String HISTORY_KEY_PREFIX = "ai:history:";
 
-    @Override
+    // @Override
     public Page<SysAiSession> selectAiSessionPage(SysAiSession session, PageQuery pageQuery) {
         Page<SysAiSession> page = new Page<>(pageQuery.getPageNum(), pageQuery.getPageSize());
         return baseMapper.selectAiSessionList(page, session.getUserId(), session.getUsername(), session.getQuestion(), session.getModel(), session.getKeyword());
@@ -195,6 +200,26 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
         // 4. 雷达图数据 (认知能力分析) - 实时计算
         Map<String, Object> radar = new HashMap<>();
         
+        // 解析时间范围
+        LocalDateTime start = null;
+        LocalDateTime end = null;
+        LocalDateTime now = LocalDateTime.now();
+        int targetActivity = 5000;
+        
+        if ("day".equals(timeRange) || "today".equals(timeRange)) {
+            start = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
+            end = LocalDateTime.of(LocalDate.now(), LocalTime.MAX);
+            targetActivity = 50;
+        } else if ("week".equals(timeRange)) {
+            start = now.with(DayOfWeek.MONDAY).with(LocalTime.MIN);
+            end = now.with(DayOfWeek.SUNDAY).with(LocalTime.MAX);
+            targetActivity = 300;
+        } else if ("month".equals(timeRange)) {
+            start = now.with(TemporalAdjusters.firstDayOfMonth()).with(LocalTime.MIN);
+            end = now.with(TemporalAdjusters.lastDayOfMonth()).with(LocalTime.MAX);
+            targetActivity = 1000;
+        }
+        
         // 4.1 知识储备 (Knowledge) - 从 Python 引擎获取
         int knowledgeScore = 0;
         try {
@@ -202,8 +227,8 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
             if (result != null) {
                 JSONObject json = new JSONObject(result);
                 int count = json.getInt("knowledge_count", 0);
-                // 假设 5000 条切片为满分 100
-                knowledgeScore = Math.min(100, (int) ((count / 5000.0) * 100));
+                // 假设 1000 条切片为满分 100
+                knowledgeScore = Math.min(100, (int) ((count / 1000.0) * 100));
             }
         } catch (Exception e) {
             knowledgeScore = 60; // 默认分
@@ -211,24 +236,61 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
         radar.put("knowledge", knowledgeScore);
         
         // 4.2 交互活跃 (Activity) - 基于总会话数
-        Long totalSessions = baseMapper.selectCount(new LambdaQueryWrapper<>());
-        // 假设 1000 次会话为满分
-        int activityScore = Math.min(100, (int) ((totalSessions / 1000.0) * 100));
+        LambdaQueryWrapper<SysAiSession> activityQuery = new LambdaQueryWrapper<>();
+        if (start != null) {
+            activityQuery.ge(SysAiSession::getCreateTime, start).le(SysAiSession::getCreateTime, end);
+        }
+        Long totalSessions = baseMapper.selectCount(activityQuery);
+        // 基于时间范围的动态目标
+        int activityScore = Math.min(100, (int) ((totalSessions / (double)targetActivity) * 100));
         radar.put("activity", Math.max(20, activityScore)); // 给个保底分
         
         // 4.3 记忆深度 (Memory) - 模拟 (人均对话轮数)
         // 简单算法：总会话数 / (活跃用户数 + 1) * 权重
-        int memoryScore = 75; // 暂时给个较高的默认值，表示具备多轮对话能力
-        radar.put("memory", memoryScore);
+        // 如果是按天/周/月，只计算该时间段内的活跃用户
+        int memoryScore = 75; 
+        try {
+             // 由于无法直接通过 selectCount(distinct) 获取用户数，这里简化处理：
+             // 如果会话数很少，假设用户数也很少。
+             // 如果会话数 > 0，则尝试计算
+             if (totalSessions > 0) {
+                 // 估算：假设平均每人 5 次会话
+                 // 实际上应该查询 distinct user_id，但为了性能暂时简化，或者查询 ID 列表（如果量不大）
+                 // 这里采用更准确的方式：查询该时间段内参与的用户ID数量
+                 // 注意：如果数据量非常大，selectObjs 可能会有性能问题，但对于 Dashboard 来说通常带时间范围，数据量可控
+                 List<Object> userIds = baseMapper.selectObjs(new LambdaQueryWrapper<SysAiSession>()
+                     .select(SysAiSession::getUserId)
+                     .ge(start != null, SysAiSession::getCreateTime, start)
+                     .le(end != null, SysAiSession::getCreateTime, end));
+                 
+                 long uniqueUsers = userIds.stream().distinct().count();
+                 if (uniqueUsers > 0) {
+                     double avgSessions = (double) totalSessions / uniqueUsers;
+                     // 假设平均 5 次会话为满分 (100分)
+                     memoryScore = Math.min(100, (int) (avgSessions / 5.0 * 100));
+                 }
+             }
+        } catch (Exception e) {
+            // ignore
+        }
+        radar.put("memory", Math.max(40, memoryScore));
         
         // 4.4 响应速度 (Speed) - 基于 sys_oper_log
         int speedScore = 80;
         try {
-            // 查询最近 50 条 AI 接口调用的平均耗时
-            List<SysOperLog> logs = sysOperLogMapper.selectList(new LambdaQueryWrapper<SysOperLog>()
+            // 查询最近 50 条 AI 接口调用的平均耗时 -> 改为查询时间段内的平均耗时
+            LambdaQueryWrapper<SysOperLog> logQuery = new LambdaQueryWrapper<SysOperLog>()
                 .like(SysOperLog::getTitle, "智能")
-                .orderByDesc(SysOperLog::getOperTime)
-                .last("LIMIT 50"));
+                .ge(start != null, SysOperLog::getOperTime, start)
+                .le(end != null, SysOperLog::getOperTime, end)
+                .orderByDesc(SysOperLog::getOperTime);
+                
+            // 如果是 total，限制 100 条以免全表扫描
+            if (start == null) {
+                logQuery.last("LIMIT 100");
+            }
+                
+            List<SysOperLog> logs = sysOperLogMapper.selectList(logQuery);
             
             if (!logs.isEmpty()) {
                 double avgCost = logs.stream().mapToLong(SysOperLog::getCostTime).average().orElse(0);
@@ -256,7 +318,7 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
         return stats;
     }
 
-    @Override
+    // @Override
     public Page<Map<String, Object>> getUserTokenStats(PageQuery pageQuery, String username, String timeRange, String rankType) {
         Page<Map<String, Object>> page = new Page<>(pageQuery.getPageNum(), pageQuery.getPageSize());
         
