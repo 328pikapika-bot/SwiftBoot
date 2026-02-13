@@ -64,20 +64,20 @@
               <span class="material-icons-round text-slate-400 text-lg transition-transform duration-300" :class="{ '-rotate-90': !openMenus.includes(item.path) }">expand_more</span>
             </div>
 
-            <div v-show="appStore.sidebar.opened ? openMenus.includes(item.path) : true" class="space-y-1">
+            <div v-show="appStore.sidebar.opened ? openMenus.includes(item.path) : true" class="space-y-1 mt-1 bg-slate-50/80 dark:bg-slate-800/40 rounded-xl py-1 mx-1">
               <router-link
                 v-for="child in item.children"
                 :key="child.path"
                 :to="resolvePath(item.path, child.path)"
-                class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 group relative"
+                class="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-all duration-200 group relative mx-1"
                 :class="route.path === resolvePath(item.path, child.path) 
-                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium' 
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'"
+                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 font-medium shadow-sm ring-1 ring-slate-200 dark:ring-slate-700' 
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-white/50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-200'"
               >
-                <div class="w-[20px] h-[20px] flex items-center justify-center transition-transform group-hover:scale-110"
+                <div class="w-[18px] h-[18px] flex items-center justify-center transition-transform group-hover:scale-110"
                       :class="[
                         route.path === resolvePath(item.path, child.path) ? 'text-blue-500' : 'text-slate-400 dark:text-slate-500',
-                        appStore.sidebar.opened ? 'ml-1' : ''
+                        appStore.sidebar.opened ? '' : ''
                       ]">
                   <el-icon v-if="isElementIcon(child.meta?.icon)" :size="18">
                     <component :is="getElementIconName(child.meta?.icon)" />

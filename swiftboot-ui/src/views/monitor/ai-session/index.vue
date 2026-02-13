@@ -45,17 +45,17 @@
               <!-- No.1 -->
               <div class="flex items-center gap-2">
                  <span class="material-icons-round text-yellow-500 text-2xl drop-shadow-sm animate-pulse">emoji_events</span>
-                 <span class="text-base font-bold text-slate-800 dark:text-slate-100 max-w-[80px] truncate">{{ topUsers[0]?.nickname || topUsers[0]?.username }}</span>
+                 <span class="text-base font-bold text-slate-800 dark:text-slate-100 max-w-[80px] truncate">{{ topUsers[0]?.deptName || topUsers[0]?.nickname || topUsers[0]?.username }}</span>
               </div>
               <!-- No.2 -->
               <div class="flex items-center gap-2 opacity-90">
                  <span class="material-icons-round text-slate-400 text-xl">emoji_events</span>
-                 <span class="text-sm font-bold text-slate-600 dark:text-slate-300 max-w-[80px] truncate">{{ topUsers[1]?.nickname || topUsers[1]?.username }}</span>
+                 <span class="text-sm font-bold text-slate-600 dark:text-slate-300 max-w-[80px] truncate">{{ topUsers[1]?.deptName || topUsers[1]?.nickname || topUsers[1]?.username }}</span>
               </div>
               <!-- No.3 -->
               <div class="flex items-center gap-2 opacity-80">
                  <span class="material-icons-round text-amber-700 text-xl">emoji_events</span>
-                 <span class="text-sm font-bold text-slate-600 dark:text-slate-300 max-w-[80px] truncate">{{ topUsers[2]?.nickname || topUsers[2]?.username }}</span>
+                 <span class="text-sm font-bold text-slate-600 dark:text-slate-300 max-w-[80px] truncate">{{ topUsers[2]?.deptName || topUsers[2]?.nickname || topUsers[2]?.username }}</span>
               </div>
            </div>
         </div>
@@ -766,14 +766,14 @@ const initCharts = () => {
        radar: {
          radius: '72%',
          center: ['50%', '55%'],
-          startAngle: radarDragStartAngle,
+         startAngle: radarDragStartAngle,
          indicator: [
-           { name: 'Java 后端', max: 100 },
-           { name: 'Vue 前端', max: 100 },
-           { name: 'Python 引擎', max: 100 },
-           { name: '数据库/SQL', max: 100 },
-           { name: '文档/Markdown', max: 100 },
-           { name: 'Shell/脚本', max: 100 }
+           { name: '知识储备', max: 100 },
+           { name: '交互活跃', max: 100 },
+           { name: '记忆深度', max: 100 },
+           { name: '响应速度', max: 100 },
+           { name: '技能覆盖', max: 100 },
+           { name: '准确度', max: 100 }
          ],
          shape: 'circle',
          splitNumber: 4,
@@ -782,15 +782,19 @@ const initCharts = () => {
            fontSize: 13,
            fontWeight: 700,
            formatter: (value: string) => {
-             const map: Record<string, number> = {
-               'Java 后端': 85,
-               'Vue 前端': 65,
-               'Python 引擎': 45,
-               '数据库/SQL': 70,
-               '文档/Markdown': 30,
-               'Shell/脚本': 50
-             }
-             return `{a|${value}}\n{b|${map[value]}%}`
+             // Initial placeholder or use current data
+             const radarData = (stats.value as any).radar || {}
+             const dataValues = [
+               radarData.knowledge || 60,
+               radarData.activity || 60,
+               radarData.memory || 60,
+               radarData.speed || 60,
+               radarData.skills || 60,
+               radarData.accuracy || 60
+             ]
+             const index = ['知识储备', '交互活跃', '记忆深度', '响应速度', '技能覆盖', '准确度'].indexOf(value)
+             const val = dataValues[index]
+             return `{a|${value}}\n{b|${val}%}`
            },
            rich: {
              a: { fontSize: 13, fontWeight: 'bold', padding: [4, 0], color: '#334155' },
@@ -809,8 +813,15 @@ const initCharts = () => {
        series: [{
           type: 'radar',
           data: [{
-             value: [85, 65, 45, 70, 30, 50],
-             name: '技术栈覆盖度',
+             value: [
+               (stats.value as any).radar?.knowledge || 60,
+               (stats.value as any).radar?.activity || 60,
+               (stats.value as any).radar?.memory || 60,
+               (stats.value as any).radar?.speed || 60,
+               (stats.value as any).radar?.skills || 60,
+               (stats.value as any).radar?.accuracy || 60
+             ],
+             name: '认知能力评估',
              itemStyle: { color: '#3b82f6' },
              areaStyle: { 
                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -845,23 +856,16 @@ const initCharts = () => {
   if (wordCloudRef.value) {
     wordCloudChart = echarts.init(wordCloudRef.value)
     
-    // 3D 球体词云配置
-    const tags = [
-      { name: 'Spring Boot', value: 90, category: 0 },
-      { name: 'Vue3', value: 80, category: 1 },
-      { name: 'RAG', value: 75, category: 2 },
-      { name: 'DeepSeek', value: 70, category: 2 },
-      { name: 'Redis', value: 60, category: 3 },
-      { name: 'ChromaDB', value: 55, category: 3 },
-      { name: 'Element Plus', value: 50, category: 1 },
-      { name: 'MyBatis', value: 45, category: 0 },
-      { name: 'Spring Security', value: 40, category: 0 },
-      { name: 'Python', value: 35, category: 4 },
-      { name: 'Docker', value: 30, category: 5 },
-      { name: 'Nginx', value: 25, category: 5 },
-      { name: 'LangChain', value: 65, category: 2 },
-      { name: 'MySQL', value: 68, category: 3 },
-      { name: 'TypeScript', value: 55, category: 1 }
+    // 3D 球体词云配置 - 使用真实数据
+    const rawTags = (stats.value as any).wordCloud || []
+    
+    // 如果没有数据，使用默认占位数据防止空白
+    const tags = rawTags.length > 0 ? rawTags.map((item: any) => ({
+      name: item.name,
+      value: Number(item.value),
+      category: Number(item.category)
+    })) : [
+      { name: '暂无数据', value: 10, category: 0 }
     ]
 
     // 生成球面上均匀分布的点 (Fibonacci Sphere)
@@ -1029,6 +1033,47 @@ const initCharts = () => {
   }
 }
 
+const updateRadarChart = () => {
+  if (!radarChart) return
+
+  const radarData = (stats.value as any).radar || {}
+  const dataValues = [
+    radarData.knowledge || 60,
+    radarData.activity || 60,
+    radarData.memory || 60,
+    radarData.speed || 60,
+    radarData.skills || 60,
+    radarData.accuracy || 60
+  ]
+
+  radarChart.setOption({
+    radar: {
+      startAngle: radarDragStartAngle,
+      indicator: [
+        { name: '知识储备', max: 100 },
+        { name: '交互活跃', max: 100 },
+        { name: '记忆深度', max: 100 },
+        { name: '响应速度', max: 100 },
+        { name: '技能覆盖', max: 100 },
+        { name: '准确度', max: 100 }
+      ],
+      axisName: {
+        formatter: (value: string) => {
+          const index = ['知识储备', '交互活跃', '记忆深度', '响应速度', '技能覆盖', '准确度'].indexOf(value)
+          const val = dataValues[index]
+          return `{a|${value}}\n{b|${val}%}`
+        }
+      }
+    },
+    series: [{
+      data: [{
+        value: dataValues,
+        name: '认知能力评估'
+      }]
+    }]
+  })
+}
+
 const updateSynapseChart = () => {
   if (!synapseChart) return
   
@@ -1104,6 +1149,14 @@ const fetchData = async () => {
       
       // Update charts
       updateSynapseChart()
+      updateRadarChart()
+      if (wordCloudChart) {
+        wordCloudChart.dispose()
+        wordCloudChart = null
+        if (wordCloudRef.value) {
+          initCharts()
+        }
+      }
     }
     
     const listQuery = { pageNum: 1, pageSize: 10 } as any

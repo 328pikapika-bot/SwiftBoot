@@ -266,7 +266,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
 import { getServer } from '@/api/monitor/server'
 import { list as getOperLogs } from '@/api/monitor/operlog'
 import request, { ApiResponse } from '@/utils/request'
@@ -463,16 +463,38 @@ const pollStats = async () => {
   statsTimer = setTimeout(pollStats, 3000)
 }
 
+const startPolling = () => {
+  pollStats()
+  if (timer) clearInterval(timer)
+  timer = setInterval(updateUptime, 1000)
+}
+
+const stopPolling = () => {
+  if (timer) clearInterval(timer)
+  if (statsTimer) clearTimeout(statsTimer)
+  timer = null
+  statsTimer = null
+}
+
 onMounted(() => {
   loadAiStats()
   loadOperLogs()
-  pollStats()
-  timer = setInterval(updateUptime, 1000)
+  // 首次挂载时启动
+  startPolling()
+})
+
+onActivated(() => {
+  // 从缓存恢复时启动
+  startPolling()
+})
+
+onDeactivated(() => {
+  // 进入缓存时停止
+  stopPolling()
 })
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
-  if (statsTimer) clearTimeout(statsTimer)
+  stopPolling()
 })
 </script>
 
