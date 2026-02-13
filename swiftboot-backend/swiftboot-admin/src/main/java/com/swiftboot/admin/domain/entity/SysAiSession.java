@@ -53,6 +53,9 @@ public class SysAiSession implements Serializable {
     @TableLogic
     private Integer deleted;
 
+    @Schema(description = "会话主题/关键词")
+    private String topic;
+
     @Schema(description = "用户名称")
     @TableField(exist = false)
     private String username;

@@ -3,6 +3,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from vector_store import VectorStore, ChatMemoryStore
 import uvicorn
+import jieba.analyse
+import jieba
+
+# 加载自定义词典
+# 实际项目中，这里应该从 vector_store 中动态读取项目中的类名、方法名作为词典
+# 这里简单演示，添加一些常见的技术栈词汇
+custom_words = [
+    "SwiftBoot", "Spring Boot", "Spring Security", "MyBatis", "Redis", "Vue", "Element Plus", "TypeScript",
+    "FastAPI", "ChromaDB", "Watchdog", "DeepSeek", "RAG", "Agent", "Function Calling", "SysUser", "SysDept", "SysMenu", "SysRole",
+    "SysAiSession", "SysOperLog", "Controller", "Service", "Mapper", "Entity", "DTO", "VO"
+]
+for word in custom_words:
+    jieba.add_word(word)
 
 app = FastAPI(title="SwiftBoot AI Knowledge Engine")
 
@@ -152,6 +165,50 @@ async def delete_memory(request: MemoryDeleteRequest):
 @app.get("/health")
 def health_check():
     return {"status": "ok", "db_path": db.client._system.settings.persist_directory}
+
+class TopicRequest(BaseModel):
+    text: str
+
+@app.post("/nlp/topic")
+async def extract_topic(request: TopicRequest):
+    """
+    NLP 关键词/主题提取接口
+    使用 jieba.analyse.textrank 算法提取核心关键词
+    """
+    try:
+        if not request.text or len(request.text.strip()) == 0:
+            return {"topic": None}
+            
+        # 1. 提取关键词 (TextRank 算法，偏向名词和短语)
+        # allowPOS=('n', 'nz', 'v', 'vd', 'vn', 'eng') - 允许名词、动名词、英文
+        keywords = jieba.analyse.textrank(
+            request.text, 
+            topK=3, 
+            withWeight=False, 
+            allowPOS=('n', 'nz', 'eng', 'vn') # 排除纯动词，保留名动词
+        )
+        
+        # 2. 如果 TextRank 没结果（通常是因为句子太短），改用 TF-IDF
+        if not keywords:
+            keywords = jieba.analyse.extract_tags(request.text, topK=3, allowPOS=('n', 'nz', 'eng', 'vn'))
+            
+        # 3. 结果处理
+        topic = None
+        if keywords:
+            # 优先选择最长或最有意义的词，或者直接返回 top 1
+            # 这里简单返回第一个，通常是最核心的
+            topic = keywords[0]
+            
+            # 特殊处理：如果提取出的词太通用（如“问题”、“时间”），则尝试取第二个
+            stop_words = ["问题", "时间", "内容", "数据", "结果", "系统", "功能"]
+            if topic in stop_words and len(keywords) > 1:
+                topic = keywords[1]
+                
+        return {"topic": topic}
+        
+    except Exception as e:
+        print(f"Topic extraction failed: {e}")
+        return {"topic": None}
 
 if __name__ == "__main__":
     print("启动 AI 知识检索引擎 API...")

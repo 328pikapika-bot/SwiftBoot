@@ -2,6 +2,7 @@ import time
 import os
 import json
 import threading
+import hashlib
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from knowledge_ingest import JavaParser, PythonParser, VueComponentParser, MarkdownParser, TypeScriptParser
@@ -32,6 +33,16 @@ IGNORE_FILENAMES = ["auto-imports.d.ts", "components.d.ts", "tsconfig.tsbuildinf
 
 # 状态文件路径
 STATE_FILE = os.path.join(os.path.dirname(__file__), "file_state.json")
+
+def get_file_hash(filepath):
+    """计算文件内容的 MD5 哈希"""
+    try:
+        if not os.path.exists(filepath):
+            return None
+        with open(filepath, "rb") as f:
+            return hashlib.md5(f.read()).hexdigest()
+    except Exception:
+        return None
 
 def load_state():
     if os.path.exists(STATE_FILE):
@@ -71,6 +82,7 @@ class CodeChangeHandler(FileSystemEventHandler):
         self.ts_parser = TypeScriptParser()
         self.db = VectorStore()
         self.last_processed = {}  # 简单的防抖动机制 {path: timestamp}
+        self.file_hashes = {}     # 内存中缓存文件内容哈希 {path: md5}
         self.file_state = file_state
         
         # 批量日志处理相关
@@ -173,6 +185,10 @@ class CodeChangeHandler(FileSystemEventHandler):
         if filename.lower().endswith(".d.ts"):
             return False
             
+        # 5. 排除临时文件和自动生成文件
+        if filename.lower().endswith(".tmp") or "~" in filename:
+            return False
+            
         return self._is_valid_ext(filename)
 
     def _process_event(self, event):
@@ -188,12 +204,25 @@ class CodeChangeHandler(FileSystemEventHandler):
         if not self._is_allowed_path(filename):
             return
 
-        # 简单的防抖动：1秒内不重复处理同一个文件
+        # 简单的防抖动：3秒内不重复处理同一个文件
         now = time.time()
         if filename in self.last_processed:
-            if now - self.last_processed[filename] < 1:
+            if now - self.last_processed[filename] < 3:
                 return
         self.last_processed[filename] = now
+
+        # 基于内容哈希的去重
+        current_hash = get_file_hash(filename)
+        if current_hash:
+            if filename in self.file_hashes:
+                if self.file_hashes[filename] == current_hash:
+                    print(f"[{self._now()}] 检测到文件事件但内容未变，跳过: {filename}")
+                    # 更新状态文件中的 mtime，防止下次启动时误判
+                    norm_path = os.path.normpath(filename).lower()
+                    self.file_state[norm_path] = now
+                    save_state(self.file_state)
+                    return
+            self.file_hashes[filename] = current_hash
 
         # 区分前后端变更类型
         rel_path = os.path.relpath(filename, WATCH_DIR)

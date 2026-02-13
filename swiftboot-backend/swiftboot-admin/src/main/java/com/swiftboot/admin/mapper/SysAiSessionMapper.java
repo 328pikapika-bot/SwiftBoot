@@ -137,18 +137,20 @@ public interface SysAiSessionMapper extends BaseMapper<SysAiSession> {
      * 统计热点词云数据
      */
     @Select("<script>" +
-            "SELECT SUBSTRING_INDEX(s.question, ' ', 1) as name, COUNT(*) as value, " +
+            "SELECT " +
+            "topic as name, " +
+            "COUNT(*) as value, " +
             "FLOOR(RAND() * 6) as category " +
             "FROM sys_ai_session s " +
             "LEFT JOIN sys_user u ON s.user_id = u.id " +
             "LEFT JOIN sys_dept d ON u.dept_id = d.id " +
-            "WHERE s.question IS NOT NULL AND s.question != '' " +
+            "WHERE s.topic IS NOT NULL AND s.topic != '' " +
             "<if test='userId != null'> AND s.user_id = #{userId} </if>" +
             "<if test='deptId != null'> AND (u.dept_id = #{deptId} OR FIND_IN_SET(#{deptId}, d.ancestors)) </if>" +
             "<if test='timeRange == \"day\"'> AND DATE(s.create_time) = CURDATE() </if>" +
             "<if test='timeRange == \"week\"'> AND YEARWEEK(s.create_time, 1) = YEARWEEK(CURDATE(), 1) </if>" +
             "<if test='timeRange == \"month\"'> AND DATE_FORMAT(s.create_time, '%Y%m') = DATE_FORMAT(CURDATE(), '%Y%m') </if>" +
-            "GROUP BY name " +
+            "GROUP BY topic " +
             "ORDER BY value DESC " +
             "LIMIT 30" +
             "</script>")

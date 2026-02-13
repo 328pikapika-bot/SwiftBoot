@@ -143,6 +143,7 @@ public class SysAiController {
     private static final String MEMORY_QUERY_URL = "http://localhost:8001/memory/query";
     private static final String MEMORY_ADD_URL = "http://localhost:8001/memory/add";
     private static final String MEMORY_DELETE_URL = "http://localhost:8001/memory/delete";
+    private static final String NLP_TOPIC_URL = "http://localhost:8001/nlp/topic";
     private static final String STATS_URL = "http://localhost:8001/stats";
 
     /**
@@ -639,6 +640,63 @@ public class SysAiController {
     }
     
     /**
+     * 从问题中提取主题关键词
+     * 策略升级：优先调用 Python 引擎的 NLP 接口进行智能提取，失败则回退到本地规则匹配
+     */
+    private String extractTopic(String question) {
+        if (StrUtil.isBlank(question)) {
+            return "未知";
+        }
+        
+        // 1. 尝试调用 Python NLP 接口
+        try {
+            JSONObject body = new JSONObject();
+            body.set("text", question);
+            
+            // 短超时，避免阻塞太久 (300ms)
+            String result = HttpRequest.post(NLP_TOPIC_URL)
+                    .timeout(300)
+                    .body(body.toString())
+                    .execute()
+                    .body();
+            
+            if (StrUtil.isNotEmpty(result)) {
+                JSONObject json = JSONUtil.parseObj(result);
+                String topic = json.getStr("topic");
+                if (StrUtil.isNotBlank(topic)) {
+                    System.out.println("NLP Topic Extracted: " + topic + " (from: " + question + ")");
+                    return topic;
+                }
+            }
+        } catch (Exception e) {
+            // NLP 服务未启动或超时，降级到本地规则
+            // System.err.println("NLP Topic extraction failed, fallback to local rules.");
+        }
+        
+        // 2. 降级策略：本地规则匹配 (保留原有逻辑作为兜底)
+        String[] keywords = {
+            // 核心技术栈
+            "Spring Boot", "Spring Security", "MyBatis", "Redis", "Vue", "Element Plus", "TypeScript", "Vite", "Pinia", "Axios",
+            "Python", "FastAPI", "Chroma", "Watchdog", "Java", "Maven", "Gradle", "MySQL", "Logback",
+            // AI 相关
+            "RAG", "向量", "DeepSeek", "Gemini", "LLM", "SSE", "流式", "Embedding", "Token", "Context", "Prompt", "Agent",
+            // 系统模块
+            "权限", "菜单", "角色", "用户", "部门", "日志", "字典", "代码生成", "定时任务", "系统监控", "服务监控",
+            // 开发运维
+            "启动", "部署", "配置", "环境", "调试", "报错", "异常", "Bug", "接口", "API"
+        };
+        
+        String lowerQuestion = question.toLowerCase();
+        for (String keyword : keywords) {
+            if (lowerQuestion.contains(keyword.toLowerCase())) {
+                return keyword;
+            }
+        }
+        
+        return null; 
+    }
+
+    /**
      * 保存对话历史（Redis + 向量库 + MySQL）
      */
     private void saveConversationHistory(Long userId, String question, String answer, long startTime) {
@@ -683,6 +741,13 @@ public class SysAiController {
             int tokens = (question.length() + answer.length()) * 2;
             aiSession.setTokens(tokens);
             aiSession.setDuration((int) duration);
+            
+            // 提取并保存主题
+            String topic = extractTopic(question);
+            if (topic != null) {
+                aiSession.setTopic(topic);
+            }
+            
             aiSessionService.save(aiSession);
         } catch (Exception e) {
             System.err.println("Failed to save ai session: " + e.getMessage());

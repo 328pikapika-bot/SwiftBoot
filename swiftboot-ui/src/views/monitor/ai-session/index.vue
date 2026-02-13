@@ -241,6 +241,12 @@
             </span>
             热点词云
           </h3>
+          <!-- 切换数据源按钮 -->
+          <span class="material-icons-round text-sm text-indigo-400/50 cursor-pointer hover:text-indigo-500 transition-colors transform active:rotate-180 duration-300" 
+                @click="toggleWordCloudSource"
+                :title="useRealWordCloud ? '切换至演示数据' : '切换至真实数据'">
+             sync
+          </span>
         </div>
         <div ref="wordCloudRef" class="flex-1 min-h-[300px] w-full"></div>
       </div>
@@ -701,9 +707,178 @@ const onRadarUp = () => {
 const synapseChartRef = ref<HTMLElement>()
 let synapseChart: echarts.ECharts | null = null
 
+// Word Cloud State
+const useRealWordCloud = ref(false) // 默认演示模式
+
+const toggleWordCloudSource = () => {
+  useRealWordCloud.value = !useRealWordCloud.value
+  ElMessage.success(useRealWordCloud.value ? '已切换至真实数据' : '已切换至演示数据')
+  initWordCloud()
+}
+
+const initWordCloud = () => {
+  if (wordCloudRef.value) {
+    // Clean up old instance and animation
+    if (wordCloudChart) {
+      wordCloudChart.dispose()
+      wordCloudChart = null
+    }
+    if (animationId) {
+      cancelAnimationFrame(animationId)
+      animationId = null
+    }
+
+    wordCloudChart = echarts.init(wordCloudRef.value)
+    
+    let rawTags = []
+    
+    if (useRealWordCloud.value) {
+       // 真实数据
+       rawTags = (stats.value as any).wordCloud || []
+    } else {
+       // 模拟 30 个热点词数据 (演示用)
+       rawTags = Array.from({ length: 30 }, (_, i) => ({
+         name: ['Spring Boot', 'Redis', 'Vue 3', 'DeepSeek', 'RAG', 'Vector DB', 'MySQL', 'MyBatis Plus', 'Element Plus', 'TypeScript', 'Vite', 'Pinia', 'Axios', 'Java 17', 'Python', 'FastAPI', 'Docker', 'Nginx', 'Linux', 'Git', 'Maven', 'Gradle', 'Jenkins', 'Kubernetes', 'Cloud Native', 'Microservices', 'Distributed', 'High Availability', 'Performance', 'Security'][i],
+         value: Math.floor(Math.random() * 100) + 10,
+         category: Math.floor(Math.random() * 6)
+       }))
+    }
+    
+    // 如果没有数据，使用默认占位数据防止空白
+    const tags = rawTags.length > 0 ? rawTags.map((item: any) => ({
+      name: item.name,
+      value: Number(item.value),
+      category: Number(item.category)
+    })) : [
+      { name: '暂无数据', value: 10, category: 0 }
+    ]
+
+    // 生成球面上均匀分布的点 (Fibonacci Sphere)
+    const points: any[] = []
+    const count = tags.length
+    const goldenRatio = (1 + Math.sqrt(5)) / 2
+    
+    for (let i = 0; i < count; i++) {
+      const y = 1 - (i / (count - 1)) * 2
+      const radius = Math.sqrt(1 - y * y)
+      const theta = 2 * Math.PI * i / goldenRatio // Golden angle increment
+      
+      const x = Math.cos(theta) * radius
+      const z = Math.sin(theta) * radius
+      
+      points.push({
+        ...tags[i],
+        x3d: x,
+        y3d: y,
+        z3d: z,
+        originX: x,
+        originY: y,
+        originZ: z
+      })
+    }
+
+    const colors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#6366f1']
+    let angleY = 0
+    let angleX = 0
+    const sphereRadius = 120
+    
+    // 交互状态
+    let isDragging = false
+    let lastMouseX = 0
+    let lastMouseY = 0
+    
+    const wordZr = wordCloudChart.getZr()
+    wordZr.on('mousedown', (e: any) => {
+      isDragging = true
+      lastMouseX = e.offsetX
+      lastMouseY = e.offsetY
+    })
+    wordZr.on('mousemove', (e: any) => {
+      if (isDragging) {
+        const dx = e.offsetX - lastMouseX
+        const dy = e.offsetY - lastMouseY
+        angleY += dx * 0.005
+        angleX += dy * 0.005
+        lastMouseX = e.offsetX
+        lastMouseY = e.offsetY
+      }
+    })
+    wordZr.on('mouseup', () => { isDragging = false })
+    wordZr.on('globalout', () => { isDragging = false })
+
+    // 动画循环
+    const animate = () => {
+      if (!wordCloudChart) return // Stop if chart disposed
+
+      if (!isDragging) {
+        angleY += 0.005 // 自动自转
+      }
+      
+      const data = points.map(p => {
+        // 1. 绕 X 轴旋转
+        let y1 = p.originY * Math.cos(angleX) - p.originZ * Math.sin(angleX)
+        let z1 = p.originY * Math.sin(angleX) + p.originZ * Math.cos(angleX)
+        
+        // 2. 绕 Y 轴旋转
+        let x2 = p.originX * Math.cos(angleY) - z1 * Math.sin(angleY)
+        let z2 = p.originX * Math.sin(angleY) + z1 * Math.cos(angleY)
+        
+        // 透视投影
+        const scale = (z2 + 2) / 3 // 简单的透视缩放
+        const alpha = (z2 + 1) / 2 // 透明度随深度变化
+        
+        return {
+          name: p.name,
+          value: [x2 * sphereRadius, y1 * sphereRadius, p.value], // [x, y, rawValue]
+          symbolSize: Math.min(Math.max(p.value / 1.5, 30) * scale, 60), // 限制最大尺寸
+          itemStyle: {
+            color: colors[p.category],
+            opacity: Math.max(0.2, Math.min(1, alpha)),
+            shadowBlur: 10 * scale,
+            shadowColor: colors[p.category]
+          },
+          label: {
+            show: true,
+            formatter: '{b}',
+            fontSize: Math.max(10, (p.value / 5) * scale),
+            color: '#334155', // 深色文字
+            opacity: Math.max(0.2, Math.min(1, alpha))
+          },
+          z: z2 * 100 // 控制层级
+        }
+      })
+
+      wordCloudChart?.setOption({
+        tooltip: {
+          show: true,
+          formatter: (params: any) => {
+             return `${params.name}: ${params.value[2]} 次`
+          }
+        },
+        xAxis: { show: false, min: -150, max: 150 },
+        yAxis: { show: false, min: -150, max: 150 },
+        grid: { left: 0, right: 0, top: 0, bottom: 0 },
+        series: [{
+          type: 'graph',
+          coordinateSystem: 'cartesian2d',
+          layout: 'none',
+          data: data,
+          roam: false, // 关闭 ECharts 自带的平移缩放，改用自定义 3D 旋转
+          draggable: false, 
+          animation: false
+        }]
+      })
+      
+      animationId = requestAnimationFrame(animate)
+    }
+    
+    animate()
+  }
+}
+
 // Mock Data for Charts
 const initCharts = () => {
-  if (synapseChartRef.value) {
+  if (synapseChartRef.value && !synapseChart) {
      synapseChart = echarts.init(synapseChartRef.value)
      
      // Generate last 7 data points labels ending with today/current week/current month
@@ -759,7 +934,7 @@ const initCharts = () => {
      })
   }
 
-  if (radarRef.value) {
+  if (radarRef.value && !radarChart) {
     radarChart = echarts.init(radarRef.value)
     const radarOption = {
        tooltip: { show: false },
@@ -853,142 +1028,9 @@ const initCharts = () => {
     radarZr.setCursorStyle('grab')
   }
 
-  if (wordCloudRef.value) {
-    wordCloudChart = echarts.init(wordCloudRef.value)
-    
-    // 3D 球体词云配置 - 使用真实数据
-    const rawTags = (stats.value as any).wordCloud || []
-    
-    // 如果没有数据，使用默认占位数据防止空白
-    const tags = rawTags.length > 0 ? rawTags.map((item: any) => ({
-      name: item.name,
-      value: Number(item.value),
-      category: Number(item.category)
-    })) : [
-      { name: '暂无数据', value: 10, category: 0 }
-    ]
+  initWordCloud()
 
-    // 生成球面上均匀分布的点 (Fibonacci Sphere)
-    const points: any[] = []
-    const count = tags.length
-    const goldenRatio = (1 + Math.sqrt(5)) / 2
-    
-    for (let i = 0; i < count; i++) {
-      const y = 1 - (i / (count - 1)) * 2
-      const radius = Math.sqrt(1 - y * y)
-      const theta = 2 * Math.PI * i / goldenRatio // Golden angle increment
-      
-      const x = Math.cos(theta) * radius
-      const z = Math.sin(theta) * radius
-      
-      points.push({
-        ...tags[i],
-        x3d: x,
-        y3d: y,
-        z3d: z,
-        originX: x,
-        originY: y,
-        originZ: z
-      })
-    }
-
-    const colors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#6366f1']
-    let angleY = 0
-    let angleX = 0
-    const sphereRadius = 120
-    
-    // 交互状态
-    let isDragging = false
-    let lastMouseX = 0
-    let lastMouseY = 0
-    
-    const wordZr = wordCloudChart.getZr()
-    wordZr.on('mousedown', (e: any) => {
-      isDragging = true
-      lastMouseX = e.offsetX
-      lastMouseY = e.offsetY
-    })
-    wordZr.on('mousemove', (e: any) => {
-      if (isDragging) {
-        const dx = e.offsetX - lastMouseX
-        const dy = e.offsetY - lastMouseY
-        angleY += dx * 0.005
-        angleX += dy * 0.005
-        lastMouseX = e.offsetX
-        lastMouseY = e.offsetY
-      }
-    })
-    wordZr.on('mouseup', () => { isDragging = false })
-    wordZr.on('globalout', () => { isDragging = false })
-
-    // 动画循环
-    const animate = () => {
-      if (!isDragging) {
-        angleY += 0.005 // 自动自转
-      }
-      
-      const data = points.map(p => {
-        // 1. 绕 X 轴旋转
-        let y1 = p.originY * Math.cos(angleX) - p.originZ * Math.sin(angleX)
-        let z1 = p.originY * Math.sin(angleX) + p.originZ * Math.cos(angleX)
-        
-        // 2. 绕 Y 轴旋转
-        let x2 = p.originX * Math.cos(angleY) - z1 * Math.sin(angleY)
-        let z2 = p.originX * Math.sin(angleY) + z1 * Math.cos(angleY)
-        
-        // 透视投影
-        const scale = (z2 + 2) / 3 // 简单的透视缩放
-        const alpha = (z2 + 1) / 2 // 透明度随深度变化
-        
-        return {
-          name: p.name,
-          value: [x2 * sphereRadius, y1 * sphereRadius, p.value], // [x, y, rawValue]
-          symbolSize: Math.min(Math.max(p.value / 1.5, 30) * scale, 60), // 限制最大尺寸
-          itemStyle: {
-            color: colors[p.category],
-            opacity: Math.max(0.2, Math.min(1, alpha)),
-            shadowBlur: 10 * scale,
-            shadowColor: colors[p.category]
-          },
-          label: {
-            show: true,
-            formatter: '{b}',
-            fontSize: Math.max(10, (p.value / 5) * scale),
-            color: '#334155', // 深色文字
-            opacity: Math.max(0.2, Math.min(1, alpha))
-          },
-          z: z2 * 100 // 控制层级
-        }
-      })
-
-      wordCloudChart?.setOption({
-        tooltip: {
-          show: true,
-          formatter: (params: any) => {
-             return `${params.name}: ${params.value[2]} 次`
-          }
-        },
-        xAxis: { show: false, min: -150, max: 150 },
-        yAxis: { show: false, min: -150, max: 150 },
-        grid: { left: 0, right: 0, top: 0, bottom: 0 },
-        series: [{
-          type: 'graph',
-          coordinateSystem: 'cartesian2d',
-          layout: 'none',
-          data: data,
-          roam: false, // 关闭 ECharts 自带的平移缩放，改用自定义 3D 旋转
-          draggable: false, 
-          animation: false
-        }]
-      })
-      
-      animationId = requestAnimationFrame(animate)
-    }
-    
-    animate()
-  }
-
-  if (funnelRef.value) {
+  if (funnelRef.value && !funnelChart) {
     funnelChart = echarts.init(funnelRef.value)
     funnelChart.setOption({
        tooltip: { 
