@@ -201,47 +201,51 @@
         </div>
         <div class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- Left: Vector Logs -->
-          <div class="space-y-6">
+          <div>
              <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                 <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
                 向量索引更新
              </h3>
-             <div v-for="log in vectorLogs" :key="log.id" class="flex gap-3">
-                <div class="mt-1 w-2 h-2 rounded-full shrink-0" :class="getBusinessTypeColor(log)"></div>
-                <div>
-                  <div class="text-sm font-medium text-slate-900 dark:text-white truncate max-w-[280px]">
-                    <span class="font-bold text-slate-700 dark:text-slate-200">{{ getDisplayOperName(log) }}</span> 
-                    {{ getLogAction(log) }} 
-                    <span v-html="formatLogTitle(log.title)"></span>
+             <div class="space-y-6 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
+                 <div v-for="log in vectorLogs" :key="log.id" class="flex gap-3">
+                    <div class="mt-1 w-2 h-2 rounded-full shrink-0" :class="getBusinessTypeColor(log)"></div>
+                    <div>
+                      <div class="text-sm font-medium text-slate-900 dark:text-white truncate max-w-[280px]">
+                        <span class="font-bold text-slate-700 dark:text-slate-200">{{ getDisplayOperName(log) }}</span> 
+                        {{ getLogAction(log) }} 
+                        <span v-html="formatLogTitle(log.title)"></span>
+                      </div>
+                      <div class="text-xs text-slate-500 mt-1">{{ formatTimeAgo(log.operTime) }}</div>
+                    </div>
                   </div>
-                  <div class="text-xs text-slate-500 mt-1">{{ formatTimeAgo(log.operTime) }}</div>
-                </div>
-              </div>
-              <div v-if="vectorLogs.length === 0" class="text-center text-slate-400 text-sm py-4">
-                暂无更新
-              </div>
+                  <div v-if="vectorLogs.length === 0" class="text-center text-slate-400 text-sm py-4">
+                    暂无更新
+                  </div>
+             </div>
           </div>
 
           <!-- Right: User Logs -->
-          <div class="space-y-6 border-l border-slate-100 dark:border-slate-800 pl-6 lg:block hidden">
+          <div class="border-l border-slate-100 dark:border-slate-800 pl-6 lg:block hidden">
              <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                 <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                 用户操作动态
              </h3>
-             <div v-for="log in operLogs" :key="log.id" class="flex gap-3">
-                <div class="mt-1 w-2 h-2 rounded-full shrink-0" :class="getBusinessTypeColor(log)"></div>
-                <div>
-                  <div class="text-sm font-medium text-slate-900 dark:text-white truncate max-w-[280px]">
-                    <span class="font-bold text-slate-700 dark:text-slate-200">{{ getDisplayOperName(log) }}</span> 
-                    {{ getLogAction(log) }} 
-                    <span v-html="formatLogTitle(log.title)"></span>
+             <div class="space-y-6 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
+                 <div v-for="log in operLogs" :key="log.id" class="flex gap-3">
+                    <div class="mt-1 w-2 h-2 rounded-full shrink-0" :class="getBusinessTypeColor(log)"></div>
+                    <div>
+                      <div class="text-sm font-medium text-slate-900 dark:text-white truncate max-w-[280px]">
+                        <span class="font-bold text-slate-700 dark:text-slate-200">{{ getDisplayOperName(log) }}</span> 
+                        {{ getLogAction(log) }} 
+                        <span v-html="formatLogTitle(log.title)"></span>
+                      </div>
+                      <div class="text-xs text-slate-500 mt-1">{{ formatTimeAgo(log.operTime) }}</div>
+                    </div>
                   </div>
-                  <div class="text-xs text-slate-500 mt-1">{{ formatTimeAgo(log.operTime) }}</div>
-                </div>
-              </div>
-              <div v-if="operLogs.length === 0" class="text-center text-slate-400 text-sm py-4">
-                暂无动态
-              </div>
+                  <div v-if="operLogs.length === 0" class="text-center text-slate-400 text-sm py-4">
+                    暂无动态
+                  </div>
+             </div>
           </div>
         </div>
         <router-link to="/monitor/operlog" class="p-4 text-center text-sm font-medium text-blue-500 hover:bg-slate-50 dark:hover:bg-slate-800 border-t border-slate-100 dark:border-slate-800 rounded-b-xl transition-colors">
@@ -295,8 +299,8 @@ const loadOperLogs = async () => {
   isLogsLoading.value = true
   try {
     const [userRes, vectorRes] = await Promise.all([
-      getOperLogs({ pageNum: 1, pageSize: 5, logType: 'user' }) as unknown as ApiResponse,
-      getOperLogs({ pageNum: 1, pageSize: 5, logType: 'vector' }) as unknown as ApiResponse
+      getOperLogs({ pageNum: 1, pageSize: 20, logType: 'user' }) as unknown as ApiResponse,
+      getOperLogs({ pageNum: 1, pageSize: 20, logType: 'vector' }) as unknown as ApiResponse
     ])
 
     if (userRes.code === 200) {
@@ -506,5 +510,26 @@ onUnmounted(() => {
 }
 .ai-pulse {
   animation: pulse-ring 3s infinite ease-in-out;
+}
+
+/* Custom Scrollbar for Dashboard Lists */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1; /* slate-300 */
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8; /* slate-400 */
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #334155; /* slate-700 */
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #475569; /* slate-600 */
 }
 </style>
