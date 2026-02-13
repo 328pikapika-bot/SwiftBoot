@@ -56,6 +56,7 @@ declare module 'vue' {
     ElTreeSelect: typeof import('element-plus/es')['ElTreeSelect']
     GiteeIcon: typeof import('./components/GiteeIcon/index.vue')['default']
     GithubIcon: typeof import('./components/GithubIcon/index.vue')['default']
+    Pagination: typeof import('./components/Pagination/index.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SwiftLogo: typeof import('./components/SwiftLogo/index.vue')['default']

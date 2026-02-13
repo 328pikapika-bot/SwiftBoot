@@ -12,11 +12,13 @@ import i18n from './locales'
 import './styles/index.scss'
 
 import DictTag from '@/components/DictTag/index.vue'
+import Pagination from '@/components/Pagination/index.vue'
 
 const app = createApp(App)
 
 // 注册全局组件
 app.component('DictTag', DictTag)
+app.component('Pagination', Pagination)
 
 // 注册 Element Plus 图标
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {

@@ -365,17 +365,13 @@
              </div>
           </div>
           <!-- Pagination -->
-          <div class="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex justify-end">
-             <el-pagination
-                v-model:current-page="sessionPage.pageNum"
-                v-model:page-size="sessionPage.pageSize"
+          <div class="border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+             <Pagination
+                v-model:page="sessionPage.pageNum"
+                v-model:limit="sessionPage.pageSize"
                 :page-sizes="[10, 15, 20, 50]"
                 :total="sessionPage.total"
-                layout="total, sizes, prev, pager, next, jumper"
-                size="small"
-                background
-                @size-change="fetchData"
-                @current-change="fetchData"
+                @pagination="fetchData"
              />
           </div>
        </div>

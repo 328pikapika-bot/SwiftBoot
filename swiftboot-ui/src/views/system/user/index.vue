@@ -69,14 +69,11 @@
         </el-table-column>
       </el-table>
 
-      <el-pagination
-        v-model:current-page="queryParams.pageNum"
-        v-model:page-size="queryParams.pageSize"
-        :page-sizes="[10, 20, 50, 100]"
+      <Pagination
+        v-model:page="queryParams.pageNum"
+        v-model:limit="queryParams.pageSize"
         :total="total"
-        layout="total, sizes, prev, pager, next, jumper"
-        @size-change="getList"
-        @current-change="getList"
+        @pagination="getList"
       />
     </el-card>
 
