@@ -146,7 +146,7 @@
       </div>
 
       <!-- 思考延迟 -->
-      <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-xl shadow-slate-200/40 dark:shadow-black/20 border border-slate-100 dark:border-slate-700/50 hover:-translate-y-1 transition-all duration-300">
+      <div @click="openLatencyDetail" class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-xl shadow-slate-200/40 dark:shadow-black/20 border border-slate-100 dark:border-slate-700/50 hover:-translate-y-1 transition-all duration-300 cursor-pointer">
         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
           <span class="material-icons-round text-6xl text-emerald-500">speed</span>
         </div>
@@ -877,6 +877,72 @@
       </div>
     </el-dialog>
 
+    <!-- 思考延迟详情弹窗 -->
+    <el-dialog
+      v-model="latencyDetailVisible"
+      width="900px"
+      class="!rounded-xl overflow-hidden"
+      align-center
+      :show-close="false"
+      @opened="initLatencyChart"
+    >
+      <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900">
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <span class="material-icons-round text-emerald-500">speed</span>
+          思考延迟详情 (Response Latency)
+          <span class="material-icons-round text-sm text-emerald-400/50 cursor-pointer hover:text-emerald-500 transition-colors transform active:rotate-180 duration-300 ml-2" 
+                @click="toggleLatencyDataSource"
+                :title="useRealLatencyData ? '切换至演示数据' : '切换至真实数据'">
+             sync
+          </span>
+        </h3>
+        
+        <div class="flex gap-2">
+            <div class="relative">
+              <select v-model="latencyTimeRange" @change="fetchLatencyStats" class="appearance-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-1 pl-3 pr-8 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all cursor-pointer">
+                 <option value="week">本周 (Daily)</option>
+                 <option value="month">本月 (Daily)</option>
+                 <option value="quarter">本季度 (Weekly)</option>
+                 <option value="year">本年 (Monthly)</option>
+                 <option value="all">历史总计 (Monthly)</option>
+              </select>
+              <span class="material-icons-round text-slate-400 text-xs absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">expand_more</span>
+           </div>
+           
+           <button @click="latencyDetailVisible = false" class="opacity-50 hover:opacity-100 transition-opacity text-slate-500 dark:text-slate-400 outline-none focus:outline-none ml-2">
+             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+             </svg>
+           </button>
+        </div>
+      </div>
+      
+      <div class="p-6 bg-slate-50 dark:bg-slate-900/50 flex flex-col gap-6 h-[600px]">
+         <!-- Description -->
+         <div class="bg-emerald-50 dark:bg-emerald-900/10 p-3 rounded-lg border border-emerald-100 dark:border-emerald-800/30 mb-0">
+            <p class="text-sm text-emerald-800 dark:text-emerald-300 leading-relaxed">
+               <span class="font-bold">思考延迟 (Thinking Latency)</span>：统计 AI 从接收到用户提问到开始输出第一个字符的时间间隔。它综合反映了 RAG 知识检索耗时、Prompt 构建耗时以及大模型首字生成耗时 (TTFT)。
+            </p>
+         </div>
+
+         <!-- Chart Area -->
+         <div class="flex-1 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm p-4 flex flex-col">
+            <div ref="latencyChartRef" class="w-full h-full"></div>
+         </div>
+         
+         <!-- Suggestion Area -->
+         <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm flex gap-4 items-start">
+             <div class="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center shrink-0">
+                <span class="material-icons-round text-emerald-500 animate-pulse">speed</span>
+             </div>
+             <div>
+                <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">性能优化建议</h4>
+                <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{{ latencySuggestion }}</p>
+             </div>
+         </div>
+      </div>
+    </el-dialog>
+
     <!-- 问答详情弹窗 -->
     <el-dialog 
       v-model="detailVisible" 
@@ -1046,7 +1112,7 @@ import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/atom-one-dark.css'
 import 'github-markdown-css/github-markdown.css'
-import { getDashboardStats, listAiSession, getUserTokenStats, getActivityStats, getTokenStats, getKnowledgeStats } from '@/api/monitor/ai-session'
+import { getDashboardStats, listAiSession, getUserTokenStats, getActivityStats, getTokenStats, getKnowledgeStats, getLatencyStats } from '@/api/monitor/ai-session'
 import { changeStatus } from '@/api/system/user'
 import type { User } from '@/api/system/user'
 import { useUserStore } from '@/stores/user'
@@ -1714,6 +1780,112 @@ const updateSynapseChart = () => {
   })
 }
 
+let latencyChart: echarts.ECharts | null = null
+
+const openLatencyDetail = () => {
+  latencyDetailVisible.value = true
+}
+
+const toggleLatencyDataSource = () => {
+  useRealLatencyData.value = !useRealLatencyData.value
+  ElMessage.success(useRealLatencyData.value ? '已切换至真实数据' : '已切换至演示数据')
+  fetchLatencyStats()
+}
+
+const fetchLatencyStats = async () => {
+    if (!latencyChart) return
+    
+    latencyChart.showLoading({ color: '#10b981', maskColor: 'rgba(255, 255, 255, 0)' })
+    try {
+        let xAxis: string[] = []
+        let series: number[] = []
+        let suggestion = ''
+
+        if (useRealLatencyData.value) {
+            const res = await getLatencyStats(latencyTimeRange.value)
+            // @ts-ignore
+            if (res.code === 200) {
+                // @ts-ignore
+                const data = res.data
+                xAxis = data.xAxis || []
+                series = data.series || []
+                suggestion = data.suggestion || '暂无建议'
+            }
+        } else {
+             // Mock
+             let count = 7
+             if (latencyTimeRange.value === 'month') count = 30
+             if (latencyTimeRange.value === 'quarter') count = 12
+             if (latencyTimeRange.value === 'year') count = 12
+             if (latencyTimeRange.value === 'all') count = 6
+             
+             for (let i = 0; i < count; i++) {
+                 xAxis.push(latencyTimeRange.value === 'week' ? `周${['一','二','三','四','五','六','日'][i]}` : `${i+1}`)
+                 series.push(Math.floor(Math.random() * 2000) + 500)
+             }
+             suggestion = '演示数据：系统响应速度极快，平均延迟维持在 1.5s 以内，用户体验流畅。'
+        }
+
+        latencySuggestion.value = suggestion
+        
+        latencyChart.setOption({
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' },
+                formatter: '{b}<br/>{a}: {c} ms'
+            },
+            grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true, top: '10%' },
+            xAxis: [
+                {
+                    type: 'category',
+                    data: xAxis,
+                    axisTick: { alignWithLabel: true },
+                    axisLine: { lineStyle: { color: '#94a3b8' } },
+                    axisLabel: { color: '#64748b', fontSize: 11 }
+                }
+            ],
+            yAxis: [
+                {
+                    type: 'value',
+                    name: 'ms',
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    splitLine: { lineStyle: { type: 'dashed', color: '#e2e8f0' } },
+                    axisLabel: { color: '#94a3b8' }
+                }
+            ],
+            series: [
+                {
+                    name: '平均延迟',
+                    type: 'bar',
+                    barWidth: '40%',
+                    data: series,
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#10b981' },
+                            { offset: 1, color: '#6ee7b7' }
+                        ]),
+                        borderRadius: [4, 4, 0, 0]
+                    },
+                    animationDelay: (idx: number) => idx * 10
+                }
+            ]
+        })
+    } finally {
+        latencyChart.hideLoading()
+    }
+}
+
+const initLatencyChart = () => {
+    nextTick(() => {
+        if (latencyChartRef.value) {
+            if (latencyChart) latencyChart.dispose()
+            latencyChart = echarts.init(latencyChartRef.value)
+            fetchLatencyStats()
+        }
+    })
+}
+
 const fetchData = async () => {
   loading.value = true
   try {
@@ -1770,6 +1942,7 @@ const handleResize = () => {
    synapseChart?.resize()
    activityChart?.resize()
    tokenChart?.resize()
+   latencyChart?.resize()
 }
 
 onMounted(() => {
@@ -1804,6 +1977,7 @@ onUnmounted(() => {
    synapseChart?.dispose()
    activityChart?.dispose()
    tokenChart?.dispose()
+   latencyChart?.dispose()
 })
 
 const getRadarOption = (forDetail = false) => {
@@ -1891,6 +2065,12 @@ const initRadarDetailChart = () => {
      radarDetailChart.setOption(getRadarOption(true))
   }
 }
+
+const latencyDetailVisible = ref(false)
+const latencyTimeRange = ref('week')
+const latencyChartRef = ref<HTMLElement>()
+const latencySuggestion = ref('')
+const useRealLatencyData = ref(true)
 
 const activityDetailVisible = ref(false)
 const activityTimeRange = ref('week')

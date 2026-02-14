@@ -198,6 +198,26 @@ public interface SysAiSessionMapper extends BaseMapper<SysAiSession> {
     List<Map<String, Object>> selectTokenStats(@Param("timeDimension") String timeDimension, @Param("startTime") String startTime, @Param("endTime") String endTime);
 
     /**
+     * 统计响应延迟详细数据 (Avg Duration)
+     */
+    @Select("<script>" +
+            "SELECT " +
+            "<choose>" +
+            "  <when test='timeDimension == \"day\"'>DATE_FORMAT(create_time, '%Y-%m-%d')</when>" +
+            "  <when test='timeDimension == \"week\"'>CONCAT(YEAR(create_time), '年第', WEEK(create_time, 1), '周')</when>" +
+            "  <when test='timeDimension == \"month\"'>DATE_FORMAT(create_time, '%Y-%m')</when>" +
+            "</choose>" +
+            " as time_point, AVG(duration) as avg_duration " +
+            "FROM sys_ai_session " +
+            "WHERE 1=1 " +
+            "<if test='startTime != null'> AND create_time &gt;= #{startTime} </if>" +
+            "<if test='endTime != null'> AND create_time &lt;= #{endTime} </if>" +
+            "GROUP BY time_point " +
+            "ORDER BY time_point" +
+            "</script>")
+    List<Map<String, Object>> selectLatencyStats(@Param("timeDimension") String timeDimension, @Param("startTime") String startTime, @Param("endTime") String endTime);
+
+    /**
      * 统计知识库切片数量 (模拟数据，实际应查询 vector_store 表)
      * 这里暂时返回一个模拟的统计结果，按文件类型分组
      */

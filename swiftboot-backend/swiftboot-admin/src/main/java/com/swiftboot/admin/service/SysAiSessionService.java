@@ -48,6 +48,11 @@ public interface SysAiSessionService extends IService<SysAiSession> {
     Map<String, Object> getDetailedTokenStats(String timeRange);
 
     /**
+     * 获取详细的响应延迟统计数据
+     */
+    Map<String, Object> getDetailedLatencyStats(String timeRange);
+
+    /**
      * 获取知识库与记忆详情统计数据 (左脑硬知识 + 右脑软记忆)
      */
     Map<String, Object> getKnowledgeStats();

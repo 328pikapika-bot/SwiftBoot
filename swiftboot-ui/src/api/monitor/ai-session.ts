@@ -70,6 +70,15 @@ export function getTokenStats(timeRange?: string) {
   })
 }
 
+// 获取详细响应延迟统计
+export function getLatencyStats(timeRange?: string) {
+  return request({
+    url: '/monitor/ai-session/latency-stats',
+    method: 'get',
+    params: { timeRange }
+  })
+}
+
 // 获取知识库与记忆详情统计
 export function getKnowledgeStats() {
   return request({

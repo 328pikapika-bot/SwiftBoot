@@ -573,6 +573,111 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
         return result;
     }
 
+    @Override
+    public Map<String, Object> getDetailedLatencyStats(String timeRange) {
+        Map<String, Object> result = new HashMap<>();
+        
+        // 1. 确定时间范围和聚合粒度
+        LocalDateTime now = LocalDateTime.now();
+        String startTime = null;
+        String endTime = null;
+        String timeDimension = "day"; // 默认按天
+        
+        if ("week".equals(timeRange)) {
+            LocalDateTime start = now.with(DayOfWeek.MONDAY).with(LocalTime.MIN);
+            LocalDateTime end = now.with(DayOfWeek.SUNDAY).with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "day";
+        } else if ("month".equals(timeRange)) {
+            LocalDateTime start = now.with(TemporalAdjusters.firstDayOfMonth()).with(LocalTime.MIN);
+            LocalDateTime end = now.with(TemporalAdjusters.lastDayOfMonth()).with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "day";
+        } else if ("quarter".equals(timeRange)) {
+            int currentMonth = now.getMonthValue();
+            int firstMonthOfQuarter = currentMonth - (currentMonth - 1) % 3;
+            LocalDateTime start = now.withMonth(firstMonthOfQuarter).with(TemporalAdjusters.firstDayOfMonth()).with(LocalTime.MIN);
+            LocalDateTime end = start.plusMonths(2).with(TemporalAdjusters.lastDayOfMonth()).with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "week";
+        } else if ("year".equals(timeRange)) {
+            LocalDateTime start = now.with(TemporalAdjusters.firstDayOfYear()).with(LocalTime.MIN);
+            LocalDateTime end = now.with(TemporalAdjusters.lastDayOfYear()).with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "month";
+        } else if ("all".equals(timeRange)) {
+            startTime = null;
+            endTime = null;
+            timeDimension = "month";
+        } else {
+            // 默认最近 7 天
+            LocalDateTime start = now.minusDays(6).with(LocalTime.MIN);
+            LocalDateTime end = now.with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "day";
+        }
+        
+        // 2. 查询数据库聚合数据
+        List<Map<String, Object>> stats = baseMapper.selectLatencyStats(timeDimension, startTime, endTime);
+        
+        // 3. 数据处理
+        List<String> xAxisData = new ArrayList<>();
+        List<Double> seriesData = new ArrayList<>();
+        
+        double totalDuration = 0;
+        double lastDuration = 0;
+        int count = 0;
+        
+        if (stats != null) {
+            for (Map<String, Object> item : stats) {
+                String timePoint = String.valueOf(item.get("time_point"));
+                Double avgDuration = item.get("avg_duration") == null ? 0.0 : Double.valueOf(String.valueOf(item.get("avg_duration")));
+                
+                xAxisData.add(timePoint);
+                seriesData.add(Math.round(avgDuration * 10.0) / 10.0); // 保留1位小数
+                
+                lastDuration = avgDuration;
+                totalDuration += avgDuration;
+                count++;
+            }
+        }
+        
+        result.put("xAxis", xAxisData);
+        result.put("series", seriesData);
+        
+        // 4. 生成动态建议
+        String suggestion = "";
+        if (seriesData.isEmpty()) {
+            suggestion = "暂无延迟数据，系统尚未产生足够对话记录。";
+        } else {
+            double avg = count > 0 ? totalDuration / count : 0;
+            
+            if (lastDuration > 3000) {
+                suggestion = "近期响应延迟较高 (>3s) ⚠️，建议检查 RAG 检索链路或模型推理负载。";
+            } else if (lastDuration < 1000) {
+                suggestion = "系统响应极速 (⚡ <1s)，用户体验极佳，请继续保持。";
+            } else {
+                suggestion = "系统响应速度稳定在正常范围 (1s~3s)，符合预期。";
+            }
+            
+            if (seriesData.size() > 1) {
+                Double prevDuration = seriesData.get(seriesData.size() - 2);
+                if (lastDuration > prevDuration * 1.5) {
+                    suggestion += " 注意：近期延迟有显著上升趋势。";
+                }
+            }
+        }
+        
+        result.put("suggestion", suggestion);
+        
+        return result;
+    }
+
     private static final String KNOWLEDGE_STATS_URL = "http://localhost:8001/knowledge/stats";
 
     @Override

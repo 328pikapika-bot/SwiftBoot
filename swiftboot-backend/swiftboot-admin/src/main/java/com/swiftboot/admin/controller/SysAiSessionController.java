@@ -83,6 +83,12 @@ public class SysAiSessionController {
         return R.ok(aiSessionService.getDetailedTokenStats(timeRange));
     }
 
+    @Operation(summary = "获取详细响应延迟统计")
+    @GetMapping("/latency-stats")
+    public R<Map<String, Object>> latencyStats(@RequestParam(required = false, defaultValue = "day") String timeRange) {
+        return R.ok(aiSessionService.getDetailedLatencyStats(timeRange));
+    }
+
     @Operation(summary = "获取知识库与记忆详情统计")
     @GetMapping("/knowledge-stats")
     public R<Map<String, Object>> knowledgeStats() {
