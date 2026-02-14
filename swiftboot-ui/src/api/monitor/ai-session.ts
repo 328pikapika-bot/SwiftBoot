@@ -60,3 +60,12 @@ export function getActivityStats(timeRange?: string) {
     params: { timeRange }
   })
 }
+
+// 获取详细算力消耗统计
+export function getTokenStats(timeRange?: string) {
+  return request({
+    url: '/monitor/ai-session/token-stats',
+    method: 'get',
+    params: { timeRange }
+  })
+}

@@ -175,7 +175,7 @@
       </div>
 
       <!-- 算力消耗 -->
-      <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-xl shadow-slate-200/40 dark:shadow-black/20 border border-slate-100 dark:border-slate-700/50 hover:-translate-y-1 transition-all duration-300">
+      <div @click="openTokenDetail" class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-xl shadow-slate-200/40 dark:shadow-black/20 border border-slate-100 dark:border-slate-700/50 hover:-translate-y-1 transition-all duration-300 cursor-pointer">
         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
           <span class="material-icons-round text-6xl text-orange-500">local_fire_department</span>
         </div>
@@ -620,6 +620,72 @@
       </div>
     </el-dialog>
 
+    <!-- 算力消耗详情弹窗 -->
+    <el-dialog
+      v-model="tokenDetailVisible"
+      width="900px"
+      class="!rounded-xl overflow-hidden"
+      align-center
+      :show-close="false"
+      @opened="initTokenChart"
+    >
+      <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <span class="material-icons-round text-orange-500">local_fire_department</span>
+          算力消耗分析
+          <span class="material-icons-round text-sm text-orange-400/50 cursor-pointer hover:text-orange-500 transition-colors transform active:rotate-180 duration-300 ml-2" 
+                @click="toggleTokenDataSource"
+                :title="useRealTokenData ? '切换至演示数据' : '切换至真实数据'">
+             sync
+          </span>
+        </h3>
+        
+        <div class="flex gap-2">
+            <div class="relative">
+              <select v-model="tokenTimeRange" @change="fetchTokenStats" class="appearance-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-1 pl-3 pr-8 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all cursor-pointer">
+                 <option value="week">本周 (Daily)</option>
+                 <option value="month">本月 (Daily)</option>
+                 <option value="quarter">本季度 (Weekly)</option>
+                 <option value="year">本年 (Monthly)</option>
+                 <option value="all">历史总计 (Monthly)</option>
+              </select>
+              <span class="material-icons-round text-slate-400 text-xs absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">expand_more</span>
+           </div>
+           
+           <button @click="tokenDetailVisible = false" class="opacity-50 hover:opacity-100 transition-opacity text-slate-500 dark:text-slate-400 outline-none focus:outline-none ml-2">
+             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+             </svg>
+           </button>
+        </div>
+      </div>
+      
+      <div class="p-6 bg-slate-50 dark:bg-slate-900/50 flex flex-col gap-6 h-[600px]">
+         <!-- Description -->
+         <div class="bg-orange-50 dark:bg-orange-900/10 p-3 rounded-lg border border-orange-100 dark:border-orange-800/30 mb-0">
+            <p class="text-sm text-orange-800 dark:text-orange-300 leading-relaxed">
+               <span class="font-bold">算力消耗 (Token Consumption)</span>：统计 Prompt（输入）与 Completion（输出）的 Token 总量。Prompt 代表提问与上下文的长度，Completion 代表 AI 生成内容的长度。Token 是计费与性能评估的核心单位。
+            </p>
+         </div>
+
+         <!-- Chart Area -->
+         <div class="flex-1 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm p-4 flex flex-col">
+            <div ref="tokenChartRef" class="w-full h-full"></div>
+         </div>
+         
+         <!-- Suggestion Area -->
+         <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm flex gap-4 items-start">
+             <div class="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center shrink-0">
+                <span class="material-icons-round text-orange-500 animate-pulse">insights</span>
+             </div>
+             <div>
+                <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">成本优化建议</h4>
+                <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{{ tokenSuggestion }}</p>
+             </div>
+         </div>
+      </div>
+    </el-dialog>
+
     <!-- 问答详情弹窗 -->
     <el-dialog 
       v-model="detailVisible" 
@@ -789,7 +855,7 @@ import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/atom-one-dark.css'
 import 'github-markdown-css/github-markdown.css'
-import { getDashboardStats, listAiSession, getUserTokenStats, getActivityStats } from '@/api/monitor/ai-session'
+import { getDashboardStats, listAiSession, getUserTokenStats, getActivityStats, getTokenStats } from '@/api/monitor/ai-session'
 import { changeStatus } from '@/api/system/user'
 import type { User } from '@/api/system/user'
 import { useUserStore } from '@/stores/user'
@@ -1512,6 +1578,7 @@ const handleResize = () => {
    funnelChart?.resize()
    synapseChart?.resize()
    activityChart?.resize()
+   tokenChart?.resize()
 }
 
 onMounted(() => {
@@ -1545,6 +1612,7 @@ onUnmounted(() => {
    funnelChart?.dispose()
    synapseChart?.dispose()
    activityChart?.dispose()
+   tokenChart?.dispose()
 })
 
 const getRadarOption = (forDetail = false) => {
@@ -1768,6 +1836,194 @@ const initActivityChart = () => {
             if (activityChart) activityChart.dispose()
             activityChart = echarts.init(activityChartRef.value)
             fetchActivityStats()
+        }
+    })
+}
+
+// Token Detail Logic
+const tokenDetailVisible = ref(false)
+const tokenTimeRange = ref('week')
+const tokenChartRef = ref<HTMLElement>()
+let tokenChart: echarts.ECharts | null = null
+const tokenSuggestion = ref('')
+const useRealTokenData = ref(true)
+
+const openTokenDetail = () => {
+  tokenDetailVisible.value = true
+}
+
+const toggleTokenDataSource = () => {
+  useRealTokenData.value = !useRealTokenData.value
+  ElMessage.success(useRealTokenData.value ? '已切换至真实数据' : '已切换至演示数据')
+  fetchTokenStats()
+}
+
+const generateMockTokenData = (range: string) => {
+    let xAxis: string[] = []
+    let promptSeries: number[] = []
+    let completionSeries: number[] = []
+    let suggestion = ''
+
+    if (range === 'week') {
+        const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+        xAxis = days
+        promptSeries = days.map(() => Math.floor(Math.random() * 5000) + 1000)
+        completionSeries = days.map(() => Math.floor(Math.random() * 2000) + 500)
+        suggestion = '演示数据：本周 Token 消耗主要集中在 Prompt 输入上，表明用户倾向于使用长文本提问。'
+    } else if (range === 'month') {
+        const days = 30
+        for (let i = 1; i <= days; i++) {
+            xAxis.push(`${i}日`)
+            promptSeries.push(Math.floor(Math.random() * 4000) + 800)
+            completionSeries.push(Math.floor(Math.random() * 1500) + 300)
+        }
+        suggestion = '演示数据：本月算力消耗平稳，Completion 输出占比较低，模型推理效率较高。'
+    } else if (range === 'quarter') {
+        for (let i = 1; i <= 12; i++) {
+            xAxis.push(`第${i}周`)
+            promptSeries.push(Math.floor(Math.random() * 20000) + 5000)
+            completionSeries.push(Math.floor(Math.random() * 8000) + 2000)
+        }
+        suggestion = '演示数据：季度数据显示算力成本稳步上升，建议关注高消耗用户并优化 Token 策略。'
+    } else if (range === 'year') {
+        const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
+        xAxis = months
+        promptSeries = months.map(() => Math.floor(Math.random() * 80000) + 20000)
+        completionSeries = months.map(() => Math.floor(Math.random() * 30000) + 8000)
+        suggestion = '演示数据：年度消耗总量符合预期，RAG 检索带来的 Prompt 膨胀在可控范围内。'
+    } else { // all
+         const months = ['2023-08', '2023-09', '2023-10', '2023-11', '2023-12', '2024-01']
+         xAxis = months
+         promptSeries = months.map(() => Math.floor(Math.random() * 100000) + 25000)
+         completionSeries = months.map(() => Math.floor(Math.random() * 40000) + 10000)
+         suggestion = '演示数据：历史数据表明系统算力需求与活跃用户数呈正相关，扩容计划需提上日程。'
+    }
+    return { xAxis, promptSeries, completionSeries, suggestion }
+}
+
+const fetchTokenStats = async () => {
+    if (!tokenChart) return
+    
+    tokenChart.showLoading({ color: '#f97316', maskColor: 'rgba(255, 255, 255, 0)' })
+    try {
+        let xAxis: string[] = []
+        let promptSeries: number[] = []
+        let completionSeries: number[] = []
+        let suggestion = ''
+
+        if (useRealTokenData.value) {
+            const res = await getTokenStats(tokenTimeRange.value)
+            // @ts-ignore
+            if (res.code === 200) {
+                // @ts-ignore
+                const data = res.data
+                xAxis = data.xAxis || []
+                const totalSeries = data.series || []
+                suggestion = data.suggestion || '暂无建议'
+                
+                // 模拟拆分 Prompt/Completion (因为后端目前只存了 Total)
+                // 假设 70% Prompt, 30% Completion
+                promptSeries = totalSeries.map((val: number) => Math.round(val * 0.7))
+                completionSeries = totalSeries.map((val: number) => Math.round(val * 0.3))
+                
+                if (totalSeries.length > 0) {
+                    suggestion += ' (注：当前数据库仅存储总 Token，Prompt/Completion 为按 7:3 比例估算展示)'
+                }
+            }
+        } else {
+             const mock = generateMockTokenData(tokenTimeRange.value)
+             xAxis = mock.xAxis
+             promptSeries = mock.promptSeries
+             completionSeries = mock.completionSeries
+             suggestion = mock.suggestion
+        }
+
+        tokenSuggestion.value = suggestion
+        
+        tokenChart.setOption({
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' },
+                formatter: (params: any) => {
+                    let res = `<div class="font-bold mb-1">${params[0].name}</div>`
+                    let total = 0
+                    params.forEach((item: any) => {
+                        res += `<div class="flex items-center gap-2 text-xs">
+                                  <span class="w-2 h-2 rounded-full" style="background:${item.color}"></span>
+                                  <span class="text-slate-500">${item.seriesName}:</span>
+                                  <span class="font-mono font-bold ml-auto">${item.value.toLocaleString()}</span>
+                                </div>`
+                        total += item.value
+                    })
+                    res += `<div class="mt-1 pt-1 border-t border-slate-200 dark:border-slate-700 flex justify-between text-xs font-bold">
+                              <span>Total:</span>
+                              <span class="font-mono">${total.toLocaleString()}</span>
+                            </div>`
+                    return res
+                }
+            },
+            legend: {
+                data: ['Prompt (输入)', 'Completion (输出)'],
+                bottom: 0,
+                textStyle: { color: '#64748b' }
+            },
+            grid: { left: '3%', right: '4%', bottom: '10%', containLabel: true, top: '10%' },
+            xAxis: [
+                {
+                    type: 'category',
+                    data: xAxis,
+                    axisTick: { alignWithLabel: true },
+                    axisLine: { lineStyle: { color: '#94a3b8' } },
+                    axisLabel: { color: '#64748b', fontSize: 11 }
+                }
+            ],
+            yAxis: [
+                {
+                    type: 'value',
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    splitLine: { lineStyle: { type: 'dashed', color: '#e2e8f0' } },
+                    axisLabel: { color: '#94a3b8' }
+                }
+            ],
+            series: [
+                {
+                    name: 'Prompt (输入)',
+                    type: 'bar',
+                    stack: 'total',
+                    barWidth: '40%',
+                    data: promptSeries,
+                    itemStyle: {
+                        color: '#f97316',
+                        borderRadius: [0, 0, 0, 0]
+                    },
+                    animationDelay: (idx: number) => idx * 10
+                },
+                {
+                    name: 'Completion (输出)',
+                    type: 'bar',
+                    stack: 'total',
+                    barWidth: '40%',
+                    data: completionSeries,
+                    itemStyle: {
+                        color: '#3b82f6',
+                        borderRadius: [4, 4, 0, 0] // Top rounded
+                    },
+                    animationDelay: (idx: number) => idx * 10 + 100
+                }
+            ]
+        })
+    } finally {
+        tokenChart.hideLoading()
+    }
+}
+
+const initTokenChart = () => {
+    nextTick(() => {
+        if (tokenChartRef.value) {
+            if (tokenChart) tokenChart.dispose()
+            tokenChart = echarts.init(tokenChartRef.value)
+            fetchTokenStats()
         }
     })
 }

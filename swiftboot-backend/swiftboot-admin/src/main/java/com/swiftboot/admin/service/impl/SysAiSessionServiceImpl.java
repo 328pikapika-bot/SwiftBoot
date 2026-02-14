@@ -456,4 +456,110 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
         
         return result;
     }
+
+    @Override
+    public Map<String, Object> getDetailedTokenStats(String timeRange) {
+        Map<String, Object> result = new HashMap<>();
+        
+        // 1. 确定时间范围和聚合粒度
+        LocalDateTime now = LocalDateTime.now();
+        String startTime = null;
+        String endTime = null;
+        String timeDimension = "day"; // 默认按天
+        
+        if ("week".equals(timeRange)) {
+            LocalDateTime start = now.with(DayOfWeek.MONDAY).with(LocalTime.MIN);
+            LocalDateTime end = now.with(DayOfWeek.SUNDAY).with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "day";
+        } else if ("month".equals(timeRange)) {
+            LocalDateTime start = now.with(TemporalAdjusters.firstDayOfMonth()).with(LocalTime.MIN);
+            LocalDateTime end = now.with(TemporalAdjusters.lastDayOfMonth()).with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "day";
+        } else if ("quarter".equals(timeRange)) {
+            int currentMonth = now.getMonthValue();
+            int firstMonthOfQuarter = currentMonth - (currentMonth - 1) % 3;
+            LocalDateTime start = now.withMonth(firstMonthOfQuarter).with(TemporalAdjusters.firstDayOfMonth()).with(LocalTime.MIN);
+            LocalDateTime end = start.plusMonths(2).with(TemporalAdjusters.lastDayOfMonth()).with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "week";
+        } else if ("year".equals(timeRange)) {
+            LocalDateTime start = now.with(TemporalAdjusters.firstDayOfYear()).with(LocalTime.MIN);
+            LocalDateTime end = now.with(TemporalAdjusters.lastDayOfYear()).with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "month";
+        } else if ("all".equals(timeRange)) {
+            startTime = null;
+            endTime = null;
+            timeDimension = "month";
+        } else {
+            // 默认最近 7 天
+            LocalDateTime start = now.minusDays(6).with(LocalTime.MIN);
+            LocalDateTime end = now.with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "day";
+        }
+        
+        // 2. 查询数据库聚合数据
+        List<Map<String, Object>> stats = baseMapper.selectTokenStats(timeDimension, startTime, endTime);
+        
+        // 3. 数据处理 (提取 X 轴和 Y 轴)
+        List<String> xAxisData = new ArrayList<>();
+        List<Long> seriesData = new ArrayList<>(); // Total Tokens
+        
+        long totalTokens = 0;
+        long lastTokens = 0;
+        
+        if (stats != null) {
+            for (Map<String, Object> item : stats) {
+                String timePoint = String.valueOf(item.get("time_point"));
+                Long tokens = item.get("total_tokens") == null ? 0L : Long.valueOf(String.valueOf(item.get("total_tokens")));
+                
+                xAxisData.add(timePoint);
+                seriesData.add(tokens);
+                
+                lastTokens = tokens;
+                totalTokens += tokens;
+            }
+        }
+        
+        result.put("xAxis", xAxisData);
+        result.put("series", seriesData);
+        
+        // 4. 生成动态建议
+        String suggestion = "";
+        if (seriesData.isEmpty()) {
+            suggestion = "暂无算力消耗数据，建议增加 AI 功能的使用场景。";
+        } else {
+            // 简单趋势分析
+            if (seriesData.size() > 1) {
+                Long prevTokens = seriesData.get(seriesData.size() - 2);
+                if (lastTokens > prevTokens * 1.2) {
+                    suggestion = "近期算力消耗激增 🚀，请关注是否存在异常高频调用，或考虑优化 Prompt 以降低成本。";
+                } else if (lastTokens < prevTokens * 0.8) {
+                    suggestion = "近期算力消耗回落 📉，表明系统负载较轻，可考虑推广更多业务场景接入。";
+                } else {
+                    suggestion = "算力消耗保持平稳 📊，成本处于可控范围内。";
+                }
+            } else {
+                suggestion = "算力消耗数据收集中。";
+            }
+            
+            // 补充成本建议 (假设 1M tokens = 2元)
+            double estimatedCost = totalTokens / 1000000.0 * 2.0;
+            if (estimatedCost > 100) {
+                suggestion += String.format(" 累计预估成本已达 ¥%.2f，建议定期审查 Token 使用效率。", estimatedCost);
+            }
+        }
+        
+        result.put("suggestion", suggestion);
+        
+        return result;
+    }
 }

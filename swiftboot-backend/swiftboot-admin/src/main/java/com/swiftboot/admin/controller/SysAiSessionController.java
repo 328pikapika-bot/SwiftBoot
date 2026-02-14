@@ -76,4 +76,10 @@ public class SysAiSessionController {
     public R<Map<String, Object>> activityStats(@RequestParam(required = false, defaultValue = "day") String timeRange) {
         return R.ok(aiSessionService.getDetailedActivityStats(timeRange));
     }
+
+    @Operation(summary = "获取详细算力消耗统计")
+    @GetMapping("/token-stats")
+    public R<Map<String, Object>> tokenStats(@RequestParam(required = false, defaultValue = "day") String timeRange) {
+        return R.ok(aiSessionService.getDetailedTokenStats(timeRange));
+    }
 }

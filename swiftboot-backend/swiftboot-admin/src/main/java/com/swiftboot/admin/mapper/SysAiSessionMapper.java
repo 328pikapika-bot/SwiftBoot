@@ -176,4 +176,24 @@ public interface SysAiSessionMapper extends BaseMapper<SysAiSession> {
             "ORDER BY time_point" +
             "</script>")
     List<Map<String, Object>> selectActivityStats(@Param("timeDimension") String timeDimension, @Param("startTime") String startTime, @Param("endTime") String endTime);
+
+    /**
+     * 统计算力消耗详细数据 (Tokens)
+     */
+    @Select("<script>" +
+            "SELECT " +
+            "<choose>" +
+            "  <when test='timeDimension == \"day\"'>DATE_FORMAT(create_time, '%Y-%m-%d')</when>" +
+            "  <when test='timeDimension == \"week\"'>CONCAT(YEAR(create_time), '年第', WEEK(create_time, 1), '周')</when>" +
+            "  <when test='timeDimension == \"month\"'>DATE_FORMAT(create_time, '%Y-%m')</when>" +
+            "</choose>" +
+            " as time_point, SUM(tokens) as total_tokens " +
+            "FROM sys_ai_session " +
+            "WHERE 1=1 " +
+            "<if test='startTime != null'> AND create_time &gt;= #{startTime} </if>" +
+            "<if test='endTime != null'> AND create_time &lt;= #{endTime} </if>" +
+            "GROUP BY time_point " +
+            "ORDER BY time_point" +
+            "</script>")
+    List<Map<String, Object>> selectTokenStats(@Param("timeDimension") String timeDimension, @Param("startTime") String startTime, @Param("endTime") String endTime);
 }

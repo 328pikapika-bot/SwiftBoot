@@ -41,4 +41,9 @@ public interface SysAiSessionService extends IService<SysAiSession> {
      * 获取详细的交互活跃度统计数据
      */
     Map<String, Object> getDetailedActivityStats(String timeRange);
+
+    /**
+     * 获取详细的算力消耗统计数据
+     */
+    Map<String, Object> getDetailedTokenStats(String timeRange);
 }
