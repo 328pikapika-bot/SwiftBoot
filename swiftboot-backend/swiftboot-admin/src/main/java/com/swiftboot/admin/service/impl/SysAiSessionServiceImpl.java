@@ -344,4 +344,116 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
         
         return baseMapper.selectUserTokenStats(page, username, timeRange, rankType, deptId, userId);
     }
+
+    @Override
+    public Map<String, Object> getDetailedActivityStats(String timeRange) {
+        Map<String, Object> result = new HashMap<>();
+        
+        // 1. 确定时间范围和聚合粒度
+        LocalDateTime now = LocalDateTime.now();
+        String startTime = null;
+        String endTime = null;
+        String timeDimension = "day"; // 默认按天
+        
+        if ("week".equals(timeRange)) {
+            // 本周 (周一 ~ 周日) -> 按天展示
+            LocalDateTime start = now.with(DayOfWeek.MONDAY).with(LocalTime.MIN);
+            LocalDateTime end = now.with(DayOfWeek.SUNDAY).with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "day";
+        } else if ("month".equals(timeRange)) {
+            // 本月 -> 按天展示
+            LocalDateTime start = now.with(TemporalAdjusters.firstDayOfMonth()).with(LocalTime.MIN);
+            LocalDateTime end = now.with(TemporalAdjusters.lastDayOfMonth()).with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "day";
+        } else if ("quarter".equals(timeRange)) {
+            // 本季度 -> 按周展示
+            // 简单处理：当前月所在季度的第一天到最后一天
+            int currentMonth = now.getMonthValue();
+            int firstMonthOfQuarter = currentMonth - (currentMonth - 1) % 3;
+            LocalDateTime start = now.withMonth(firstMonthOfQuarter).with(TemporalAdjusters.firstDayOfMonth()).with(LocalTime.MIN);
+            LocalDateTime end = start.plusMonths(2).with(TemporalAdjusters.lastDayOfMonth()).with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "week";
+        } else if ("year".equals(timeRange)) {
+            // 本年 -> 按月展示
+            LocalDateTime start = now.with(TemporalAdjusters.firstDayOfYear()).with(LocalTime.MIN);
+            LocalDateTime end = now.with(TemporalAdjusters.lastDayOfYear()).with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "month";
+        } else if ("all".equals(timeRange)) {
+            // 所有 -> 按月展示 (或按年，这里暂定按月)
+            startTime = null;
+            endTime = null;
+            timeDimension = "month";
+        } else {
+            // 默认最近 7 天
+            LocalDateTime start = now.minusDays(6).with(LocalTime.MIN);
+            LocalDateTime end = now.with(LocalTime.MAX);
+            startTime = start.toString().replace("T", " ");
+            endTime = end.toString().replace("T", " ");
+            timeDimension = "day";
+        }
+        
+        // 2. 查询数据库聚合数据
+        List<Map<String, Object>> stats = baseMapper.selectActivityStats(timeDimension, startTime, endTime);
+        
+        // 3. 数据处理 (提取 X 轴和 Y 轴)
+        // 注意：这里未做严格的日期补全（填充0），为了简化逻辑，前端 ECharts 可以处理非连续数据，或者后端简单处理
+        List<String> xAxisData = new ArrayList<>();
+        List<Long> seriesData = new ArrayList<>();
+        
+        long totalCount = 0;
+        long lastCount = 0;
+        
+        if (stats != null) {
+            for (Map<String, Object> item : stats) {
+                String timePoint = String.valueOf(item.get("time_point"));
+                Long count = Long.valueOf(String.valueOf(item.get("count")));
+                
+                xAxisData.add(timePoint);
+                seriesData.add(count);
+                
+                lastCount = count; // 记录最后一个点的数据
+                totalCount += count;
+            }
+        }
+        
+        result.put("xAxis", xAxisData);
+        result.put("series", seriesData);
+        
+        // 4. 生成动态建议
+        String suggestion = "";
+        if (seriesData.isEmpty()) {
+            suggestion = "暂无数据，建议开始使用 AI 助手进行对话以积累数据。";
+        } else {
+            // 简单趋势分析
+            if (seriesData.size() > 1) {
+                Long prevCount = seriesData.get(seriesData.size() - 2);
+                if (lastCount > prevCount) {
+                    suggestion = "近期活跃度呈上升趋势 📈，用户参与度较高，建议保持当前运营策略，并关注热门话题。";
+                } else if (lastCount < prevCount) {
+                    suggestion = "近期活跃度有所下滑 📉，建议检查系统稳定性或开展用户引导活动，提升用户粘性。";
+                } else {
+                    suggestion = "系统活跃度保持稳定 ⚖️，用户习惯已初步形成。";
+                }
+            } else {
+                suggestion = "数据积累中，当前活跃度表现正常。";
+            }
+            
+            // 补充总量建议
+            if ("year".equals(timeRange) && totalCount > 10000) {
+                suggestion += " 年度累计交互量已突破 1万次，系统运行状况良好！";
+            }
+        }
+        
+        result.put("suggestion", suggestion);
+        
+        return result;
+    }
 }

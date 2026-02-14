@@ -37,4 +37,8 @@ public interface SysAiSessionService extends IService<SysAiSession> {
      * 分页查询用户算力消耗排行
      */
     Page<Map<String, Object>> getUserTokenStats(PageQuery pageQuery, String username, String timeRange, String rankType);
+    /**
+     * 获取详细的交互活跃度统计数据
+     */
+    Map<String, Object> getDetailedActivityStats(String timeRange);
 }

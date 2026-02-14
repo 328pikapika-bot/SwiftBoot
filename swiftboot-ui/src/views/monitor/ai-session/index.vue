@@ -122,7 +122,7 @@
       </div>
 
       <!-- 突触活跃度 -->
-      <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-xl shadow-slate-200/40 dark:shadow-black/20 border border-slate-100 dark:border-slate-700/50 hover:-translate-y-1 transition-all duration-300">
+      <div @click="openActivityDetail" class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-xl shadow-slate-200/40 dark:shadow-black/20 border border-slate-100 dark:border-slate-700/50 hover:-translate-y-1 transition-all duration-300 cursor-pointer">
         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
           <span class="material-icons-round text-6xl text-purple-500">hub</span>
         </div>
@@ -554,6 +554,72 @@
       </div>
     </el-dialog>
 
+    <!-- 突触活跃度详情弹窗 -->
+    <el-dialog
+      v-model="activityDetailVisible"
+      width="900px"
+      class="!rounded-xl overflow-hidden"
+      align-center
+      :show-close="false"
+      @opened="initActivityChart"
+    >
+      <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <span class="material-icons-round text-purple-500">hub</span>
+          突触活跃度分析
+          <span class="material-icons-round text-sm text-purple-400/50 cursor-pointer hover:text-purple-500 transition-colors transform active:rotate-180 duration-300 ml-2" 
+                @click="toggleActivityDataSource"
+                :title="useRealActivityData ? '切换至演示数据' : '切换至真实数据'">
+             sync
+          </span>
+        </h3>
+        
+        <div class="flex gap-2">
+            <div class="relative">
+              <select v-model="activityTimeRange" @change="fetchActivityStats" class="appearance-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-1 pl-3 pr-8 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all cursor-pointer">
+                 <option value="week">本周 (Daily)</option>
+                 <option value="month">本月 (Daily)</option>
+                 <option value="quarter">本季度 (Weekly)</option>
+                 <option value="year">本年 (Monthly)</option>
+                 <option value="all">历史总计 (Monthly)</option>
+              </select>
+              <span class="material-icons-round text-slate-400 text-xs absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">expand_more</span>
+           </div>
+           
+           <button @click="activityDetailVisible = false" class="opacity-50 hover:opacity-100 transition-opacity text-slate-500 dark:text-slate-400 outline-none focus:outline-none ml-2">
+             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+             </svg>
+           </button>
+        </div>
+      </div>
+      
+      <div class="p-6 bg-slate-50 dark:bg-slate-900/50 flex flex-col gap-6 h-[600px]">
+         <!-- Description -->
+         <div class="bg-purple-50 dark:bg-purple-900/10 p-3 rounded-lg border border-purple-100 dark:border-purple-800/30 mb-0">
+            <p class="text-sm text-purple-800 dark:text-purple-300 leading-relaxed">
+               <span class="font-bold">突触活跃度 (Synapse Activity)</span>：反映用户与 AI 系统的交互频率与深度。每一次对话如同神经网络中的一次突触激发，活跃度越高代表系统“大脑”运转越频繁，知识流动越高效。
+            </p>
+         </div>
+
+         <!-- Chart Area -->
+         <div class="flex-1 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm p-4 flex flex-col">
+            <div ref="activityChartRef" class="w-full h-full"></div>
+         </div>
+         
+         <!-- Suggestion Area -->
+         <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm flex gap-4 items-start">
+             <div class="w-10 h-10 rounded-full bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center shrink-0">
+                <span class="material-icons-round text-purple-500 animate-pulse">insights</span>
+             </div>
+             <div>
+                <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">智能分析建议</h4>
+                <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{{ activitySuggestion }}</p>
+             </div>
+         </div>
+      </div>
+    </el-dialog>
+
     <!-- 问答详情弹窗 -->
     <el-dialog 
       v-model="detailVisible" 
@@ -723,7 +789,7 @@ import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/atom-one-dark.css'
 import 'github-markdown-css/github-markdown.css'
-import { getDashboardStats, listAiSession, getUserTokenStats } from '@/api/monitor/ai-session'
+import { getDashboardStats, listAiSession, getUserTokenStats, getActivityStats } from '@/api/monitor/ai-session'
 import { changeStatus } from '@/api/system/user'
 import type { User } from '@/api/system/user'
 import { useUserStore } from '@/stores/user'
@@ -1445,6 +1511,7 @@ const handleResize = () => {
    wordCloudChart?.resize()
    funnelChart?.resize()
    synapseChart?.resize()
+   activityChart?.resize()
 }
 
 onMounted(() => {
@@ -1477,6 +1544,7 @@ onUnmounted(() => {
    wordCloudChart?.dispose()
    funnelChart?.dispose()
    synapseChart?.dispose()
+   activityChart?.dispose()
 })
 
 const getRadarOption = (forDetail = false) => {
@@ -1563,6 +1631,145 @@ const initRadarDetailChart = () => {
      // @ts-ignore
      radarDetailChart.setOption(getRadarOption(true))
   }
+}
+
+// Activity Detail Logic
+const activityDetailVisible = ref(false)
+const activityTimeRange = ref('week')
+const activityChartRef = ref<HTMLElement>()
+let activityChart: echarts.ECharts | null = null
+const activitySuggestion = ref('')
+const useRealActivityData = ref(true)
+
+const openActivityDetail = () => {
+  activityDetailVisible.value = true
+}
+
+const toggleActivityDataSource = () => {
+  useRealActivityData.value = !useRealActivityData.value
+  ElMessage.success(useRealActivityData.value ? '已切换至真实数据' : '已切换至演示数据')
+  fetchActivityStats()
+}
+
+const generateMockActivityData = (range: string) => {
+    let xAxis: string[] = []
+    let series: number[] = []
+    let suggestion = ''
+
+    if (range === 'week') {
+        const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+        xAxis = days
+        series = days.map(() => Math.floor(Math.random() * 100) + 20)
+        suggestion = '演示数据：本周系统活跃度表现强劲，尤其是工作日期间交互频繁，体现了用户对 AI 辅助办公的高依赖度。'
+    } else if (range === 'month') {
+        const days = 30
+        for (let i = 1; i <= days; i++) {
+            xAxis.push(`${i}日`)
+            series.push(Math.floor(Math.random() * 80) + 10)
+        }
+        suggestion = '演示数据：本月整体流量平稳，月中出现的小高峰可能与新功能发布有关，建议持续关注用户反馈。'
+    } else if (range === 'quarter') {
+        for (let i = 1; i <= 12; i++) {
+            xAxis.push(`第${i}周`)
+            series.push(Math.floor(Math.random() * 500) + 100)
+        }
+        suggestion = '演示数据：季度数据显示系统处于稳步增长期，周活跃用户数（WAU）环比增长 15%，用户粘性显著提升。'
+    } else if (range === 'year') {
+        const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
+        xAxis = months
+        series = months.map(() => Math.floor(Math.random() * 2000) + 500)
+        suggestion = '演示数据：年度回顾显示，随着知识库的不断丰富，系统交互量呈现指数级增长，已成为团队不可或缺的智能助手。'
+    } else { // all
+         const months = ['2023-08', '2023-09', '2023-10', '2023-11', '2023-12', '2024-01']
+         xAxis = months
+         series = months.map(() => Math.floor(Math.random() * 3000) + 800)
+         suggestion = '演示数据：历史总览表明系统已稳定运行超过半年，累计服务次数突破万次，核心价值得到充分验证。'
+    }
+    return { xAxis, series, suggestion }
+}
+
+const fetchActivityStats = async () => {
+    if (!activityChart) return
+    
+    activityChart.showLoading({ color: '#a855f7', maskColor: 'rgba(255, 255, 255, 0)' })
+    try {
+        let xAxis: string[] = []
+        let series: number[] = []
+        let suggestion = ''
+
+        if (useRealActivityData.value) {
+            const res = await getActivityStats(activityTimeRange.value)
+            // @ts-ignore
+            if (res.code === 200) {
+                // @ts-ignore
+                const data = res.data
+                xAxis = data.xAxis || []
+                series = data.series || []
+                suggestion = data.suggestion || '暂无建议'
+            }
+        } else {
+             const mock = generateMockActivityData(activityTimeRange.value)
+             xAxis = mock.xAxis
+             series = mock.series
+             suggestion = mock.suggestion
+        }
+
+        activitySuggestion.value = suggestion
+        
+        activityChart.setOption({
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' }
+            },
+            grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true, top: '10%' },
+            xAxis: [
+                {
+                    type: 'category',
+                    data: xAxis,
+                    axisTick: { alignWithLabel: true },
+                    axisLine: { lineStyle: { color: '#94a3b8' } },
+                    axisLabel: { color: '#64748b', fontSize: 11 }
+                }
+            ],
+            yAxis: [
+                {
+                    type: 'value',
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    splitLine: { lineStyle: { type: 'dashed', color: '#e2e8f0' } },
+                    axisLabel: { color: '#94a3b8' }
+                }
+            ],
+            series: [
+                {
+                    name: '交互会话数',
+                    type: 'bar',
+                    barWidth: '40%',
+                    data: series,
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#a855f7' },
+                            { offset: 1, color: '#d8b4fe' }
+                        ]),
+                        borderRadius: [4, 4, 0, 0]
+                    },
+                    animationDelay: (idx: number) => idx * 10
+                }
+            ]
+        })
+    } finally {
+        activityChart.hideLoading()
+    }
+}
+
+const initActivityChart = () => {
+    nextTick(() => {
+        if (activityChartRef.value) {
+            if (activityChart) activityChart.dispose()
+            activityChart = echarts.init(activityChartRef.value)
+            fetchActivityStats()
+        }
+    })
 }
 </script>
 

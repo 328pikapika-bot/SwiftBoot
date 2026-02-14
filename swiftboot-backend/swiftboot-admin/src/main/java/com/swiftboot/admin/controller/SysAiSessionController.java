@@ -70,4 +70,10 @@ public class SysAiSessionController {
         Page<Map<String, Object>> page = aiSessionService.getUserTokenStats(pageQuery, username, timeRange, rankType);
         return R.ok(PageResult.of(page.getRecords(), page.getTotal(), page.getCurrent(), page.getSize()));
     }
+
+    @Operation(summary = "获取详细交互活跃度统计")
+    @GetMapping("/activity-stats")
+    public R<Map<String, Object>> activityStats(@RequestParam(required = false, defaultValue = "day") String timeRange) {
+        return R.ok(aiSessionService.getDetailedActivityStats(timeRange));
+    }
 }

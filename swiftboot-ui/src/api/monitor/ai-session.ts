@@ -51,3 +51,12 @@ export function cleanAiCache(userId?: number) {
     params: { targetUserId: userId }
   })
 }
+
+// 获取详细交互活跃度统计
+export function getActivityStats(timeRange?: string) {
+  return request({
+    url: '/monitor/ai-session/activity-stats',
+    method: 'get',
+    params: { timeRange }
+  })
+}
