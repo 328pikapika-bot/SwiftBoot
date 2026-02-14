@@ -69,3 +69,11 @@ export function getTokenStats(timeRange?: string) {
     params: { timeRange }
   })
 }
+
+// 获取知识库与记忆详情统计
+export function getKnowledgeStats() {
+  return request({
+    url: '/monitor/ai-session/knowledge-stats',
+    method: 'get'
+  })
+}

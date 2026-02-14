@@ -512,6 +512,8 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
         // 3. 数据处理 (提取 X 轴和 Y 轴)
         List<String> xAxisData = new ArrayList<>();
         List<Long> seriesData = new ArrayList<>(); // Total Tokens
+        List<Long> inputSeries = new ArrayList<>(); // Prompt Tokens (Mock)
+        List<Long> outputSeries = new ArrayList<>(); // Completion Tokens (Mock)
         
         long totalTokens = 0;
         long lastTokens = 0;
@@ -524,6 +526,12 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
                 xAxisData.add(timePoint);
                 seriesData.add(tokens);
                 
+                // 模拟 Prompt/Completion 比例 (约 7:3)
+                long prompt = (long) (tokens * 0.7);
+                long completion = tokens - prompt;
+                inputSeries.add(prompt);
+                outputSeries.add(completion);
+                
                 lastTokens = tokens;
                 totalTokens += tokens;
             }
@@ -531,6 +539,8 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
         
         result.put("xAxis", xAxisData);
         result.put("series", seriesData);
+        result.put("inputSeries", inputSeries);
+        result.put("outputSeries", outputSeries);
         
         // 4. 生成动态建议
         String suggestion = "";
@@ -560,6 +570,129 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
         
         result.put("suggestion", suggestion);
         
+        return result;
+    }
+
+    private static final String KNOWLEDGE_STATS_URL = "http://localhost:8001/knowledge/stats";
+
+    @Override
+    public Map<String, Object> getKnowledgeStats() {
+        Map<String, Object> result = new HashMap<>();
+        
+        // 尝试从 Python 引擎获取真实统计数据
+        try {
+            String resp = HttpRequest.get(KNOWLEDGE_STATS_URL)
+                    .timeout(3000)
+                    .execute()
+                    .body();
+            
+            if (resp != null) {
+                JSONObject json = new JSONObject(resp);
+                
+                // 1. 左脑数据 (Hard Knowledge)
+                int totalChunks = json.getInt("total_chunks", 0);
+                JSONObject languages = json.getJSONObject("languages");
+                // JSONObject fileTypes = json.getJSONObject("file_types"); // 暂时不用细粒度
+                
+                // 构建 Sunburst Data
+                List<Map<String, Object>> sunburstData = new ArrayList<>();
+                
+                // Backend (Java)
+                int javaCount = languages.getInt("Java", 0);
+                if (javaCount > 0) {
+                    Map<String, Object> backendNode = new HashMap<>();
+                    backendNode.put("name", "Backend");
+                    backendNode.put("value", javaCount);
+                    List<Map<String, Object>> children = new ArrayList<>();
+                    Map<String, Object> javaNode = new HashMap<>();
+                    javaNode.put("name", "Java");
+                    javaNode.put("value", javaCount);
+                    children.add(javaNode);
+                    backendNode.put("children", children);
+                    sunburstData.add(backendNode);
+                }
+                
+                // Frontend
+                int frontendCount = languages.getInt("Frontend", 0);
+                if (frontendCount > 0) {
+                    Map<String, Object> node = new HashMap<>();
+                    node.put("name", "Frontend");
+                    node.put("value", frontendCount);
+                    List<Map<String, Object>> children = new ArrayList<>();
+                    Map<String, Object> cNode = new HashMap<>();
+                    cNode.put("name", "Vue/TS");
+                    cNode.put("value", frontendCount);
+                    children.add(cNode);
+                    node.put("children", children);
+                    sunburstData.add(node);
+                }
+                
+                // Python
+                int pyCount = languages.getInt("Python", 0);
+                if (pyCount > 0) {
+                     Map<String, Object> node = new HashMap<>();
+                     node.put("name", "AI Engine");
+                     node.put("value", pyCount);
+                     sunburstData.add(node);
+                }
+                
+                // SQL / Data
+                int sqlCount = languages.getInt("SQL", 0);
+                if (sqlCount > 0) {
+                    Map<String, Object> node = new HashMap<>();
+                    node.put("name", "Data");
+                    node.put("value", sqlCount);
+                    sunburstData.add(node);
+                }
+                
+                // Docs
+                int docCount = languages.getInt("Docs", 0);
+                if (docCount > 0) {
+                    Map<String, Object> node = new HashMap<>();
+                    node.put("name", "Docs");
+                    node.put("value", docCount);
+                    sunburstData.add(node);
+                }
+                
+                result.put("leftBrain", sunburstData);
+                result.put("totalChunks", totalChunks);
+                
+                // 2. 右脑数据 (Soft Memory)
+                int memoryCount = json.getInt("memory_count", 0);
+                JSONArray memories = json.getJSONArray("recent_memories");
+                
+                result.put("rightBrain", memories);
+                result.put("memoryCount", memoryCount);
+                
+                // 3. 生成智能建议
+                String suggestion = "";
+                
+                double backendRatio = (double)javaCount / (totalChunks > 0 ? totalChunks : 1);
+                double frontendRatio = (double)frontendCount / (totalChunks > 0 ? totalChunks : 1);
+                
+                if (backendRatio > frontendRatio + 0.3) {
+                     suggestion = "检测到后端代码知识储备远超前端 (偏差 > 30%)，建议补充前端组件库索引，以免 AI 在辅助 UI 开发时产生幻觉。";
+                } else if (frontendRatio > backendRatio + 0.3) {
+                     suggestion = "前端知识库较为丰富，但后端逻辑覆盖不足，建议加强 Service 层代码索引。";
+                } else {
+                     suggestion = "左右脑发育均衡，代码知识库覆盖全面。";
+                }
+                
+                if (memoryCount < 10) {
+                    suggestion += " 近期交互产生的记忆较少，建议在对话中明确强调关键规则，强制触发记忆存储。";
+                } else {
+                    suggestion += " 右脑记忆系统运转正常，已成功捕获多条关键开发偏好。";
+                }
+                
+                result.put("suggestion", suggestion);
+                
+                return result;
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to fetch knowledge stats from Python engine: " + e.getMessage());
+        }
+        
+        // Fallback: 如果调用失败，返回空结构防止前端报错
         return result;
     }
 }

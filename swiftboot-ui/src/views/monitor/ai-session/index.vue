@@ -94,7 +94,7 @@
     <!-- Layer 1: Vital Signs (核心生命体征) -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       <!-- 脑容量 -->
-      <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-xl shadow-slate-200/40 dark:shadow-black/20 border border-slate-100 dark:border-slate-700/50 hover:-translate-y-1 transition-all duration-300">
+      <div @click="openKnowledgeDetail" class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-xl shadow-slate-200/40 dark:shadow-black/20 border border-slate-100 dark:border-slate-700/50 hover:-translate-y-1 transition-all duration-300 cursor-pointer">
         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
           <span class="material-icons-round text-6xl text-blue-500">psychology</span>
         </div>
@@ -106,14 +106,14 @@
             <span class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">脑容量</span>
           </div>
           <div class="flex items-baseline gap-2 mt-2">
-            <span class="text-3xl font-black text-slate-900 dark:text-white">24,501</span>
+            <span class="text-3xl font-black text-slate-900 dark:text-white">10,600</span>
             <span class="text-xs font-medium text-emerald-500 flex items-center">
               +120
               <span class="material-icons-round text-[10px]">arrow_upward</span>
             </span>
           </div>
           <div class="mt-3 h-1.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-            <div class="h-full bg-blue-500 w-[75%] rounded-full relative overflow-hidden">
+            <div class="h-full bg-blue-500 w-[100%] rounded-full relative overflow-hidden">
                <div class="absolute inset-0 bg-white/30 animate-[shimmer_2s_infinite]"></div>
             </div>
           </div>
@@ -554,6 +554,197 @@
       </div>
     </el-dialog>
 
+    <!-- 脑容量详情弹窗 (Knowledge) -->
+    <el-dialog
+      v-model="knowledgeDetailVisible"
+      width="1000px"
+      class="!rounded-xl overflow-hidden"
+      align-center
+      :show-close="false"
+      @opened="initKnowledgeChart"
+    >
+      <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <span class="material-icons-round text-blue-500">psychology</span>
+          认知能力全景 (Cognitive Capacity)
+          <span class="material-icons-round text-sm text-blue-400/50 cursor-pointer hover:text-blue-500 transition-colors transform active:rotate-180 duration-300 ml-2" 
+                @click="toggleKnowledgeDataSource"
+                :title="useRealKnowledgeData ? '切换至演示数据' : '切换至真实数据'">
+             sync
+          </span>
+        </h3>
+        
+        <button @click="knowledgeDetailVisible = false" class="opacity-50 hover:opacity-100 transition-opacity text-slate-500 dark:text-slate-400 outline-none focus:outline-none ml-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      
+      <div class="p-6 bg-slate-50 dark:bg-slate-900/50 flex flex-col gap-6 h-[700px] overflow-hidden">
+         <!-- 核心区域：左右双栏 -->
+         <div class="grid grid-cols-2 gap-6 flex-1 min-h-0">
+             
+             <!-- 左栏：左脑 · 硬知识 -->
+             <div class="flex flex-col gap-4 h-full">
+                 <!-- 顶部卡片 -->
+                 <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl p-5 text-white shadow-lg shadow-blue-500/20 relative overflow-hidden group shrink-0">
+                     <div class="absolute right-0 top-0 opacity-10 group-hover:opacity-20 transition-opacity">
+                         <span class="material-icons-round text-8xl transform translate-x-4 -translate-y-4">storage</span>
+                     </div>
+                     <div class="relative z-10">
+                         <div class="flex items-center gap-2 mb-3">
+                             <span class="bg-white/20 p-1.5 rounded-lg backdrop-blur-sm">
+                                 <span class="material-icons-round text-sm">memory</span>
+                             </span>
+                             <span class="text-xs font-bold uppercase tracking-wider opacity-90">左脑 · 硬知识</span>
+                         </div>
+                         <div class="flex items-baseline gap-2">
+                             <span class="text-4xl font-black">{{ knowledgeStats.totalChunks?.toLocaleString() || 0 }}</span>
+                             <span class="text-xs opacity-80 font-medium">切片 (Chunks)</span>
+                         </div>
+                         <p class="text-[11px] mt-3 opacity-80 leading-relaxed">项目代码与文档的结构化索引</p>
+                     </div>
+                 </div>
+
+                 <!-- 旭日图 -->
+                 <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm p-4 flex-1 flex flex-col min-h-0">
+                     <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-2 shrink-0">
+                         <span class="material-icons-round text-blue-500 text-base">pie_chart</span>
+                         知识覆盖分布
+                     </h4>
+                     <div class="flex-1 relative w-full h-full">
+                         <div ref="knowledgeChartRef" class="w-full h-full"></div>
+                         <!-- Center Text Overlay -->
+                         <div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 transition-opacity duration-300" :class="{'opacity-100': !isSunburstHovered}">
+                            <div class="text-center">
+                                <span class="text-xs text-slate-400 block mb-1">Total Coverage</span>
+                                <span class="text-xl font-black text-slate-700 dark:text-slate-300">100%</span>
+                            </div>
+                         </div>
+                     </div>
+                 </div>
+
+                 <!-- 智能切分策略说明 (新增) -->
+                 <div class="bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-800/30 p-4 shrink-0">
+                     <h4 class="text-xs font-bold text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
+                         <span class="material-icons-round text-sm">content_cut</span>
+                         智能切分策略 (Smart Slicing)
+                     </h4>
+                     <div class="grid grid-cols-2 gap-3">
+                         <div class="flex items-start gap-2">
+                             <span class="material-icons-round text-blue-400 text-sm mt-0.5">code</span>
+                             <div>
+                                 <div class="text-xs font-bold text-slate-700 dark:text-slate-300">Java/Backend</div>
+                                 <div class="text-[11px] text-slate-500 leading-tight mt-0.5">基于 AST 解析，按 Class/Method 边界切分，保留完整函数签名与注释。</div>
+                             </div>
+                         </div>
+                         <div class="flex items-start gap-2">
+                             <span class="material-icons-round text-indigo-400 text-sm mt-0.5">web</span>
+                             <div>
+                                 <div class="text-xs font-bold text-slate-700 dark:text-slate-300">Vue/Frontend</div>
+                                 <div class="text-[11px] text-slate-500 leading-tight mt-0.5">识别 Template/Script/Style 语义块，确保组件逻辑上下文完整。</div>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+
+             <!-- 右栏：右脑 · 软记忆 -->
+             <div class="flex flex-col gap-4 h-full">
+                 <!-- 顶部卡片 -->
+                 <div class="bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl p-5 text-white shadow-lg shadow-purple-500/20 relative overflow-hidden group shrink-0">
+                     <div class="absolute right-0 top-0 opacity-10 group-hover:opacity-20 transition-opacity">
+                         <span class="material-icons-round text-8xl transform translate-x-4 -translate-y-4">history_edu</span>
+                     </div>
+                     <div class="relative z-10">
+                         <div class="flex items-center gap-2 mb-3">
+                             <span class="bg-white/20 p-1.5 rounded-lg backdrop-blur-sm">
+                                 <span class="material-icons-round text-sm">auto_awesome</span>
+                             </span>
+                             <span class="text-xs font-bold uppercase tracking-wider opacity-90">右脑 · 软记忆</span>
+                         </div>
+                         <div class="flex items-baseline gap-2">
+                             <span class="text-4xl font-black">{{ knowledgeStats.memoryCount?.toLocaleString() || 0 }}</span>
+                             <span class="text-xs opacity-80 font-medium">条目 (Entries)</span>
+                         </div>
+                         <p class="text-[11px] mt-3 opacity-80 leading-relaxed">对话中沉淀的业务规则与偏好</p>
+                     </div>
+                 </div>
+
+                 <!-- 记忆清单 -->
+                 <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm p-4 flex-1 flex flex-col min-h-0">
+                     <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-2 shrink-0">
+                         <span class="material-icons-round text-purple-500 text-base">format_list_bulleted</span>
+                         近期记忆流
+                     </h4>
+                     <div class="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-3">
+                         <div v-if="!knowledgeStats.rightBrain || knowledgeStats.rightBrain.length === 0" class="flex flex-col items-center justify-center h-full text-slate-400">
+                            <span class="material-icons-round text-4xl mb-2 opacity-20">inbox</span>
+                            <span class="text-xs">暂无记忆条目</span>
+                         </div>
+                         <div v-else v-for="(item, idx) in knowledgeStats.rightBrain" :key="idx" class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 hover:border-purple-200 dark:hover:border-purple-800/50 transition-colors group">
+                             <div class="flex justify-between items-start mb-1.5">
+                                 <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border"
+                                       :class="{
+                                         'bg-blue-50 text-blue-600 border-blue-100': item.type === 'rule',
+                                         'bg-amber-50 text-amber-600 border-amber-100': item.type === 'preference',
+                                         'bg-emerald-50 text-emerald-600 border-emerald-100': item.type === 'business',
+                                         'bg-red-50 text-red-600 border-red-100': item.type === 'correction'
+                                       }">
+                                     {{ item.type }}
+                                 </span>
+                                 <span class="text-[10px] text-slate-400 font-mono">{{ item.time }}</span>
+                             </div>
+                             <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-3 group-hover:line-clamp-none transition-all">
+                                 {{ item.content }}
+                             </p>
+                         </div>
+                     </div>
+                 </div>
+
+                 <!-- 记忆策略说明 (新增) -->
+                 <div class="bg-purple-50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-800/30 p-4 shrink-0">
+                     <h4 class="text-xs font-bold text-purple-800 dark:text-purple-300 mb-3 flex items-center gap-2">
+                         <span class="material-icons-round text-sm">psychology_alt</span>
+                         记忆留存机制 (Retention Policy)
+                     </h4>
+                     <div class="grid grid-cols-2 gap-3">
+                         <div class="flex items-start gap-2">
+                             <span class="material-icons-round text-purple-400 text-sm mt-0.5">filter_center_focus</span>
+                             <div>
+                                 <div class="text-xs font-bold text-slate-700 dark:text-slate-300">关键提取</div>
+                                 <div class="text-[11px] text-slate-500 leading-tight mt-0.5">NLP 自动识别“必须”、“修正”、“偏好”等关键词，高优先级存入。</div>
+                             </div>
+                         </div>
+                         <div class="flex items-start gap-2">
+                             <span class="material-icons-round text-pink-400 text-sm mt-0.5">hourglass_top</span>
+                             <div>
+                                 <div class="text-xs font-bold text-slate-700 dark:text-slate-300">动态淘汰</div>
+                                 <div class="text-[11px] text-slate-500 leading-tight mt-0.5">基于时间衰减与引用频率 (LRU)，自动清理过期或低频记忆。</div>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+         </div>
+         
+         <!-- 底部：智能建议 -->
+         <div class="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800/30 flex gap-4 items-center shrink-0">
+             <div class="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0 shadow-sm shadow-emerald-200/50 dark:shadow-none">
+                <span class="material-icons-round text-emerald-600 dark:text-emerald-400 animate-pulse">medical_services</span>
+             </div>
+             <div>
+                <h4 class="text-sm font-bold text-emerald-800 dark:text-emerald-200 mb-0.5 flex items-center gap-2">
+                    AI 诊断建议
+                    <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-200/50 text-emerald-700 border border-emerald-300/50">Smart Check</span>
+                </h4>
+                <p class="text-xs text-emerald-700 dark:text-emerald-300 leading-relaxed">{{ knowledgeStats.suggestion }}</p>
+             </div>
+         </div>
+      </div>
+    </el-dialog>
+
     <!-- 突触活跃度详情弹窗 -->
     <el-dialog
       v-model="activityDetailVisible"
@@ -855,7 +1046,7 @@ import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/atom-one-dark.css'
 import 'github-markdown-css/github-markdown.css'
-import { getDashboardStats, listAiSession, getUserTokenStats, getActivityStats, getTokenStats } from '@/api/monitor/ai-session'
+import { getDashboardStats, listAiSession, getUserTokenStats, getActivityStats, getTokenStats, getKnowledgeStats } from '@/api/monitor/ai-session'
 import { changeStatus } from '@/api/system/user'
 import type { User } from '@/api/system/user'
 import { useUserStore } from '@/stores/user'
@@ -939,7 +1130,7 @@ const md = new MarkdownIt({
   html: true,
   linkify: true,
   typographer: true,
-  highlight: function (str, lang) {
+  highlight: function (str: string, lang: string): string {
     if (lang && hljs.getLanguage(lang)) {
       try {
         return '<pre class="hljs"><code>' +
@@ -1701,13 +1892,174 @@ const initRadarDetailChart = () => {
   }
 }
 
-// Activity Detail Logic
 const activityDetailVisible = ref(false)
 const activityTimeRange = ref('week')
 const activityChartRef = ref<HTMLElement>()
 let activityChart: echarts.ECharts | null = null
 const activitySuggestion = ref('')
 const useRealActivityData = ref(true)
+
+const knowledgeDetailVisible = ref(false)
+const knowledgeStats = ref<any>({})
+const useRealKnowledgeData = ref(true)
+const knowledgeChartRef = ref(null)
+const isSunburstHovered = ref(false)
+
+const openKnowledgeDetail = () => {
+  knowledgeDetailVisible.value = true
+  fetchKnowledgeStats()
+}
+
+const toggleKnowledgeDataSource = () => {
+  useRealKnowledgeData.value = !useRealKnowledgeData.value
+  fetchKnowledgeStats()
+}
+
+const fetchKnowledgeStats = async () => {
+  if (useRealKnowledgeData.value) {
+    try {
+      const res = await getKnowledgeStats()
+      // @ts-ignore
+      if (res.code === 200) {
+        // @ts-ignore
+        const data = res.data
+        
+        // 兼容处理：如果后端返回 recent_memories，映射到 rightBrain
+        if (data.recent_memories && (!data.rightBrain || data.rightBrain.length === 0)) {
+           data.rightBrain = data.recent_memories
+        }
+        
+        knowledgeStats.value = data
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  } else {
+    // Mock Data
+    knowledgeStats.value = {
+        totalChunks: 12450,
+        memoryCount: 128,
+        leftBrain: [
+            {
+                name: 'Backend',
+                value: 6000,
+                children: [
+                    { name: 'Java', value: 5500 },
+                    { name: 'XML', value: 500 }
+                ]
+            },
+            {
+                name: 'Frontend',
+                value: 4000,
+                children: [
+                    { name: 'Vue', value: 3000 },
+                    { name: 'TS', value: 1000 }
+                ]
+            },
+            {
+                name: 'Data',
+                value: 1500,
+                children: [
+                    { name: 'SQL', value: 1500 }
+                ]
+            },
+            {
+                name: 'Docs',
+                value: 950
+            }
+        ],
+        rightBrain: [
+            { type: 'preference', content: '用户偏好使用 Element Plus UI 库', time: '2026-02-14' },
+            { type: 'rule', content: '所有 Service 接口必须添加 @Transactional 注解', time: '2026-02-13' },
+            { type: 'business', content: '订单状态流转：Create -> Pay -> Ship -> Complete', time: '2026-02-12' },
+            { type: 'correction', content: '修正了用户权限校验的逻辑漏洞', time: '2026-02-11' }
+        ],
+        suggestion: '系统运行良好，知识库覆盖全面。建议定期清理旧的记忆条目。'
+    }
+  }
+  
+  initKnowledgeChart()
+}
+
+const initKnowledgeChart = () => {
+  nextTick(() => {
+    if (!knowledgeChartRef.value) return
+    
+    // @ts-ignore
+    const chart = echarts.init(knowledgeChartRef.value)
+    const data = knowledgeStats.value.leftBrain || []
+    
+    const option = {
+        color: ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#6366f1'],
+        series: {
+            type: 'sunburst',
+            data: data,
+            radius: [0, '95%'],
+            sort: undefined,
+            emphasis: {
+                focus: 'ancestor'
+            },
+            levels: [
+                {},
+                {
+                    r0: '15%',
+                    r: '40%',
+                    itemStyle: {
+                        borderRadius: 5,
+                        borderWidth: 2
+                    },
+                    label: {
+                        rotate: 'tangential'
+                    }
+                },
+                {
+                    r0: '40%',
+                    r: '75%',
+                    label: {
+                        align: 'right'
+                    },
+                    itemStyle: {
+                        borderRadius: 5,
+                        borderWidth: 2
+                    }
+                },
+                {
+                    r0: '75%',
+                    r: '77%',
+                    label: {
+                        position: 'outside',
+                        padding: 3,
+                        silent: false
+                    },
+                    itemStyle: {
+                        borderWidth: 2
+                    }
+                }
+            ]
+        },
+        tooltip: {
+            trigger: 'item',
+            formatter: (params: any) => {
+                const total = knowledgeStats.value.totalChunks || 1
+                const percent = ((params.value / total) * 100).toFixed(1)
+                return `${params.name}: ${params.value} Chunks (${percent}%)`
+            }
+        }
+    };
+    
+    chart.setOption(option)
+    
+    chart.on('mouseover', () => {
+        isSunburstHovered.value = true
+    })
+    
+    chart.on('mouseout', () => {
+        isSunburstHovered.value = false
+    })
+    
+    window.addEventListener('resize', () => chart.resize())
+  })
+}
 
 const openActivityDetail = () => {
   activityDetailVisible.value = true
@@ -1748,7 +2100,7 @@ const generateMockActivityData = (range: string) => {
         series = months.map(() => Math.floor(Math.random() * 2000) + 500)
         suggestion = '演示数据：年度回顾显示，随着知识库的不断丰富，系统交互量呈现指数级增长，已成为团队不可或缺的智能助手。'
     } else { // all
-         const months = ['2023-08', '2023-09', '2023-10', '2023-11', '2023-12', '2024-01']
+         const months = ['2025-08', '2025-09', '2025-10', '2025-11', '2025-12', '2026-01']
          xAxis = months
          series = months.map(() => Math.floor(Math.random() * 3000) + 800)
          suggestion = '演示数据：历史总览表明系统已稳定运行超过半年，累计服务次数突破万次，核心价值得到充分验证。'

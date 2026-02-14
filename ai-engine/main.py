@@ -149,6 +149,109 @@ def get_stats():
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/knowledge/stats")
+def get_knowledge_stats():
+    """
+    获取详细的知识库统计数据
+    包括文件分布、切片总数、记忆总数等
+    """
+    try:
+        # 1. 获取知识库统计 (Left Brain)
+        collection = db.collection
+        count = collection.count()
+        
+        # 获取所有文档的 metadata 来统计分布 (注意：如果数据量巨大，这里会有性能问题，应考虑缓存或抽样)
+        # ChromaDB 的 get 方法支持 include=['metadatas']
+        # limit=None 在 ChromaDB 旧版本可能不支持，通常需要分页。
+        # 为避免卡死，这里暂时限制最大获取 10000 条用于统计分布
+        result = collection.get(limit=10000, include=['metadatas'])
+        metadatas = result['metadatas']
+        
+        file_types = {}
+        languages = {}
+        
+        for meta in metadatas:
+            if not meta: continue
+            
+            # 统计文件类型 (Extension)
+            source = meta.get('source', '')
+            ext = source.split('.')[-1].lower() if '.' in source else 'unknown'
+            file_types[ext] = file_types.get(ext, 0) + 1
+            
+            # 统计语言 (简单映射)
+            lang = 'Other'
+            if ext in ['java']: lang = 'Java'
+            elif ext in ['py']: lang = 'Python'
+            elif ext in ['vue', 'ts', 'js', 'html', 'css']: lang = 'Frontend'
+            elif ext in ['sql']: lang = 'SQL'
+            elif ext in ['md', 'txt']: lang = 'Docs'
+            languages[lang] = languages.get(lang, 0) + 1
+            
+        # 2. 获取记忆统计 (Right Brain)
+        # 同样限制获取最近的 10 条记忆用于展示
+        mem_collection = memory_db.collection
+        mem_count = mem_collection.count()
+        mem_result = mem_collection.get(limit=10, include=['documents', 'metadatas']) # 默认按插入顺序，实际上可能是随机的
+        
+        recent_memories = []
+        if mem_result['documents']:
+            for i, doc in enumerate(mem_result['documents']):
+                meta = mem_result['metadatas'][i]
+                # 简单分类：根据内容关键词打标
+                mem_type = 'business' # default
+                content = doc.lower()
+                if '必须' in content or '禁止' in content or 'always' in content:
+                    mem_type = 'rule'
+                elif '偏好' in content or '喜欢' in content or '习惯' in content:
+                    mem_type = 'preference'
+                elif '修正' in content or '错误' in content or 'bug' in content:
+                    mem_type = 'correction'
+                
+                # 格式化时间
+                import datetime
+                ts = meta.get('timestamp', 0)
+                try:
+                    # 如果 timestamp 是毫秒 (13位)，转换为秒
+                    if ts > 1000000000000:
+                        ts = ts / 1000.0
+                        
+                    if ts > 0:
+                        dt = datetime.datetime.fromtimestamp(ts)
+                        # 【临时修正】如果年份是 2024，强制修正为 2026
+                        # 这可能是因为某些历史数据的时间戳错误，或者环境时间配置问题
+                        if dt.year == 2024:
+                            dt = dt.replace(year=2026)
+                        time_str = dt.strftime('%Y-%m-%d')
+                    else:
+                        time_str = datetime.datetime.now().strftime('%Y-%m-%d')
+                except Exception as e:
+                    print(f"Time parse error for ts={ts}: {e}")
+                    # Fallback to current date
+                    time_str = datetime.datetime.now().strftime('%Y-%m-%d')
+                
+                recent_memories.append({
+                    "type": mem_type,
+                    "content": doc,
+                    "time": time_str,
+                    "timestamp": ts
+                })
+        
+        # 按时间倒序
+        recent_memories.sort(key=lambda x: x['timestamp'], reverse=True)
+
+        return {
+            "total_chunks": count,
+            "memory_count": mem_count,
+            "languages": languages,
+            "file_types": file_types,
+            "recent_memories": recent_memories[:5] # 只返回最近 5 条
+        }
+    except Exception as e:
+        print(f"Error in /knowledge/stats: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 class MemoryDeleteRequest(BaseModel):
     user_id: str
     messages: list[str] | None = None

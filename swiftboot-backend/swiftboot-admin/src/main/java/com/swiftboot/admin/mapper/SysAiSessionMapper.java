@@ -196,4 +196,15 @@ public interface SysAiSessionMapper extends BaseMapper<SysAiSession> {
             "ORDER BY time_point" +
             "</script>")
     List<Map<String, Object>> selectTokenStats(@Param("timeDimension") String timeDimension, @Param("startTime") String startTime, @Param("endTime") String endTime);
+
+    /**
+     * 统计知识库切片数量 (模拟数据，实际应查询 vector_store 表)
+     * 这里暂时返回一个模拟的统计结果，按文件类型分组
+     */
+    @Select("SELECT 'Java' as type, 5200 as count UNION ALL " +
+            "SELECT 'Vue' as type, 3100 as count UNION ALL " +
+            "SELECT 'SQL' as type, 1500 as count UNION ALL " +
+            "SELECT 'Markdown' as type, 800 as count UNION ALL " +
+            "SELECT 'Python' as type, 1850 as count")
+    List<Map<String, Object>> selectKnowledgeStats();
 }

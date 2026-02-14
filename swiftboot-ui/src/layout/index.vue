@@ -225,7 +225,7 @@
                 <div class="text-xs font-semibold leading-none text-slate-900 dark:text-slate-100">{{ userStore.userInfo?.nickname || 'Admin' }}</div>
                 <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Super User</div>
               </div>
-              <img :src="userStore.userInfo?.avatar || 'https://lh3.googleusercontent.com/aida-public/AB6AXuBKKxp4o64VKOOMt5SPw0ePf0XixCWAa-cd_srSjsglvXvFMIXJY2SeSvo8K7CRpA1C0Uyov8aCvmBWX_hx5Q0GnfOvRclbXvP_UM-STIQZ-v8m-qqyXpc7IBjEFbxjJlyHoXuAq92bnLhZGA037m3AwvTPq1e8DAWqS1s1qKt6nkGoaVOPYpH_yIQFq6zwWSuTyh__otMPntjywlTfrmw57JJeTcN9lKePhYU-JDRwHSL-VwN5BjGH_5gAuIS1Z8uMNG_46ATQQ5k'" alt="User Avatar" class="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700"/>
+              <img :src="userStore.userInfo?.avatar || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzk0YTMiPjxwYXRoIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0iTTcuNSA2YTQuNSA0LjUgMCAxMTkgMCA0LjUgNC41IDAgMDEtOSAwek0zLjc1MSAyMC4xMDVhOC4yNSA4LjI1IDAgMDExNi40OTggMCAuNzUuNzUgMCAwMS0uNDM3LjY5NUExOC42ODMgMTguNjgzIDAgMDExMiAyMi41Yy0yLjc4NiAwLTUuNDMzLS42MDgtNy44MTItMS43YS43NS43NSAwIDAxLS40MzctLjY5NXoiIGNsaXAtcnVsZT0iZXZlbm9kZCIgLz48L3N2Zz4='" alt="User Avatar" class="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700"/>
             </div>
             <template #dropdown>
               <el-dropdown-menu>

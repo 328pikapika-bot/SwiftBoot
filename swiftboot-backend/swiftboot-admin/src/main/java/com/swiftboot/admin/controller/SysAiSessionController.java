@@ -82,4 +82,10 @@ public class SysAiSessionController {
     public R<Map<String, Object>> tokenStats(@RequestParam(required = false, defaultValue = "day") String timeRange) {
         return R.ok(aiSessionService.getDetailedTokenStats(timeRange));
     }
+
+    @Operation(summary = "获取知识库与记忆详情统计")
+    @GetMapping("/knowledge-stats")
+    public R<Map<String, Object>> knowledgeStats() {
+        return R.ok(aiSessionService.getKnowledgeStats());
+    }
 }

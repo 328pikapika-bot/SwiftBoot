@@ -46,4 +46,9 @@ public interface SysAiSessionService extends IService<SysAiSession> {
      * 获取详细的算力消耗统计数据
      */
     Map<String, Object> getDetailedTokenStats(String timeRange);
+
+    /**
+     * 获取知识库与记忆详情统计数据 (左脑硬知识 + 右脑软记忆)
+     */
+    Map<String, Object> getKnowledgeStats();
 }
