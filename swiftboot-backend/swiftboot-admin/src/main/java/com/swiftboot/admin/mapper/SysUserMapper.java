@@ -26,4 +26,16 @@ public interface SysUserMapper extends BaseMapper<SysUser> {
      * 查询用户详情（含角色）
      */
     SysUser selectUserById(@Param("userId") Long userId);
+
+    /**
+     * 根据部门ID查询用户ID列表
+     */
+    @org.apache.ibatis.annotations.Select("select id from sys_user where dept_id = #{deptId} and deleted = 0")
+    java.util.List<Long> selectUserIdsByDeptId(@Param("deptId") Long deptId);
+
+    /**
+     * 查询部门详情
+     */
+    @org.apache.ibatis.annotations.Select("select * from sys_dept where id = #{deptId} and status = 0")
+    com.swiftboot.admin.domain.entity.SysDept selectDeptById(@Param("deptId") Long deptId);
 }

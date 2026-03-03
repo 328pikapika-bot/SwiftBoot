@@ -136,6 +136,22 @@ async def query_memory(request: MemoryQueryRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class SimilarityRequest(BaseModel):
+    text1: str
+    text2: str
+
+@app.post("/nlp/similarity")
+async def calculate_similarity(request: SimilarityRequest):
+    """
+    计算两个文本的语义相似度 (0.0 ~ 1.0)
+    用于判断多轮对话中是否需要引入上下文
+    """
+    try:
+        score = db.calculate_similarity(request.text1, request.text2)
+        return {"similarity": score}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/stats")
 def get_stats():
     try:

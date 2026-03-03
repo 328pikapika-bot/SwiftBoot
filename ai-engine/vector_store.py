@@ -88,6 +88,52 @@ class VectorStore:
         self.collection = self.client.get_or_create_collection(name=COLLECTION_NAME)
         print(f"[{self._now()}]数据库连接成功！")
 
+    def calculate_similarity(self, text1: str, text2: str) -> float:
+        """
+        计算两个文本的余弦相似度
+        利用 ChromaDB 内置的 embedding function 进行向量化
+        """
+        try:
+            # 获取 embedding function
+            # 注意：ChromaDB 的 collection 默认使用 all-MiniLM-L6-v2
+            # 我们这里直接利用 collection 的 embedding_function
+            embedding_function = self.collection._embedding_function
+            
+            if not embedding_function:
+                # Fallback: 如果没有显式设置，尝试从 chromadb.utils.embedding_functions 导入
+                # 但通常 persistent client 会有默认的
+                from chromadb.utils import embedding_functions
+                embedding_function = embedding_functions.DefaultEmbeddingFunction()
+                
+            embeddings = embedding_function([text1, text2])
+            
+            vec1 = embeddings[0]
+            vec2 = embeddings[1]
+            
+            # 计算余弦相似度
+            import numpy as np
+            
+            # 转换为 numpy 数组
+            v1 = np.array(vec1)
+            v2 = np.array(vec2)
+            
+            # 计算点积
+            dot_product = np.dot(v1, v2)
+            
+            # 计算模长
+            norm_v1 = np.linalg.norm(v1)
+            norm_v2 = np.linalg.norm(v2)
+            
+            if norm_v1 == 0 or norm_v2 == 0:
+                return 0.0
+                
+            similarity = dot_product / (norm_v1 * norm_v2)
+            return float(similarity)
+            
+        except Exception as e:
+            print(f"[{self._now()}]计算相似度失败: {e}")
+            return 0.0
+
     def _now(self):
         return time.strftime("%Y-%m-%d %H:%M:%S")
 

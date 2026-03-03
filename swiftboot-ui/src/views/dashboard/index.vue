@@ -342,6 +342,10 @@ const formatTimeAgo = (time: string) => {
 }
 
 const getBusinessTypeColor = (log: any) => {
+  if (log.title && log.title.includes('检测到问题记忆持久化')) {
+    return 'bg-orange-500' // AI 记忆同步显示橙色
+  }
+  
   if (log.title && log.title.includes('RAG 向量索引更新')) {
     return 'bg-purple-500' // RAG 更新显示紫色
   }
@@ -366,7 +370,7 @@ const getBusinessTypeColor = (log: any) => {
 }
 
 const getLogAction = (log: any) => {
-  if (log.title && log.title.includes('RAG 向量索引更新')) {
+  if (log.title && (log.title.includes('RAG 向量索引更新') || log.title.includes('检测到问题记忆持久化'))) {
     return '完成'
   }
   // AI Engine 或 兼容旧的 前端/后端 operName，都不显示动作（因为动作在 title 里或不需要）
@@ -384,6 +388,7 @@ const formatLogTitle = (title: string) => {
     res = res.replace(/(后端)/g, '<span class="text-blue-500 font-bold">$1</span>')
     res = res.replace(/(前端)/g, '<span class="text-orange-500 font-bold">$1</span>')
     res = res.replace(/(文件)/g, '<span class="text-slate-500 font-bold">$1</span>')
+    res = res.replace(/【(.*?)】/g, '<span class="text-orange-500 font-bold">【$1】</span>')
     
     return res
 }

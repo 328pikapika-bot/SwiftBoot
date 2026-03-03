@@ -158,6 +158,7 @@ public class SysAiController {
     private static final String MEMORY_ADD_URL = "http://localhost:8001/memory/add";
     private static final String MEMORY_DELETE_URL = "http://localhost:8001/memory/delete";
     private static final String NLP_TOPIC_URL = "http://localhost:8001/nlp/topic";
+    private static final String NLP_SIMILARITY_URL = "http://localhost:8001/nlp/similarity";
     private static final String STATS_URL = "http://localhost:8001/stats";
 
     /**
@@ -174,7 +175,9 @@ public class SysAiController {
             // 查询最新的 limit 条 AI 引擎日志
             Page<SysOperLog> page = new Page<>(1, limit);
             LambdaQueryWrapper<SysOperLog> queryWrapper = new LambdaQueryWrapper<>();
-            queryWrapper.eq(SysOperLog::getOperName, "AI Engine")
+            queryWrapper.and(w -> w.eq(SysOperLog::getOperName, "AI Engine")
+                                .or()
+                                .like(SysOperLog::getMethod, "VectorStore."))
                         .orderByDesc(SysOperLog::getOperTime);
             
             Page<SysOperLog> result = operLogService.page(page, queryWrapper);
@@ -192,7 +195,7 @@ public class SysAiController {
                 // 根据日志内容简单的着色逻辑
                 if (log.getTitle() != null) {
                     if (log.getTitle().contains("检测到")) {
-                        msg.set("color", "text-blue-400");
+                        msg.set("color", "text-orange-400");
                     } else if (log.getTitle().contains("完成") || log.getTitle().contains("成功")) {
                         msg.set("color", "text-emerald-400");
                     } else if (log.getTitle().contains("失败") || log.getTitle().contains("错误")) {
@@ -238,7 +241,7 @@ public class SysAiController {
             msg.set("msg", log.getTitle());
             // 根据日志内容简单的着色逻辑
             if (log.getTitle().contains("检测到")) {
-                msg.set("color", "text-blue-400");
+                msg.set("color", "text-orange-400");
             } else if (log.getTitle().contains("完成") || log.getTitle().contains("成功")) {
                 msg.set("color", "text-emerald-400");
             } else if (log.getTitle().contains("失败") || log.getTitle().contains("错误")) {
@@ -432,11 +435,12 @@ public class SysAiController {
      * 使用 SSE (Server-Sent Events) 技术，实现打字机效果。
      * 
      * 【Agent 工具调用流程】：
-     * 1. 用户提问 → LLM（携带 tools 定义）
-     * 2. LLM 决定是否调用工具 → 如需调用，返回 tool_calls
-     * 3. 执行工具（调用 RAG 检索引擎）→ 获取代码上下文
-     * 4. 将工具结果发送给 LLM → LLM 生成最终回答
-     * 5. 流式输出给用户
+     * 1. 上下文判断（相似度计算）：决定是否引入历史对话
+     * 2. 用户提问 → LLM（携带 tools 定义）
+     * 3. LLM 决定是否调用工具 → 如需调用，返回 tool_calls
+     * 4. 执行工具（调用 RAG 检索引擎）→ 获取代码上下文
+     * 5. 将工具结果发送给 LLM → LLM 生成最终回答
+     * 6. 流式输出给用户
      */
     @Operation(summary = "发送对话(流式)")
     @Log(title = "智能会话", businessType = BusinessType.OTHER)
@@ -445,6 +449,7 @@ public class SysAiController {
         final SseEmitter emitter = new SseEmitter(0L);
         String content = (String) params.get("content");
         Long userId = SecurityUtils.getUserId();
+        String userIp = SecurityUtils.getLoginUser().getLoginIp();
         
         if (content == null || content.trim().isEmpty()) {
             try {
@@ -467,13 +472,65 @@ public class SysAiController {
                 JSONArray messages = new JSONArray();
                 messages.add(new JSONObject().set("role", "system").set("content", systemPrompt));
                 
-                // 3. 注入近期对话历史
-                addRecentHistory(messages, userId);
+                // 3. 智能上下文判断 (基于向量相似度)
+                // 获取 Redis 中最近的一条用户提问
+                String redisKey = HISTORY_KEY_PREFIX + userId;
+                String lastUserMsgJson = null;
+                List<String> history = stringRedisTemplate.opsForList().range(redisKey, -2, -2); // 获取倒数第2条 (assistant, user, assistant, user) -> user
+                if (history != null && !history.isEmpty()) {
+                     // 简单判断，实际 Redis 存储结构是 {"role":"user","content":"..."}
+                     // 这里为了简化，我们遍历找到最后一条 role=user 的消息
+                     List<String> allHistory = stringRedisTemplate.opsForList().range(redisKey, 0, -1);
+                     if (allHistory != null) {
+                         for (int i = allHistory.size() - 1; i >= 0; i--) {
+                             JSONObject msg = JSONUtil.parseObj(allHistory.get(i));
+                             if ("user".equals(msg.getStr("role"))) {
+                                 lastUserMsgJson = msg.getStr("content");
+                                 break;
+                             }
+                         }
+                     }
+                }
                 
-                // 4. 添加用户消息
+                boolean shouldIncludeHistory = true;
+                if (lastUserMsgJson != null) {
+                    try {
+                        JSONObject simRequest = new JSONObject();
+                        simRequest.set("text1", content);
+                        simRequest.set("text2", lastUserMsgJson);
+                        
+                        String simResult = HttpRequest.post(NLP_SIMILARITY_URL)
+                                .timeout(1000) // 1s 超时
+                                .body(simRequest.toString())
+                                .execute()
+                                .body();
+                                
+                        if (StrUtil.isNotEmpty(simResult)) {
+                            double similarity = JSONUtil.parseObj(simResult).getDouble("similarity");
+                            System.out.println("Context Similarity: " + similarity + " (Current: " + content + " vs Last: " + lastUserMsgJson + ")");
+                            
+                            if (similarity < 0.5) {
+                                shouldIncludeHistory = false;
+                                System.out.println("Topic switched (similarity < 0.5), history context dropped.");
+                            }
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Similarity check failed: " + e.getMessage());
+                    }
+                }
+                
+                // 4. 注入近期对话历史 (如果判定为相关)
+                if (shouldIncludeHistory) {
+                    addRecentHistory(messages, userId);
+                } else {
+                    // 即使不引入历史，也可以考虑引入最后一条 AI 的回复（如果需要连贯性），但在 RAG 场景下，切断通常更安全
+                    // 这里我们选择彻底切断，只保留 System Prompt
+                }
+                
+                // 5. 添加用户消息
                 messages.add(new JSONObject().set("role", "user").set("content", content));
                 
-                // 5. Agent 循环：仅允许 1 轮工具调用，以提高响应速度
+                // 6. Agent 循环：仅允许 1 轮工具调用，以提高响应速度
                 int maxToolCalls = 1;
                 int toolCallCount = 0;
                 boolean toolCallLimitReached = false;
@@ -629,7 +686,7 @@ public class SysAiController {
                 
                 // 7. 存储对话历史
                 if (fullReply.length() > 0) {
-                    saveConversationHistory(userId, content, fullReply.toString(), startTime);
+                    saveConversationHistory(userId, content, fullReply.toString(), startTime, userIp);
                     System.out.println("[Agent] 流式响应正常结束，回复长度: " + fullReply.length());
                 } else {
                     System.out.println("[Agent] 流式响应结束，但回复为空");
@@ -815,7 +872,7 @@ public class SysAiController {
     /**
      * 保存对话历史（Redis + 向量库 + MySQL）
      */
-    private void saveConversationHistory(Long userId, String question, String answer, long startTime) {
+    private void saveConversationHistory(Long userId, String question, String answer, long startTime, String userIp) {
         long now = System.currentTimeMillis();
         
         // 1. 存入 Redis 短期历史
@@ -834,6 +891,7 @@ public class SysAiController {
         }
 
         // 2. 存入 Vector DB 长期记忆
+        boolean vectorSyncSuccess = false;
         try {
             JSONObject memoryAdd = new JSONObject();
             memoryAdd.set("user_id", String.valueOf(userId));
@@ -841,9 +899,13 @@ public class SysAiController {
             memoryMessages.add(new JSONObject().set("content", question).set("role", "user").set("timestamp", now).set("sequence", now));
             memoryMessages.add(new JSONObject().set("content", answer).set("role", "assistant").set("timestamp", now + 1).set("sequence", now + 1));
             memoryAdd.set("messages", memoryMessages);
-            HttpRequest.post(MEMORY_ADD_URL).timeout(5000).body(memoryAdd.toString()).execute();
+            System.out.println("[AI History] Syncing to Vector DB: " + MEMORY_ADD_URL);
+            HttpResponse response = HttpRequest.post(MEMORY_ADD_URL).timeout(30000).body(memoryAdd.toString()).execute();
+            vectorSyncSuccess = response.isOk();
+            System.out.println("[AI History] Vector DB Sync result: " + vectorSyncSuccess + ", status: " + response.getStatus());
         } catch (Exception e) {
             System.err.println("Vector DB save failed: " + e.getMessage());
+            e.printStackTrace();
         }
         
         // 3. 持久化到 MySQL
@@ -867,6 +929,46 @@ public class SysAiController {
             aiSessionService.save(aiSession);
         } catch (Exception e) {
             System.err.println("Failed to save ai session: " + e.getMessage());
+        }
+
+        // 4. 如果向量同步成功，记录操作日志并推送到 SSE
+        if (vectorSyncSuccess) {
+            try {
+                String logTitle = "AI Engine 检测到问题记忆持久化【" + (question.length() > 20 ? question.substring(0, 20) + "..." : question) + "】";
+                
+                SysOperLog operLog = new SysOperLog();
+                operLog.setTitle(logTitle);
+                operLog.setBusinessType(0); // 其他
+                operLog.setMethod("VectorStore.memory_sync");
+                operLog.setRequestMethod("POST");
+                operLog.setOperName(String.valueOf(userId)); // 存入用户ID，供前端/Service 转换
+                operLog.setOperUrl("/system/ai/memory/add");
+                operLog.setOperIp(userIp);
+                operLog.setStatus(0);
+                operLog.setOperTime(java.time.LocalDateTime.now());
+                
+                operLogService.save(operLog);
+                
+                // 立即推送到 SSE 流 (AI 看板索引构建流)
+                JSONObject sseMsg = new JSONObject();
+                sseMsg.set("time", cn.hutool.core.date.DateUtil.format(new java.util.Date(), "HH:mm:ss"));
+                sseMsg.set("msg", logTitle);
+                sseMsg.set("color", "text-orange-400"); // 橙色圆点
+                
+                String jsonStr = sseMsg.toString();
+                List<SseEmitter> deadEmitters = new java.util.ArrayList<>();
+                for (SseEmitter emitter : logEmitters) {
+                    try {
+                        emitter.send(SseEmitter.event().data(jsonStr));
+                    } catch (Exception e) {
+                        deadEmitters.add(emitter);
+                    }
+                }
+                logEmitters.removeAll(deadEmitters);
+            } catch (Exception e) {
+                System.err.println("Failed to save oper log or push SSE: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
     }
 
