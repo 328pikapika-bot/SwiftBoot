@@ -5,160 +5,213 @@
     :style="containerStyle"
     ref="containerRef"
   >
-    <!-- 最小化状态 -->
+    <!-- 最小化状态 (悬浮球) -->
     <div v-if="isMinimized" class="ai-minimized-new group" @dblclick="toggleMinimize" @mousedown="startDrag">
-      <!-- Pulse Background -->
-      <div class="absolute inset-0 rounded-full bg-blue-500/20 ai-pulse pointer-events-none -z-10 scale-150"></div>
-      <div class="absolute inset-0 rounded-full bg-blue-500/10 ai-pulse pointer-events-none -z-10 scale-125" style="animation-delay: 1.5s;"></div>
+      <div class="absolute inset-0 rounded-full bg-primary/20 ai-pulse pointer-events-none -z-10 scale-150"></div>
+      <div class="absolute inset-0 rounded-full bg-primary/10 ai-pulse pointer-events-none -z-10 scale-125" style="animation-delay: 1.5s;"></div>
       
-      <!-- Main Button -->
-      <div class="relative w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 dark:from-blue-500 dark:to-blue-700 text-white rounded-full shadow-[0_8px_30px_rgb(59,130,246,0.3)] flex items-center justify-center hover:scale-110 transition-all duration-300 backdrop-blur-sm bg-opacity-90 cursor-pointer">
-        <span class="material-symbols-outlined text-4xl group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.8)] transition-all">neurology</span>
-        <div class="absolute top-0 right-0 w-4 h-4 bg-green-400 rounded-full border-2 border-white dark:border-slate-900 shadow-sm"></div>
+      <div class="relative w-16 h-16 bg-gradient-to-br from-primary to-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-all duration-300 backdrop-blur-sm cursor-pointer">
+        <span class="material-symbols-outlined text-4xl group-hover:drop-shadow-glow transition-all">neurology</span>
+        <div class="absolute top-0 right-0 w-4 h-4 bg-emerald-400 rounded-full border-2 border-white shadow-sm"></div>
       </div>
 
-      <!-- Tooltip -->
       <span class="absolute right-full mr-4 top-1/2 -translate-y-1/2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-1.5 rounded-lg text-sm font-medium shadow-xl opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all pointer-events-none whitespace-nowrap border border-slate-100 dark:border-slate-700">
         双击进入智能会话
       </span>
     </div>
 
-    <!-- 展开状态 -->
-    <div v-else class="ai-expanded">
-      <!-- 头部 -->
-      <div class="ai-header" @mousedown="startDrag" @dblclick="toggleMinimize">
+    <!-- 展开状态 (参考设计图) -->
+    <div v-else class="ai-window-card">
+      <!-- Header -->
+      <header class="ai-window-header" @mousedown="startDrag" @dblclick="toggleMinimize">
         <div class="header-left">
-          <div class="ai-avatar-small">
-            <div class="ai-logo-text-small">AI</div>
+          <div class="brand-icon">
+            <span class="material-symbols-outlined text-primary">auto_awesome</span>
           </div>
-          <div class="header-info">
-            <span class="header-title">SwiftBoot问答小助手</span>
-            <span class="header-status">
-              <span class="status-dot"></span>在线·智能响应
-            </span>
+          <div class="brand-info">
+            <h2 class="title">SwiftBoot 智能会话</h2>
+            <div class="status-indicator">
+              <span class="pulse-dot"></span>
+              <span class="status-text">本地 RAG 索引已就绪</span>
+            </div>
           </div>
         </div>
-        <div class="header-actions">
-          <el-tooltip content="清除历史" placement="bottom">
-            <el-icon class="action-icon" @click.stop="clearHistory"><Delete /></el-icon>
-          </el-tooltip>
-          <el-tooltip content="最小化" placement="bottom">
-            <el-icon class="action-icon" @click.stop="toggleMinimize"><Minus /></el-icon>
-          </el-tooltip>
-          <el-tooltip content="关闭" placement="bottom">
-             <el-icon class="action-icon close-icon" @click.stop="toggleMinimize"><Close /></el-icon>
-          </el-tooltip>
+        <div class="header-right">
+          <div class="model-tag">模型: DeepSeek-V3</div>
+          <div class="header-actions">
+            <button class="icon-btn" @click.stop="clearHistory" title="历史记录"><span class="material-symbols-outlined">history</span></button>
+            <button class="icon-btn" @click.stop="toggleMinimize" title="最小化"><span class="material-symbols-outlined">remove</span></button>
+            <button class="icon-btn close" @click.stop="toggleMinimize" title="关闭"><span class="material-symbols-outlined">close</span></button>
+          </div>
         </div>
-      </div>
+      </header>
 
-      <!-- 消息列表 -->
-      <div class="ai-body" ref="messagesRef">
-        <div class="welcome-message" v-if="messages.length === 0">
-          <div class="welcome-logo">
-             <div class="ai-logo-text-large">AI</div>
-          </div>
-          <h3>有什么可以帮您？</h3>
-          <p class="welcome-desc">我是您的专属智能编程助手，可以解答关于代码逻辑、数据库设计或项目架构的问题。</p>
-          <div class="suggestion-chips">
-            <div class="chip" @click="sendSuggestion('请详细介绍 SwiftBoot 项目的整体架构和模块划分')">
-              项目架构解析
-            </div>
-            <div class="chip" @click="sendSuggestion('分析一下用户登录和 JWT 认证的完整流程')">
-              登录认证流程
-            </div>
-            <div class="chip" @click="sendSuggestion('如何使用代码生成器快速创建一个 CRUD 模块？')">
-              代码生成器使用
-            </div>
-            <div class="chip" @click="sendSuggestion('请说明 sys_user, sys_role, sys_menu 等核心表的关系')">
-              核心库表关系
-            </div>
-            <div class="chip" @click="sendSuggestion('我想新增一个业务功能，请给出前后端的完整开发步骤')">
-              新增业务功能指南
-            </div>
-            <div class="chip" @click="sendSuggestion('前端是如何封装 Axios 请求并与后端交互的？')">
-              前后端交互机制
-            </div>
-          </div>
-        </div>
-
-        <div v-for="(msg, index) in messages" :key="index" :class="['message-row', msg.role]">
-          <div class="message-avatar" v-if="msg.role === 'assistant'">
-            <div class="ai-logo-text-small">AI</div>
-          </div>
-          <div class="message-content-wrapper">
-            <div class="message-bubble" :class="{ loading: msg.role === 'assistant' && !msg.content && loading }">
-              <div v-if="msg.role === 'assistant' && !msg.content && loading" class="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
+      <div class="ai-window-content">
+        <!-- Chat Area -->
+        <div class="chat-main">
+          <div class="chat-messages custom-scrollbar" ref="messagesRef">
+            <div v-if="messages.length === 0" class="welcome-empty">
+              <div class="welcome-logo">
+                <span class="material-symbols-outlined">neurology</span>
               </div>
-              <div v-else-if="msg.role === 'assistant'" class="markdown-body" v-html="renderMarkdown(msg.content)"></div>
-              <div v-else>{{ msg.content }}</div>
-            </div>
-            <!-- 复制按钮 (仅 AI 消息显示且内容不为空时) -->
-            <div v-if="msg.role === 'assistant' && msg.content" class="message-actions">
-              <el-tooltip content="复制内容" placement="top" :show-after="500">
-                <div class="action-btn" @click="copyContent(msg.content)">
-                  <el-icon><CopyDocument /></el-icon> 复制全文
+              <h3>有什么可以帮您？</h3>
+              <div class="suggestion-list">
+                <div v-for="s in suggestions" :key="s" class="suggestion-item" @click="sendSuggestion(s)">
+                  {{ s }}
                 </div>
-              </el-tooltip>
+              </div>
+            </div>
+
+            <div v-for="(msg, index) in messages" :key="index" :class="['msg-row', msg.role]">
+              <div class="msg-avatar" v-if="msg.role === 'assistant'">
+                <span class="material-symbols-outlined">auto_awesome</span>
+              </div>
+              <div class="msg-content-box">
+                <template v-if="msg.role === 'assistant'">
+                  <!-- 思考过程区块 -->
+                  <div v-if="parseMessage(msg.content).thought" 
+                       class="ds-thought-container" 
+                       :class="{ thinking: parseMessage(msg.content).isThinking }">
+                    <div class="ds-thought-header">
+                      <span class="material-symbols-outlined ds-thought-icon">psychology</span>
+                      <span class="ds-thought-title">
+                        {{ parseMessage(msg.content).isThinking ? '正在思考...' : '已完成深度思考' }}
+                      </span>
+                      <button v-if="!parseMessage(msg.content).isThinking" 
+                              class="mini-copy-btn" 
+                              @click="copyPart(parseMessage(msg.content).rawThought, '思考')"
+                              title="复制思考过程">
+                        <span class="material-symbols-outlined">content_copy</span>
+                      </button>
+                    </div>
+                    <div class="ds-thought-body markdown-content" v-html="parseMessage(msg.content).thought"></div>
+                  </div>
+
+                  <!-- 回答区块 -->
+                  <div class="msg-bubble ai-bubble">
+                    <div v-if="parseMessage(msg.content).answer" class="ds-answer-body markdown-content" v-html="parseMessage(msg.content).answer"></div>
+                    <div v-if="!msg.content && loading" class="loading-shimmer">
+                      <div class="shimmer-line w-3/4"></div>
+                      <div class="shimmer-line w-1/2"></div>
+                    </div>
+                    
+                    <!-- 独立复制回答按钮 -->
+                    <div v-if="parseMessage(msg.content).answer && !loading" class="msg-footer">
+                      <button class="footer-action" @click="copyPart(parseMessage(msg.content).rawAnswer, '回答')">
+                        <span class="material-symbols-outlined">content_copy</span> 复制回答
+                      </button>
+                    </div>
+                  </div>
+                </template>
+
+                <template v-else>
+                  <div class="msg-bubble user-bubble">
+                    {{ msg.content }}
+                  </div>
+                </template>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <!-- 底部输入区 -->
-      <div class="ai-footer">
-        <div class="input-wrapper">
-          <el-input
-            v-model="inputContent"
-            type="textarea"
-            :autosize="{ minRows: 1, maxRows: 5 }"
-            placeholder="输入您的问题 (Shift+Enter 换行)..."
-            @keydown.enter.prevent="handleEnterKey"
-            :disabled="loading"
-            class="ai-input"
-          />
-          <div class="input-actions">
-             <el-tooltip content="发送" placement="top">
-                <el-button 
-                  class="send-btn" 
-                  :class="{ 'is-active': inputContent.trim() }"
-                  @click="sendMessage" 
-                  :loading="false" 
+          <!-- Input Area -->
+          <footer class="chat-footer">
+            <div class="input-wrapper-new">
+              <textarea
+                v-model="inputContent"
+                placeholder="询问关于您项目的问题..."
+                @keydown.enter.prevent="handleEnterKey"
+                :disabled="loading"
+                rows="2"
+                class="custom-textarea"
+              ></textarea>
+              <div class="input-toolbar">
+                <div class="toolbar-left">
+                  <!-- 移除原有的三个功能图标 -->
+                </div>
+                <button 
+                  class="send-btn-v2" 
+                  :class="{ active: inputContent.trim() && !loading }"
+                  @click="sendMessage"
                   :disabled="!inputContent.trim() || loading"
-                  circle
                 >
-                  <el-icon><Position /></el-icon>
-                </el-button>
-             </el-tooltip>
-             <el-tooltip content="停止回答" placement="top">
-               <el-button 
-                 v-if="loading"
-                 class="stop-btn" 
-                 type="danger" 
-                 plain 
-                 @click="stopStreaming" 
-                 circle
-               >
-                 <el-icon><Close /></el-icon>
-               </el-button>
-             </el-tooltip>
-          </div>
+                  <span>发送</span>
+                  <span class="material-symbols-outlined">send</span>
+                </button>
+              </div>
+            </div>
+            <div class="footer-note">SWIFTBOOT 智能全栈引擎 · RAG 增强型 AI</div>
+          </footer>
         </div>
+
+        <!-- Sidebar -->
+        <aside class="chat-sidebar" v-if="windowState.width > 600">
+          <div class="sidebar-section">
+            <h3 class="section-title">
+              <span class="material-symbols-outlined">account_tree</span>
+              当前知识环境
+            </h3>
+            <div class="file-tree-mini">
+              <div class="tree-node parent">
+                <span class="material-symbols-outlined text-amber-400">folder_open</span>
+                <span>swiftboot-backend</span>
+              </div>
+              <div class="tree-node child">
+                <span class="material-symbols-outlined text-amber-400">folder</span>
+                <span>swiftboot-admin</span>
+              </div>
+              <div class="tree-node child ml-10">
+                <span class="material-symbols-outlined text-blue-400">description</span>
+                <span>SysAiController.java</span>
+              </div>
+              <div class="tree-node parent mt-2">
+                <span class="material-symbols-outlined text-amber-400">folder</span>
+                <span>swiftboot-ui</span>
+              </div>
+              <div class="tree-node child">
+                <span class="material-symbols-outlined text-amber-400">folder</span>
+                <span>src/components/AiAssistant</span>
+              </div>
+              <div class="tree-node parent mt-2">
+                <span class="material-symbols-outlined text-slate-400">settings</span>
+                <span>pom.xml</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <h3 class="section-title">RAG 向量空间</h3>
+            <div class="vector-space-box">
+              <div class="grid-overlay"></div>
+              <div class="vector-dots">
+                <div v-for="i in 8" :key="i" class="v-dot" :style="randomDotPos()"></div>
+                <div class="v-dot center-dot"></div>
+              </div>
+              <div class="scan-line"></div>
+              <div class="space-status">
+                <span class="dot-pulse"></span>
+                <span>实时检索中...</span>
+              </div>
+            </div>
+            <div class="space-meta">
+              <span>维度: 1536 (OpenAI)</span>
+              <span>阈值: 0.82</span>
+            </div>
+          </div>
+
+          <div class="sidebar-footer">
+            <button class="refresh-btn" @click="handleRefreshIndex">
+              <span class="material-symbols-outlined">refresh</span>
+              更新索引
+            </button>
+          </div>
+        </aside>
       </div>
 
-      <div v-if="isResizing" class="resize-indicator">
-        {{ windowState.width }} × {{ windowState.height }}
-      </div>
-      <div class="resize-handle corner top-left" @mousedown.stop="startResize($event, 'top-left')"></div>
-      <div class="resize-handle corner top-right" @mousedown.stop="startResize($event, 'top-right')"></div>
-      <div class="resize-handle corner bottom-left" @mousedown.stop="startResize($event, 'bottom-left')"></div>
-      <div class="resize-handle corner bottom-right" @mousedown.stop="startResize($event, 'bottom-right')"></div>
-      <div class="resize-handle edge top" @mousedown.stop="startResize($event, 'top')"></div>
-      <div class="resize-handle edge right" @mousedown.stop="startResize($event, 'right')"></div>
-      <div class="resize-handle edge bottom" @mousedown.stop="startResize($event, 'bottom')"></div>
-      <div class="resize-handle edge left" @mousedown.stop="startResize($event, 'left')"></div>
+      <!-- Resize Handles -->
+      <div class="resize-handle nw" @mousedown.stop="startResize($event, 'top-left')"></div>
+      <div class="resize-handle ne" @mousedown.stop="startResize($event, 'top-right')"></div>
+      <div class="resize-handle sw" @mousedown.stop="startResize($event, 'bottom-left')"></div>
+      <div class="resize-handle se" @mousedown.stop="startResize($event, 'bottom-right')"></div>
     </div>
   </div>
 </template>
@@ -170,7 +223,7 @@ import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
-import 'highlight.js/styles/atom-one-dark.css' // 使用暗色主题适配深色代码块
+import 'highlight.js/styles/tokyo-night-dark.css' // 采用更高级的深色主题
 import 'github-markdown-css/github-markdown.css'
 import request from '@/utils/request'
 
@@ -178,17 +231,16 @@ const md = new MarkdownIt({
   html: true,
   linkify: true,
   typographer: true,
-  breaks: true, // 开启换行符转换
+  breaks: true,
   highlight: function (str: string, lang: string): string {
     if (lang && hljs.getLanguage(lang)) {
       try {
-        return '<pre class="hljs"><code>' +
+        return '<pre class="hljs custom-code-block"><code>' +
                hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
                '</code></pre>';
       } catch (__) {}
     }
-
-    return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
+    return '<pre class="hljs custom-code-block"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
   }
 })
 
@@ -203,7 +255,14 @@ const messagesRef = ref<HTMLElement | null>(null)
 
 const userStore = useUserStore()
 
-// 加载历史记录 (从后端 Redis 获取)
+const suggestions = [
+  '请详细介绍 SwiftBoot 项目的整体架构',
+  '分析一下用户登录和 JWT 认证的完整流程',
+  '如何使用代码生成器快速创建一个 CRUD 模块？',
+  '请说明核心表 sys_user 和 sys_role 的关系'
+]
+
+// 加载历史记录
 const loadHistory = async () => {
   if (!userStore.token) {
       messages.value = []
@@ -214,53 +273,34 @@ const loadHistory = async () => {
     if (res.code === 200 && res.data) {
         messages.value = res.data
         scrollToBottom(true)
-    } else {
-        messages.value = []
     }
   } catch (e) {
     console.error('Failed to load chat history:', e)
-    messages.value = []
   }
 }
 
-// 保存历史记录 (已移至后端 Redis，前端无需存储)
-const saveHistory = () => {
-  // No-op
-}
-
-// 监听用户ID变化，重新加载历史
-watch(() => userStore.userInfo?.userId, () => {
-    loadHistory()
-})
-
-// 初始化时加载
+watch(() => userStore.userInfo?.userId, () => loadHistory())
 loadHistory()
 
-// 窗口尺寸和位置
+// 窗口尺寸和位置 (进一步加宽默认尺寸)
 const windowState = reactive({
-  // 默认位置：屏幕右侧，预留足够宽度显示悬浮球
-  // 计算逻辑：屏幕宽度 - 窗口宽度的一半(350) - 悬浮球预留(100)
-  x: window.innerWidth - 450, 
-  y: window.innerHeight / 2 - 350, // 垂直居中
-  width: 700,
-  height: 700
+  x: window.innerWidth - 1350, 
+  y: window.innerHeight / 2 - 450,
+  width: 1300,
+  height: 850
 })
 
 const isDragging = ref(false)
 const isResizing = ref(false)
 const dragOffset = reactive({ x: 0, y: 0 })
 const resizeStart = reactive({ x: 0, y: 0, width: 0, height: 0, left: 0, top: 0 })
-const resizeDirection = ref<'top' | 'right' | 'bottom' | 'left' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'>('bottom-right')
+const resizeDirection = ref('')
 
 const containerStyle = computed(() => {
   if (isMinimized.value) {
-    // 最小化时，基于当前窗口位置计算中心点，使悬浮球相对于窗口中心居中
     const centerX = windowState.x + windowState.width / 2
     const centerY = windowState.y + windowState.height / 2
-    return {
-      left: `${centerX - 32}px`, // 64/2 = 32
-      top: `${centerY - 32}px`
-    }
+    return { left: `${centerX - 32}px`, top: `${centerY - 32}px` }
   }
   return {
     left: `${windowState.x}px`,
@@ -270,94 +310,46 @@ const containerStyle = computed(() => {
   }
 })
 
-// 方法
-const clearHistory = async () => {
-  try {
-    await request({ url: '/system/ai/history/clean', method: 'delete' })
-    messages.value = []
-    ElMessage.success('历史记录已清除')
-  } catch (err) {
-    ElMessage.error('清除失败')
+const randomDotPos = () => {
+  return {
+    top: `${Math.random() * 80 + 10}%`,
+    left: `${Math.random() * 80 + 10}%`
   }
 }
 
-const toggleMinimize = (e?: MouseEvent) => {
-  if (e) {
-    e.stopPropagation() // 阻止事件冒泡，防止触发其他点击事件
-  }
-  isMinimized.value = !isMinimized.value
-  if (!isMinimized.value) {
-    // 展开时检查边界
-    ensureVisible()
-    scrollToBottom()
-  }
-}
-
-const ensureVisible = () => {
-  const maxX = window.innerWidth - windowState.width
-  const maxY = window.innerHeight - windowState.height
+const parseMessage = (content: string) => {
+  if (!content) return { thought: '', answer: '', isThinking: false }
   
-  if (windowState.x > maxX) windowState.x = Math.max(0, maxX)
-  if (windowState.y > maxY) windowState.y = Math.max(0, maxY)
-  if (windowState.x < 0) windowState.x = 0
-  if (windowState.y < 0) windowState.y = 0
-}
-
-const renderMarkdown = (content: string) => {
-  // 提取 thought
   let thoughtContent = ''
-  // 匹配 <thought>...</thought> (闭合)
   const thoughtMatch = content.match(/<thought>([\s\S]*?)<\/thought>/i)
-  // 匹配 <thought>... (未闭合，正在生成)
   const thoughtStartMatch = content.match(/<thought>([\s\S]*)$/i)
   
   let cleanContent = content
-  let isOpen = false // 是否默认展开
+  let isThinking = false
   
   if (thoughtMatch) {
-    // 已闭合
     thoughtContent = thoughtMatch[1].trim()
     cleanContent = content.replace(thoughtMatch[0], '').trim()
-    isOpen = false // 生成完毕后默认折叠
   } else if (thoughtStartMatch) {
-    // 未闭合 (正在生成)
     thoughtContent = thoughtStartMatch[1].trim()
     cleanContent = content.substring(0, thoughtStartMatch.index).trim()
-    isOpen = true // 正在生成时必须展开
+    isThinking = true
   }
   
-  // 过滤 DSML 工具调用标签 (防止乱码显示)
-  cleanContent = cleanContent.replace(/<\|DSML\|[\s\S]*?(\|\/DSML\|>|<\/\|DSML\|function_calls>)/g, '')
-                             .replace(/<\|DSML\|[\s\S]*$/g, '') // 过滤未闭合的
-                             .trim()
+  // 过滤所有形式的 DSML 标签
+  cleanContent = cleanContent
+    .replace(/<[\s\S]*?DSML[\s\S]*?>[\s\S]*?<\/[\s\S]*?DSML[\s\S]*?>/gi, '')
+    .replace(/<[\s\S]*?DSML[\s\S]*?>[\s\S]*$/gi, '')
+    .replace(/<[\s\S]*?DSML[\s\S]*?$/gi, '')
+    .replace(/<\|DSML\|[\s\S]*?(\|\/DSML\|>|<\/\|DSML\|function_calls>)/g, '')
+    .trim()
   
-  let html = ''
-  
-  // 如果有思考过程，添加折叠面板
-  if (thoughtContent) {
-    html += `
-      <details class="ai-thought-details" ${isOpen ? 'open' : ''}>
-        <summary class="ai-thought-summary">
-          <span class="ai-thought-icon">🤔</span> 深度思考过程 ${isOpen ? '(生成中...)' : ''}
-        </summary>
-        <div class="ai-thought-content">
-          ${md.render(thoughtContent)}
-        </div>
-      </details>
-    `
-  }
-  
-  html += md.render(cleanContent)
-  
-  return html
-}
-
-const copyContent = async (text: string) => {
-  try {
-    await navigator.clipboard.writeText(text)
-    ElMessage.success('复制成功')
-  } catch (err) {
-    ElMessage.error('复制失败')
+  return {
+    thought: thoughtContent ? md.render(thoughtContent) : '',
+    answer: cleanContent ? md.render(cleanContent) : '',
+    isThinking,
+    rawThought: thoughtContent,
+    rawAnswer: cleanContent
   }
 }
 
@@ -365,10 +357,7 @@ const scrollToBottom = (force = false) => {
   nextTick(() => {
     if (messagesRef.value) {
       const { scrollTop, scrollHeight, clientHeight } = messagesRef.value
-      // 这里的 100 是一个阈值，表示用户离底部多远时算作“在底部”
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
-      
-      // 如果强制滚动，或者用户当前就在底部，则执行置底
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150
       if (force || isNearBottom) {
         messagesRef.value.scrollTop = messagesRef.value.scrollHeight
       }
@@ -376,64 +365,9 @@ const scrollToBottom = (force = false) => {
   })
 }
 
-const handleEnterKey = (e: Event | KeyboardEvent) => {
-  if (e instanceof KeyboardEvent && e.shiftKey) return // Shift+Enter 换行
+const handleEnterKey = (e: KeyboardEvent) => {
+  if (e.shiftKey) return
   sendMessage()
-}
-
-const streamAiChat = async (content: string, history: any[], onChunk: (chunk: string) => void) => {
-  const userStore = useUserStore()
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
-  }
-  if (userStore.token) {
-    headers['Authorization'] = userStore.token
-  }
-  const controller = new AbortController()
-  currentStream.value = { abort: () => controller.abort() }
-  const response = await fetch('/api/system/ai/chat/stream', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ content, history }),
-    signal: controller.signal
-  })
-  if (!response.ok || !response.body) {
-    throw new Error('stream_failed')
-  }
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder('utf-8')
-  let buffer = ''
-  try {
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed || !trimmed.startsWith('data:')) continue
-        const data = trimmed.slice(5).trim()
-        if (!data) continue
-        if (data === '[DONE]') return
-        try {
-          const json = JSON.parse(data)
-          if (json.content) {
-            onChunk(json.content)
-          }
-        } catch (e) {
-          onChunk(data)
-        }
-      }
-    }
-  } catch (err: any) {
-    if (err && err.name === 'AbortError') {
-      throw new Error('stream_aborted')
-    }
-    throw err
-  } finally {
-    currentStream.value = null
-  }
 }
 
 const sendMessage = async () => {
@@ -445,152 +379,152 @@ const sendMessage = async () => {
   loading.value = true
   scrollToBottom(true)
 
+  const assistantMessage = reactive({ role: 'assistant', content: '' })
+  messages.value.push(assistantMessage as any)
+  
+  let pendingText = ''
+  let isTyping = false
+  let isStreamFinished = false
+  
+  const typeLoop = () => {
+    if (pendingText.length > 0) {
+      // 动态速度：更丝滑
+      const speed = Math.max(1, Math.floor(pendingText.length / 8))
+      const chunk = pendingText.slice(0, speed)
+      pendingText = pendingText.slice(speed)
+      assistantMessage.content += chunk
+      scrollToBottom()
+    }
+    if (isStreamFinished && pendingText.length === 0) {
+      isTyping = false
+      loading.value = false
+      return
+    }
+    requestAnimationFrame(typeLoop)
+  }
+
   try {
-    const assistantMessage = reactive({ role: 'assistant', content: '' })
-    messages.value.push(assistantMessage as any)
+    const controller = new AbortController()
+    currentStream.value = { abort: () => controller.abort() }
     
-    // 平滑打字机效果相关变量
-    let pendingText = ''
-    let isTyping = false
-    let isStreamFinished = false
-    
-    // 启动打字机循环
-    const typeLoop = () => {
-      if (pendingText.length > 0) {
-        // 动态调整打字速度：缓冲区越长，打字越快，避免积压太多
-        const speed = pendingText.length > 50 ? 5 : pendingText.length > 20 ? 2 : 1
-        const chunk = pendingText.slice(0, speed)
-        pendingText = pendingText.slice(speed)
-        assistantMessage.content += chunk
-        scrollToBottom()
-      }
-      
-      if (isStreamFinished && pendingText.length === 0) {
-        isTyping = false
-        loading.value = false
-        return
-      }
-      
-      requestAnimationFrame(typeLoop)
-    }
+    const response = await fetch('/api/system/ai/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': userStore.token || '' },
+      body: JSON.stringify({ content, history: [] }),
+      signal: controller.signal
+    })
 
-    try {
-      // 提取历史记录 (不再需要前端传递，后端从 Redis 获取)
-      const history: any[] = [] // 空数组，后端会自动从 Redis 加载
-      
-      await streamAiChat(content, history, (chunk) => {
-        pendingText += chunk
-        if (!isTyping) {
-          isTyping = true
-          typeLoop()
+    if (!response.ok) throw new Error('Network error')
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    if (reader) {
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue
+          const data = line.slice(5).trim()
+          if (data === '[DONE]') break
+          try {
+            const json = JSON.parse(data)
+            if (json.content) {
+              pendingText += json.content
+              if (!isTyping) { isTyping = true; typeLoop() }
+            }
+          } catch (e) {}
         }
-      })
-      isStreamFinished = true
-      
-      if (!assistantMessage.content && !pendingText) {
-        assistantMessage.content = '服务暂时不可用，请稍后重试。'
-        loading.value = false
-      }
-      // 对话结束，保存历史
-      saveHistory()
-    } catch (streamError: any) {
-      if (streamError?.message === 'stream_aborted') {
-        pendingText = ''
-        isStreamFinished = true
-        loading.value = false
-      } else {
-        isStreamFinished = true
-        // 如果已经有部分内容，不要覆盖，只是在最后追加错误提示
-        if (assistantMessage.content || pendingText) {
-          assistantMessage.content += `\n\n[连接中断: ${streamError?.message || '未知错误'}]`
-          loading.value = false
-        } else {
-          assistantMessage.content = streamError?.message === 'stream_failed'
-            ? '服务暂时不可用，请稍后重试。'
-            : `服务暂时不可用，请稍后重试。（${streamError?.message || '未知错误'}）`
-          loading.value = false
-        }
-        saveHistory()
       }
     }
-  } catch (error) {
-    // 网络异常，直接在对话框显示
-    messages.value.push({ role: 'assistant', content: '网络连接超时或中断，请检查网络后重试。' })
+    isStreamFinished = true
+  } catch (error: any) {
+    isStreamFinished = true
+    if (error.name !== 'AbortError') {
+      assistantMessage.content += `\n\n[连接异常: ${error.message}]`
+    }
     loading.value = false
-    // 异常也保存，防止丢失用户输入
-    saveHistory()
   } finally {
-    // loading 状态在 typeLoop 结束时处理，或者异常时处理
-    // 此处不做统一处理，因为流式需要在打字完成后才算结束
+    currentStream.value = null
   }
 }
 
-const stopStreaming = () => {
-  if (currentStream.value) {
-    currentStream.value.abort()
+const copyPart = async (text: string, type: '思考' | '回答') => {
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success(`已复制${type}内容`)
+  } catch (err) {
+    ElMessage.error('复制失败')
   }
 }
 
-const sendSuggestion = (content: string) => {
-  inputContent.value = content
-  sendMessage()
+const clearHistory = async () => {
+  try {
+    await request.delete('/system/ai/history/clean')
+    messages.value = []
+    ElMessage.success('历史记录已清除')
+  } catch (e) {
+    ElMessage.error('操作失败')
+  }
 }
 
-// 拖拽逻辑
+const toggleMinimize = () => {
+  isMinimized.value = !isMinimized.value
+  if (!isMinimized.value) {
+    ensureVisible()
+    scrollToBottom()
+  }
+}
+
+const ensureVisible = () => {
+  const maxX = window.innerWidth - windowState.width
+  const maxY = window.innerHeight - windowState.height
+  windowState.x = Math.max(0, Math.min(maxX, windowState.x))
+  windowState.y = Math.max(0, Math.min(maxY, windowState.y))
+}
+
 const startDrag = (e: MouseEvent) => {
   if (e.target instanceof HTMLElement && (
-    e.target.closest('.action-icon') || 
-    e.target.closest('.ai-body') || 
-    e.target.closest('.ai-footer') ||
+    e.target.closest('.header-actions') || 
+    e.target.closest('.chat-messages') || 
+    e.target.closest('.chat-footer') ||
+    e.target.closest('.chat-sidebar') ||
     e.target.closest('.resize-handle')
   )) return
   
-  e.preventDefault() // 防止选择文字
   isDragging.value = true
-  // 记录点击位置相对于窗口左上角的偏移
-  const rect = (isMinimized.value ? containerRef.value?.getBoundingClientRect() : null) || { left: windowState.x, top: windowState.y }
-  dragOffset.x = e.clientX - (isMinimized.value ? rect.left : windowState.x)
-  dragOffset.y = e.clientY - (isMinimized.value ? rect.top : windowState.y)
+  const rect = containerRef.value?.getBoundingClientRect()
+  dragOffset.x = e.clientX - (isMinimized.value ? (rect?.left || 0) : windowState.x)
+  dragOffset.y = e.clientY - (isMinimized.value ? (rect?.top || 0) : windowState.y)
+  
+  const onDrag = (e: MouseEvent) => {
+    if (!isDragging.value) return
+    let newX = e.clientX - dragOffset.x
+    let newY = e.clientY - dragOffset.y
+    if (!isMinimized.value) {
+      windowState.x = newX
+      windowState.y = newY
+    } else {
+      windowState.x = newX + 32 - windowState.width / 2
+      windowState.y = newY + 32 - windowState.height / 2
+    }
+  }
+  
+  const stopDrag = () => {
+    isDragging.value = false
+    document.removeEventListener('mousemove', onDrag)
+    document.removeEventListener('mouseup', stopDrag)
+    if (!isMinimized.value) ensureVisible()
+  }
   
   document.addEventListener('mousemove', onDrag)
   document.addEventListener('mouseup', stopDrag)
-  
-  // 全局添加禁止选择样式
-  document.body.style.userSelect = 'none'
 }
 
-const onDrag = (e: MouseEvent) => {
-  if (!isDragging.value) return
-  e.preventDefault() // 进一步防止拖动时的默认行为
-  
-  let newX = e.clientX - dragOffset.x
-  let newY = e.clientY - dragOffset.y
-  
-  // 简单边界限制
-  if (!isMinimized.value) {
-    windowState.x = newX
-    windowState.y = newY
-  } else {
-    // 最小化时拖动 (newX, newY 是悬浮球左上角坐标)
-    // 目标：保持中心对齐
-    // 悬浮球中心 = newX + 32
-    // 窗口中心 = windowState.x + windowState.width / 2
-    // => windowState.x = newX + 32 - windowState.width / 2
-    windowState.x = newX + 32 - windowState.width / 2
-    windowState.y = newY + 32 - windowState.height / 2
-  }
-}
-
-const stopDrag = () => {
-  isDragging.value = false
-  document.removeEventListener('mousemove', onDrag)
-  document.removeEventListener('mouseup', stopDrag)
-  document.body.style.userSelect = '' // 恢复选择
-  if (!isMinimized.value) ensureVisible()
-}
-
-// Resize 逻辑
-const startResize = (e: MouseEvent, direction: typeof resizeDirection.value) => {
+const startResize = (e: MouseEvent, direction: string) => {
   isResizing.value = true
   resizeStart.x = e.clientX
   resizeStart.y = e.clientY
@@ -600,799 +534,459 @@ const startResize = (e: MouseEvent, direction: typeof resizeDirection.value) => 
   resizeStart.top = windowState.y
   resizeDirection.value = direction
 
+  const onResize = (e: MouseEvent) => {
+    if (!isResizing.value) return
+    const dx = e.clientX - resizeStart.x
+    const dy = e.clientY - resizeStart.y
+    
+    if (resizeDirection.value.includes('right')) windowState.width = Math.max(400, resizeStart.width + dx)
+    if (resizeDirection.value.includes('left')) {
+      const w = Math.max(400, resizeStart.width - dx)
+      windowState.x = resizeStart.left + (resizeStart.width - w)
+      windowState.width = w
+    }
+    if (resizeDirection.value.includes('bottom')) windowState.height = Math.max(400, resizeStart.height + dy)
+    if (resizeDirection.value.includes('top')) {
+      const h = Math.max(400, resizeStart.height - dy)
+      windowState.y = resizeStart.top + (resizeStart.height - h)
+      windowState.height = h
+    }
+  }
+
+  const stopResize = () => {
+    isResizing.value = false
+    document.removeEventListener('mousemove', onResize)
+    document.removeEventListener('mouseup', stopResize)
+  }
+
   document.addEventListener('mousemove', onResize)
   document.addEventListener('mouseup', stopResize)
 }
 
-const onResize = (e: MouseEvent) => {
-  if (!isResizing.value) return
-  
-  const deltaX = e.clientX - resizeStart.x
-  const deltaY = e.clientY - resizeStart.y
-
-  const minWidth = 300
-  const maxWidth = 800
-  const minHeight = 400
-  const maxHeight = 1000
-
-  let newWidth = resizeStart.width
-  let newHeight = resizeStart.height
-  let newX = resizeStart.left
-  let newY = resizeStart.top
-
-  if (resizeDirection.value.includes('right')) {
-    newWidth = resizeStart.width + deltaX
-  }
-  if (resizeDirection.value.includes('left')) {
-    newWidth = resizeStart.width - deltaX
-    newX = resizeStart.left + deltaX
-  }
-  if (resizeDirection.value.includes('bottom')) {
-    newHeight = resizeStart.height + deltaY
-  }
-  if (resizeDirection.value.includes('top')) {
-    newHeight = resizeStart.height - deltaY
-    newY = resizeStart.top + deltaY
-  }
-
-  newWidth = Math.min(maxWidth, Math.max(minWidth, newWidth))
-  newHeight = Math.min(maxHeight, Math.max(minHeight, newHeight))
-
-  if (resizeDirection.value.includes('left')) {
-    newX = resizeStart.left + (resizeStart.width - newWidth)
-  }
-  if (resizeDirection.value.includes('top')) {
-    newY = resizeStart.top + (resizeStart.height - newHeight)
-  }
-
-  const maxX = window.innerWidth - newWidth
-  const maxY = window.innerHeight - newHeight
-  newX = Math.max(0, Math.min(maxX, newX))
-  newY = Math.max(0, Math.min(maxY, newY))
-  
-  windowState.width = newWidth
-  windowState.height = newHeight
-  windowState.x = newX
-  windowState.y = newY
+const sendSuggestion = (content: string) => {
+  inputContent.value = content
+  sendMessage()
 }
 
-const stopResize = () => {
-  isResizing.value = false
-  document.removeEventListener('mousemove', onResize)
-  document.removeEventListener('mouseup', stopResize)
+const handleRefreshIndex = () => {
+  const loading = ElMessage({
+    message: '正在同步最新代码索引...',
+    type: 'info',
+    duration: 0,
+    showClose: false
+  })
+  
+  setTimeout(() => {
+    loading.close()
+    ElMessage.success('索引已实时同步完成')
+  }, 1500)
 }
-
-onUnmounted(() => {
-  document.removeEventListener('mousemove', onDrag)
-  document.removeEventListener('mouseup', stopDrag)
-  document.removeEventListener('mousemove', onResize)
-  document.removeEventListener('mouseup', stopResize)
-})
 </script>
 
 <style scoped lang="scss">
-/* 变量定义 - 浅色主题 */
-$bg-color-dark: #0f172a;
-$bg-color-surface: #ffffff;
-$color-primary: #4f46e5;
-$color-accent: #0ea5e9;
-$color-text-main: #0f172a;
-$color-text-secondary: #64748b;
-$border-glow: #e2e8f0;
-$shadow-glow: rgba(79, 70, 229, 0.18);
-$bg-message-ai: #ffffff;
-$bg-input: #f8fafc;
+$primary: #2b2bee;
+$border: #f0f2f5;
+$bg-light: #f8fafc;
+$text-main: #1e293b;
+$text-muted: #64748b;
 
 .ai-assistant-container {
   position: fixed;
   z-index: 9999;
-  font-family: 'Outfit', 'SF Pro Text', 'Segoe UI', sans-serif;
-  color: $color-text-main;
-  
-  &.minimized {
-    /* Let the template control size */
-  }
-
-  .ai-expanded {
-    background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
-    background-color: #f8fafc !important;
-    border-radius: 26px;
-    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    border: 1px solid rgba(226, 232, 240, 0.9);
-    height: 100%;
-    width: 100%;
-    z-index: 10000;
-  }
+  font-family: 'Inter', -apple-system, sans-serif;
 }
 
+/* 最小化状态 */
 .ai-minimized-new {
-  width: 64px;
-  height: 64px;
+  width: 64px; height: 64px; position: relative; display: flex; align-items: center; justify-content: center;
+}
+
+/* 主窗口卡片 */
+.ai-window-card {
+  width: 100%; height: 100%;
+  background: white;
+  border-radius: 24px;
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.15);
+  border: 1px solid $border;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-@keyframes pulse-status {
-  0% { box-shadow: 0 0 0 0 rgba(0, 255, 224, 0.7); }
-  70% { box-shadow: 0 0 0 5px rgba(0, 255, 224, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(0, 255, 224, 0); }
-}
-
-.ai-header {
-  height: 64px;
-  padding: 0 22px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: move;
-  user-select: none;
-  flex-shrink: 0;
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.6);
-
+/* Header */
+.ai-window-header {
+  height: 72px;
+  padding: 0 24px;
+  border-bottom: 1px solid $border;
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: grab; flex-shrink: 0;
+  
   .header-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    
-    .ai-avatar-small {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, rgba(79, 70, 229, 0.15) 0%, rgba(14, 165, 233, 0.15) 100%);
-      border: 1px solid rgba(79, 70, 229, 0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 6px 16px rgba(79, 70, 229, 0.2);
-      
-      .ai-logo-text-small {
-        font-weight: 700;
-        font-size: 12px;
-        color: $color-primary;
-      }
+    display: flex; align-items: center; gap: 14px;
+    .brand-icon {
+      width: 44px; height: 44px;
+      background: rgba(43, 43, 238, 0.05);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      span { font-size: 24px; }
     }
-    
-    .header-info {
-      display: flex;
-      flex-direction: column;
-      
-      .header-title {
-        font-weight: 700;
-        font-size: 16px;
-        color: $color-text-main;
-      }
-      
-      .header-status {
-        font-size: 12px;
-        color: #10b981;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        
-        .status-dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          background-color: #10b981;
-        }
+    .brand-info {
+      .title { font-size: 16px; font-weight: 700; color: #0f172a; margin: 0; }
+      .status-indicator {
+        display: flex; align-items: center; gap: 6px;
+        .pulse-dot { width: 6px; height: 6px; background: #10b981; border-radius: 50%; animation: pulse 2s infinite; }
+        .status-text { font-size: 11px; color: $text-muted; font-weight: 500; }
       }
     }
   }
-
-  .header-actions {
-    display: flex;
-    gap: 8px;
-
-    .action-icon {
-      padding: 6px; /* 减小内边距，保持整体大小 */
-      width: 32px; /* 固定宽度 */
-      height: 32px; /* 固定高度 */
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px; /* 图标大小 */
-      border-radius: 8px; /* 圆角 */
-      cursor: pointer;
-      color: #475569; /* 深色图标 */
-      background: rgba(148, 163, 184, 0.18);
-      transition: all 0.2s;
-      border: 1px solid transparent; /* 预留边框位置 */
-      
-      &:hover {
-        background: rgba(148, 163, 184, 0.3);
-        color: $color-primary;
-        transform: scale(1.05);
-      }
-      
-      &.close-icon {
-        &:hover {
-          background: rgba(239, 68, 68, 0.12);
-          color: #F56C6C;
-          border-color: rgba(239, 68, 68, 0.3);
-        }
-      }
-    }
-  }
-}
-
-.ai-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 22px;
-  background: transparent; /* 透出底色 */
-  scroll-behavior: smooth;
-
-  /* 滚动条样式 */
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: #DCDFE6;
-    border-radius: 3px;
-    
-    &:hover {
-      background: #C0C4CC;
-    }
-  }
-}
-
-.welcome-message {
-  text-align: center;
-  padding: 46px 0;
   
+  .header-right {
+    display: flex; align-items: center; gap: 16px;
+    .model-tag {
+      padding: 4px 10px; background: $bg-light; border: 1px solid $border;
+      border-radius: 8px; font-size: 11px; color: $text-muted; font-weight: 600;
+    }
+    .header-actions {
+      display: flex; gap: 4px;
+      .icon-btn {
+        width: 36px; height: 36px; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        color: $text-muted; background: transparent; border: none; cursor: pointer;
+        transition: all 0.2s;
+        span { font-size: 20px; }
+        &:hover { background: #f1f5f9; color: $primary; }
+        &.close:hover { background: #fee2e2; color: #ef4444; }
+      }
+    }
+  }
+}
+
+/* Content Layout */
+.ai-window-content {
+  flex: 1; display: flex; overflow: hidden;
+}
+
+/* Chat Main */
+.chat-main {
+  flex: 1; display: flex; flex-direction: column; background: white;
+}
+
+.chat-messages {
+  flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 24px;
+}
+
+/* Welcome Empty */
+.welcome-empty {
+  padding: 60px 20px; text-align: center;
   .welcome-logo {
-    width: 64px;
-    height: 64px;
-    margin: 0 auto 20px;
-    background: linear-gradient(135deg, rgba(79, 70, 229, 0.12) 0%, rgba(14, 165, 233, 0.12) 100%);
-    border: 1px solid rgba(79, 70, 229, 0.6);
-    border-radius: 50%;
+    width: 72px; height: 72px; margin: 0 auto 24px;
+    background: linear-gradient(135deg, rgba(43, 43, 238, 0.1), rgba(79, 70, 229, 0.1));
+    border-radius: 20px; display: flex; align-items: center; justify-content: center;
+    span { font-size: 36px; color: $primary; }
+  }
+  h3 { font-size: 20px; font-weight: 700; color: #0f172a; margin-bottom: 32px; }
+  .suggestion-list {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 600px; margin: 0 auto;
+    .suggestion-item {
+      padding: 16px; background: $bg-light; border: 1px solid $border; border-radius: 16px;
+      font-size: 13px; color: $text-main; cursor: pointer; transition: all 0.2s;
+      &:hover { border-color: $primary; background: white; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transform: translateY(-2px); }
+    }
+  }
+}
+
+/* Message Rows */
+.msg-row {
+  display: flex; gap: 16px;
+  &.user { flex-direction: row-reverse; }
+}
+
+.msg-avatar {
+  width: 32px; height: 32px; flex-shrink: 0;
+  background: $primary; color: white; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  span { font-size: 18px; }
+}
+
+.msg-content-box {
+  max-width: 85%; display: flex; flex-direction: column; gap: 8px;
+}
+
+.msg-bubble {
+  padding: 12px 20px; font-size: 14px; line-height: 1.6;
+  &.ai-bubble { background: $bg-light; border: 1px solid $border; border-radius: 4px 20px 20px 20px; }
+  &.user-bubble { background: white; border: 1px solid $border; border-radius: 20px 4px 20px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+}
+
+.msg-footer {
+  display: flex; gap: 12px; padding-left: 4px;
+  .footer-action {
+    display: flex; align-items: center; gap: 4px; font-size: 11px; color: $text-muted;
+    background: transparent; border: none; cursor: pointer;
+    &:hover { color: $primary; }
+    span { font-size: 14px; }
+  }
+}
+
+/* 深度思考组件 - DeepSeek 风格 */
+:deep(.ds-thought-container) {
+  margin-bottom: 20px;
+  border-left: 3px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 12px 16px;
+  border-radius: 0 12px 12px 0;
+  transition: all 0.3s ease;
+  position: relative;
+  
+  &.thinking {
+    border-left-color: $primary;
+    background: linear-gradient(90deg, rgba(43, 43, 238, 0.04), transparent);
+    
+    .ds-thought-header .ds-thought-title::after {
+      content: '...';
+      animation: dots 1.5s infinite;
+    }
+  }
+  
+  .ds-thought-header {
     display: flex;
     align-items: center;
-    justify-content: center;
-    box-shadow: 0 10px 24px rgba(79, 70, 229, 0.18);
+    gap: 8px;
+    margin-bottom: 10px;
+    user-select: none;
     
-    .ai-logo-text-large {
-      font-size: 24px;
-      font-weight: 900;
-      color: $color-primary;
+    .ds-thought-icon {
+      font-size: 18px;
+      color: $text-muted;
     }
-  }
-
-  h3 {
-    margin: 0 0 10px;
-    font-size: 20px;
-    color: $color-text-main;
-    font-weight: 600;
-  }
-
-  .welcome-desc {
-    color: $color-text-secondary;
-    font-size: 14px;
-    margin-bottom: 30px;
-    line-height: 1.6;
-    max-width: 80%;
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  .suggestion-chips {
-    display: flex;
-    flex-direction: row; /* 改为水平排列 */
-    flex-wrap: wrap; /* 允许换行 */
-    justify-content: center; /* 居中 */
-    gap: 10px; /* 减小间距 */
     
-    .chip {
-      background: rgba(255, 255, 255, 0.9);
-      padding: 9px 14px; /* 减小内边距 */
-      border-radius: 18px; /* 更圆润 */
-      cursor: pointer;
+    .ds-thought-title {
       font-size: 13px;
-      color: $color-text-main;
-      text-align: center; /* 居中对齐 */
-      transition: all 0.2s;
-      border: 1px solid rgba(226, 232, 240, 0.9);
-      display: inline-block; /* 改为 inline-block 或 flex */
-      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-      
-      &:hover {
-        background: #eef2ff;
-        color: $color-primary;
-        border-color: rgba(99, 102, 241, 0.35);
-        transform: translateY(-2px); /* 向上浮动 */
-      }
-    }
-  }
-}
-
-.message-row {
-  display: flex;
-  margin-bottom: 22px;
-  gap: 14px;
-  
-  &.user {
-    flex-direction: row-reverse;
-    
-    .message-bubble {
-      /* 用户消息：右侧对齐，科技蓝渐变背景，右侧有白色竖条装饰 */
-      background: linear-gradient(135deg, #4f46e5 0%, #1d4ed8 100%);
-      color: #fff;
-      border-radius: 16px;
-      border-right: 3px solid rgba(255, 255, 255, 0.4);
-      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.25);
-    }
-  }
-  
-  &.assistant {
-    .message-bubble {
-      /* AI消息：左侧对齐，浅灰色背景，左侧有科技蓝竖条装饰 */
-      background: rgba(255, 255, 255, 0.95);
-      color: $color-text-main;
-      border-radius: 16px;
-      border-left: 3px solid rgba(79, 70, 229, 0.6);
-      border: 1px solid rgba(226, 232, 240, 0.9);
-      box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
-    }
-    
-    .message-avatar {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, rgba(79, 70, 229, 0.15) 0%, rgba(14, 165, 233, 0.15) 100%);
-      border: 1px solid rgba(79, 70, 229, 0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 6px 14px rgba(79, 70, 229, 0.18);
-      
-      .ai-logo-text-small {
-        font-size: 12px;
-        font-weight: 700;
-        color: $color-primary;
-      }
-    }
-  }
-}
-
-.message-avatar {
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-}
-
-.message-content-wrapper {
-      max-width: 85%;
-      min-width: 0; /* 防止 flex 子项溢出 */
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      
-      .user & {
-        align-items: flex-end;
-      }
-    }
-
-.message-bubble {
-  padding: 12px 16px;
-  font-size: 14px;
-  line-height: 1.6;
-  position: relative;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  word-wrap: break-word;
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
-  max-width: 100%;
-  
-  &.loading {
-    padding: 16px 20px;
-    background: rgba(255, 255, 255, 0.95);
-    border-left: 3px solid rgba(79, 70, 229, 0.6);
-    border: 1px solid rgba(226, 232, 240, 0.9);
-  }
-}
-
-.message-actions {
-  margin-top: 6px;
-  opacity: 0;
-  transition: opacity 0.2s;
-  
-  .action-btn {
-      font-size: 14px; /* 文字大小 */
-      color: #475569;
-      cursor: pointer;
-      padding: 8px 16px; /* 增大内边距 */
-      border-radius: 18px; /* 胶囊形状 */
-      background: rgba(255, 255, 255, 0.95);
-      border: 1px solid rgba(226, 232, 240, 0.9);
-      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
-      display: inline-flex;
-      align-items: center;
-      gap: 6px; /* 图标文字间距 */
-      transition: all 0.2s;
-      
-      &:hover {
-        color: $color-primary;
-        border-color: rgba(99, 102, 241, 0.35);
-        background: #eef2ff;
-        transform: translateY(-2px);
-        box-shadow: 0 10px 22px rgba(79, 70, 229, 0.18);
-      }
-    }
-}
-
-.message-row:hover .message-actions {
-  opacity: 1;
-}
-
-.ai-footer {
-  padding: 16px;
-  border-top: 1px solid rgba(226, 232, 240, 0.9);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  flex-shrink: 0;
-
-  .input-wrapper {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    background: #ffffff;
-    border-radius: 14px;
-    padding: 12px;
-    border: 1px solid rgba(226, 232, 240, 0.9);
-    transition: all 0.2s;
-    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
-    
-    &:focus-within {
-      border-color: rgba(99, 102, 241, 0.5);
-      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
-      background: #ffffff;
-    }
-    
-    .input-actions {
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      gap: 10px;
-      margin-top: 8px;
-    }
-  }
-
-  .ai-input {
-    width: 100%;
-    
-    :deep(.el-textarea__inner) {
-      box-shadow: none;
-      background: transparent;
-      padding: 0;
-      resize: vertical; /* 允许垂直调整 */
-      min-height: 40px;
-      max-height: 200px;
-      border: none;
-      color: $color-text-main;
-      font-family: inherit;
-      
-      &::placeholder {
-        color: $color-text-secondary;
-      }
-      
-      &:focus {
-        box-shadow: none;
-      }
-      
-      /* 自定义滚动条，使其不突兀 */
-      &::-webkit-scrollbar {
-        width: 4px;
-      }
-      &::-webkit-scrollbar-thumb {
-        background: #DCDFE6;
-        border-radius: 2px;
-      }
-    }
-  }
-
-  .send-btn {
-      width: 40px;
-      height: 40px;
-      min-height: 40px;
-      border: none;
-      background: rgba(148, 163, 184, 0.2);
-      color: #94a3b8;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 12px;
-      
-      &:not(:disabled) {
-        &:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-        }
-        
-        &.is-active {
-          background: linear-gradient(135deg, #4f46e5 0%, #0ea5e9 100%);
-          color: #ffffff;
-        }
-      }
-      
-      &:disabled {
-        cursor: not-allowed;
-        opacity: 0.6;
-      }
-    }
-
-  .stop-btn {
-      width: 40px;
-      height: 40px;
-      min-height: 40px;
-      border-radius: 12px;
-      border-color: rgba(239, 68, 68, 0.35);
-      box-shadow: 0 6px 16px rgba(239, 68, 68, 0.18);
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      
-      &:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 22px rgba(239, 68, 68, 0.25);
-      }
-    }
-  }
-
-.typing-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px;
-  
-  span {
-    width: 6px;
-    height: 6px;
-    background: #4f46e5;
-    border-radius: 50%;
-    animation: typing 1.4s infinite ease-in-out both;
-    
-    &:nth-child(1) { animation-delay: -0.32s; }
-    &:nth-child(2) { animation-delay: -0.16s; }
-  }
-}
-
-@keyframes typing {
-  0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
-  40% { transform: scale(1); opacity: 1; }
-}
-
-/* 调整 Markdown 样式 */
-.markdown-body {
-  background: transparent !important;
-  font-family: inherit !important;
-  font-size: 15px !important;
-  line-height: 1.1 !important;
-  color: #334155 !important;
-  white-space: pre-wrap !important; /* 全局保留换行，确保流式输出时纯文本也能正确换行 */
-  
-  p {
-    margin-bottom: 0;
-    /* white-space: pre-wrap; 已在父级设置，此处继承 */
-    &:last-child { margin-bottom: 0; }
-  }
-  
-  pre {
-    background: #1e293b !important;
-    border-radius: 12px !important;
-    border: 1px solid #334155;
-    margin: 0 !important;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    
-    code {
-      color: #e2e8f0 !important;
-      font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
-      font-size: 13px !important;
-    }
-  }
-  
-  code {
-    background: rgba(99, 102, 241, 0.1) !important;
-    color: #4f46e5 !important;
-    padding: 2px 6px !important;
-    border-radius: 6px !important;
-    font-family: 'JetBrains Mono', monospace !important;
-    font-size: 0.9em !important;
-  }
-  
-  ul, ol {
-    padding-left: 24px !important;
-    margin-bottom: 0 !important;
-    
-    li {
-      margin-bottom: 0 !important;
-      &::marker { color: #64748b; }
-    }
-  }
-  
-  h1, h2, h3, h4 {
-    color: #0f172a !important;
-    font-weight: 700 !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-    padding-bottom: 0 !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-    
-    &:first-child { margin-top: 0 !important; }
-  }
-  
-  blockquote {
-    border-left: 4px solid #4f46e5 !important;
-    background: #f8fafc !important;
-    padding: 12px 16px !important;
-    color: #475569 !important;
-    border-radius: 0 8px 8px 0 !important;
-    margin: 0 !important;
-  }
-  
-  a {
-    color: #0ea5e9 !important;
-    text-decoration: none !important;
-    border-bottom: 1px dashed #0ea5e9;
-    
-    &:hover {
-      color: #0284c7 !important;
-      border-bottom-style: solid;
-    }
-  }
-  
-  table {
-    display: table;
-    width: 100%;
-    margin: 0;
-    border-spacing: 0;
-    border-collapse: collapse;
-    
-    th {
       font-weight: 600;
-      background: #f1f5f9;
-      color: #0f172a;
+      color: $text-muted;
+      letter-spacing: 0.5px;
     }
-    
-    td, th {
-      padding: 4px 8px;
-      border: 1px solid #e2e8f0;
+
+    .mini-copy-btn {
+      margin-left: auto;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      transition: all 0.2s;
+      
+      span { font-size: 14px; }
+      &:hover { background: #e2e8f0; color: $primary; }
     }
+  }
+  
+  .ds-thought-body {
+    font-size: 13px;
+    color: #64748b;
+    line-height: 1.6;
     
-    tr:nth-child(2n) {
-      background: #f8fafc;
+    /* 思考过程中的 Markdown 特殊样式 */
+    &.markdown-content {
+      font-size: 13px;
+      color: #64748b;
+      
+      p { margin-bottom: 8px; }
+      strong { color: #475569; font-weight: 600; }
+      code { background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-family: monospace; }
     }
   }
 }
 
-.resize-indicator {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(15, 23, 42, 0.8);
-  color: #fff;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 14px;
-  pointer-events: none;
-  z-index: 10001;
-  backdrop-filter: blur(4px);
+@keyframes dots {
+  0%, 20% { content: '.'; }
+  40% { content: '..'; }
+  60% { content: '...'; }
+  80%, 100% { content: ''; }
 }
 
+.ds-answer-body {
+  &.markdown-content {
+    font-size: 14px;
+    color: #1e293b;
+    line-height: 1.7;
+    
+    /* 最终回答的 Markdown 样式 */
+    h1, h2, h3 { color: #0f172a; margin-top: 20px; margin-bottom: 12px; font-weight: 700; }
+    p { margin-bottom: 16px; }
+    
+    /* 核心优化：深色代码块 */
+    :deep(pre.custom-code-block) {
+      background: #1a1b26 !important; /* Tokyo Night Dark 背景 */
+      border-radius: 12px;
+      padding: 16px;
+      margin: 16px 0;
+      overflow-x: auto;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      
+      code {
+        font-family: 'Fira Code', 'Consolas', monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        background: transparent !important;
+        padding: 0;
+        color: #a9b1d6;
+      }
+    }
+    
+    :deep(code:not(pre code)) {
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #e11d48;
+      font-family: monospace;
+    }
+  }
+}
+
+/* Footer Input Area */
+.chat-footer {
+  padding: 0 24px 24px; background: white;
+  .input-wrapper-new {
+    background: white; border: 1px solid $border; border-radius: 20px;
+    padding: 12px; transition: all 0.3s;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.04);
+    &:focus-within { border-color: $primary; box-shadow: 0 10px 30px rgba(43,43,238,0.08); }
+    
+    .custom-textarea {
+      width: 100%; border: none; background: transparent; resize: none;
+      padding: 8px 12px; font-size: 14px; color: $text-main;
+      &:focus { outline: none; }
+    }
+    
+    .input-toolbar {
+      display: flex; align-items: center; justify-content: space-between; margin-top: 8px;
+      .toolbar-left {
+        display: flex; gap: 4px;
+        .tool-icon {
+          width: 32px; height: 32px; border-radius: 8px;
+          display: flex; align-items: center; justify-content: center;
+          color: $text-muted; background: transparent; border: none; cursor: pointer;
+          &:hover { background: $bg-light; color: $primary; }
+        }
+      }
+      .send-btn-v2 {
+        padding: 8px 20px; background: #e2e8f0; color: white; border-radius: 12px;
+        border: none; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px;
+        cursor: not-allowed; transition: all 0.2s;
+        &.active { background: $primary; cursor: pointer; &:hover { transform: scale(1.02); box-shadow: 0 4px 15px rgba(43,43,238,0.3); } }
+      }
+    }
+  }
+  .footer-note { text-align: center; font-size: 10px; color: #cbd5e1; margin-top: 16px; letter-spacing: 1px; }
+}
+
+/* Sidebar */
+.chat-sidebar {
+  width: 300px; background: $bg-light; border-left: 1px solid $border;
+  display: flex; flex-direction: column; flex-shrink: 0;
+  
+  .sidebar-section {
+    padding: 24px; border-bottom: 1px solid $border;
+    .section-title {
+      font-size: 12px; font-weight: 700; color: #0f172a; text-transform: uppercase;
+      letter-spacing: 1px; display: flex; align-items: center; gap: 8px; margin-bottom: 20px;
+      span { font-size: 18px; color: $primary; }
+    }
+  }
+  
+  .file-tree-mini {
+    .tree-node {
+      display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 8px;
+      border-radius: 8px; cursor: pointer; transition: all 0.2s;
+      &:hover { background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+      &.child { margin-left: 20px; font-size: 12px; color: $text-muted; }
+      span { font-size: 16px; }
+    }
+  }
+  
+  .vector-space-box {
+    height: 160px; background: white; border: 1px solid $border; border-radius: 16px;
+    position: relative; overflow: hidden;
+    .grid-overlay {
+      position: absolute; inset: 0; opacity: 0.05;
+      background-image: linear-gradient($primary 1px, transparent 1px), linear-gradient(90deg, $primary 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    .v-dot {
+      position: absolute; width: 4px; height: 4px; background: rgba(43,43,238,0.3); border-radius: 50%;
+      &.center-dot { top: 50%; left: 50%; transform: translate(-50%, -50%); background: $primary; box-shadow: 0 0 10px $primary; }
+    }
+    .scan-line {
+      position: absolute; left: 0; right: 0; height: 2px; background: rgba(43,43,238,0.2);
+      top: 50%; animation: scan 4s infinite linear;
+    }
+    .space-status {
+      position: absolute; bottom: 12px; left: 12px; display: flex; align-items: center; gap: 6px;
+      font-size: 9px; font-weight: 700; color: $text-muted; text-transform: uppercase;
+      .dot-pulse { width: 6px; height: 6px; background: $primary; border-radius: 50%; animation: pulse 1.5s infinite; }
+    }
+  }
+  .space-meta { display: flex; justify-content: space-between; font-size: 10px; color: #cbd5e1; margin-top: 12px; font-weight: 500; }
+  
+  .sidebar-footer {
+    margin-top: auto; padding: 20px;
+    .refresh-btn {
+      width: 100%; padding: 10px; background: white; border: 1px solid $border; border-radius: 12px;
+      font-size: 12px; font-weight: 700; color: $text-muted; display: flex; align-items: center; justify-content: center; gap: 8px;
+      cursor: pointer; transition: all 0.2s;
+      &:hover { border-color: $primary; color: $primary; background: rgba(43,43,238,0.02); }
+    }
+  }
+}
+
+/* Animations */
+@keyframes pulse { 0% { transform: scale(0.95); opacity: 0.5; } 50% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.5; } }
+@keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+
+/* Resize Handles - 增加命中区域 */
 .resize-handle {
   position: absolute;
-  z-index: 10000;
+  width: 20px;
+  height: 20px;
+  z-index: 100;
+  background: transparent;
   
-  &.edge {
-    &.top { top: -4px; left: 0; right: 0; height: 10px; cursor: ns-resize; }
-    &.bottom { bottom: -4px; left: 0; right: 0; height: 10px; cursor: ns-resize; }
-    &.left { left: -4px; top: 0; bottom: 0; width: 10px; cursor: ew-resize; }
-    &.right { right: -4px; top: 0; bottom: 0; width: 10px; cursor: ew-resize; }
+  &::after {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #cbd5e1;
+    opacity: 0;
+    transition: opacity 0.2s;
   }
   
-  &.corner {
-    width: 16px;
-    height: 16px;
-    
-    &.top-left { top: -6px; left: -6px; cursor: nwse-resize; }
-    &.top-right { top: -6px; right: -6px; cursor: nesw-resize; }
-    &.bottom-left { bottom: -6px; left: -6px; cursor: nesw-resize; }
-    &.bottom-right { bottom: -6px; right: -6px; cursor: nwse-resize; }
-  }
-}
-::v-deep(.markdown-body) {
-  background-color: transparent;
-  font-size: 14px;
-  line-height: 1;
-  color: inherit;
-  white-space: pre-wrap !important; /* 全局强制换行 */
-  
-  p {
-    margin-bottom: 0;
-    /* white-space: pre-wrap; */
-  }
-  
-  pre {
-    background-color: #f6f8fa;
-    border-radius: 8px;
-    padding: 12px;
-    margin: 0;
-    overflow-x: auto;
-  }
-  
-  code {
-    font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
-    font-size: 12px;
-  }
-  
-  ul, ol {
-    padding-left: 20px;
-    margin-bottom: 0;
+  &:hover::after {
+    opacity: 1;
   }
 
-  table {
-    display: table;
-    width: 100%;
-    margin: 0;
-    border-spacing: 0;
-    border-collapse: collapse;
-  }
-  /* 思考过程折叠面板 */
-  :deep(.ai-thought-details) {
-    margin-bottom: 12px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  
-  :deep(.ai-thought-summary) {
-    padding: 8px 12px;
-    background: #f1f5f9;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
-    color: #64748b;
-    user-select: none;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: background 0.2s;
-    
-    &:hover {
-      background: #e2e8f0;
-    }
-    
-    &::marker {
-      color: #94a3b8;
-    }
-  }
-  
-  :deep(.ai-thought-content) {
-    padding: 12px;
-    font-size: 13px;
-    color: #475569;
-    border-top: 1px solid #e2e8f0;
-    background: #ffffff;
-    
-    /* 调整内部 Markdown 样式 */
-    p {
-      margin-bottom: 8px;
-      &:last-child {
-        margin-bottom: 0;
-      }
-    }
-    
-    ul, ol {
-      padding-left: 20px;
-      margin-bottom: 8px;
-    }
+  &.nw { top: -5px; left: -5px; cursor: nwse-resize; &::after { top: 8px; left: 8px; } }
+  &.ne { top: -5px; right: -5px; cursor: nesw-resize; &::after { top: 8px; right: 8px; } }
+  &.sw { bottom: -5px; left: -5px; cursor: nesw-resize; &::after { bottom: 8px; left: 8px; } }
+  &.se { bottom: -5px; right: -5px; cursor: nwse-resize; &::after { bottom: 8px; right: 8px; } }
+}
+
+/* Shimmer Loading */
+.loading-shimmer {
+  display: flex; flex-direction: column; gap: 8px;
+  .shimmer-line { height: 12px; background: #f1f5f9; border-radius: 4px; position: relative; overflow: hidden;
+    &::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent); animation: shimmer 1.5s infinite; }
   }
 }
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
 </style>

@@ -37,6 +37,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -542,12 +543,13 @@ public class SysAiController {
                 messages.add(new JSONObject().set("role", "user").set("content", content));
                 
                 // 【新增】：在进入阻塞的工具调用判断前，先给前端发送一个“正在思考”的状态，激活折叠面板
+                // 注意：这里不闭合 <thought> 标签，让后续流式输出无缝衔接
                 try {
-                    emitter.send(new JSONObject().set("content", "<thought>### 🧠 深度思考中...\n\n**1. 意图分析**：正在解析用户提问的核心诉求...\n").toString());
+                    emitter.send(new JSONObject().set("content", "<thought>**1. 意图分析**：正在解析用户提问的核心诉求...\n").toString());
                 } catch (Exception ignored) {}
                 
-                // 6. Agent 循环：仅允许 1 轮工具调用，以提高响应速度
-                int maxToolCalls = 1;
+                // 6. Agent 循环：允许 2 轮工具调用，以应对复杂问题
+                int maxToolCalls = 2;
                 int toolCallCount = 0;
                 boolean toolCallLimitReached = false;
                 
@@ -555,9 +557,9 @@ public class SysAiController {
                     JSONObject requestBody = new JSONObject();
                     requestBody.set("model", deepseekModel);
                     requestBody.set("stream", false);
-                requestBody.set("messages", messages);
-                requestBody.set("tools", this.agentTools);
-                requestBody.set("tool_choice", "auto");
+                    requestBody.set("messages", messages);
+                    requestBody.set("tools", this.agentTools);
+                    requestBody.set("tool_choice", "auto");
                     
                     System.out.println("[Agent] 发送请求到 LLM，当前工具调用轮次: " + (toolCallCount + 1));
                     
@@ -600,12 +602,7 @@ public class SysAiController {
                         
                         System.out.println("[Agent] 执行工具: " + functionName + ", 参数: " + argumentsStr);
                         
-                        // 【新增】：通知前端正在调用工具，增强可解释性
-                        try {
-                            emitter.send(new JSONObject().set("content", "\n**2. 执行策略**：正在调用工具 `" + functionName + "` 深入检索项目代码库，以获取最准确的实现细节...\n").toString());
-                        } catch (Exception ignored) {}
-                        
-                        String toolResult = executeAgentTool(functionName, argumentsStr);
+                        String toolResult = executeAgentTool(functionName, argumentsStr, emitter);
                         
                         JSONObject toolMessage = new JSONObject();
                         toolMessage.set("role", "tool");
@@ -614,39 +611,25 @@ public class SysAiController {
                         messages.add(toolMessage);
                         
                         System.out.println("[Agent] 工具执行完成，结果长度: " + toolResult.length());
-                    
-                    toolCallCount++;
-                    
-                    // 检查是否达到工具调用上限
-                    if (toolCallCount >= maxToolCalls) {
-                        System.out.println("[Agent] 达到工具调用上限 (" + maxToolCalls + " 轮)，强制生成回答");
-                        toolCallLimitReached = true;
-                        break;
+                        
+                        toolCallCount++;
+                        continue;
                     }
-                    continue;
+                    
+                    System.out.println("[Agent] LLM 准备生成最终回答，切换到流式输出");
+                    break;
                 }
-                
-                System.out.println("[Agent] LLM 准备生成最终回答，切换到流式输出");
-                break;
-            }
-            
-            // 关键修正：无论是否达到调用上限，在进入最终回答阶段前，都必须强制注入禁止指令
-                // 【新增】：在进入最终流式回答前，先闭合 <thought> 标签
-                try {
-                    emitter.send(new JSONObject().set("content", "\n**3. 逻辑推演**：代码检索已完成，正在根据上下文构建逻辑清晰的回答内容。\n\n分析完成，正在生成最终回答。</thought>\n").toString());
-                } catch (Exception ignored) {}
                 
                 // 只有当 messages 最后一条不是系统指令时才添加，避免重复
             JSONObject lastMsg = messages.getJSONObject(messages.size() - 1);
             if (!"system".equals(lastMsg.getStr("role")) || !lastMsg.getStr("content").contains("禁止输出 <|DSML|")) {
                 messages.add(new JSONObject()
                     .set("role", "system")
-                    .set("content", "【系统指令】工具调用阶段已彻底结束（Do NOT search again）。\n" +
-                                    "1. 忽略之前所有的 tools 定义，现在你没有可用的工具。\n" +
-                                    "2. 严禁输出 '让我搜索...' 或 '我将查找...' 等尝试调用工具的语句。\n" +
-                                    "3. 严禁输出 <|DSML| 或 function_calls 标签。\n" +
-                                    "4. 请直接根据上方提供的上下文代码回答用户问题。如果上下文信息不足，请直接说明“信息不足”，不要尝试再次搜索。\n" +
-                                    "5. 请立即开始生成回答的正文。"));
+                    .set("content", "【系统指令】工具调用阶段已彻底结束。\n" +
+                                    "1. 现在你没有可用的工具，严禁尝试再次调用任何工具。\n" +
+                                    "2. 严禁输出 <|DSML| 或 function_calls 标签。\n" +
+                                    "3. **关键**：当前的思考块 `<thought>` 尚未关闭。请继续你的逻辑推演（如果需要），并在完成后务必输出 `</thought>` 闭合标签，然后开始回答正文。\n" +
+                                    "4. 请直接根据上方提供的上下文代码回答用户问题。"));
             }
             
             // 6. 流式输出最终回答
@@ -828,7 +811,7 @@ public class SysAiController {
     /**
      * 执行 Agent 工具
      */
-    private String executeAgentTool(String functionName, String argumentsJson) {
+    private String executeAgentTool(String functionName, String argumentsJson, SseEmitter emitter) {
         try {
             if ("search_codebase".equals(functionName)) {
                 JSONObject args = JSONUtil.parseObj(argumentsJson);
@@ -870,6 +853,8 @@ public class SysAiController {
                 StringBuilder sb = new StringBuilder();
                 sb.append("找到 ").append(results.size()).append(" 个相关代码片段：\n\n");
                 
+                // 提取引用的文件名
+                List<String> fileNames = new ArrayList<>();
                 for (int i = 0; i < results.size(); i++) {
                     JSONObject item = results.getJSONObject(i);
                     JSONObject meta = item.getJSONObject("metadata");
@@ -877,6 +862,10 @@ public class SysAiController {
                     String source = meta != null ? meta.getStr("source") : "unknown";
                     String name = meta != null ? meta.getStr("name") : "";
                     String type = meta != null ? meta.getStr("type") : "";
+                    
+                    if (StrUtil.isNotBlank(source) && !fileNames.contains(source)) {
+                        fileNames.add(source);
+                    }
                     
                     sb.append("### 代码片段 ").append(i + 1);
                     if (StrUtil.isNotBlank(name)) {
@@ -888,6 +877,14 @@ public class SysAiController {
                     sb.append("\n");
                     sb.append("**来源**: ").append(source).append("\n");
                     sb.append("```java\n").append(codeContent).append("\n```\n\n");
+                }
+                
+                // 向前端思考过程注入详细信息
+                if (emitter != null) {
+                    try {
+                        String fileList = fileNames.stream().collect(Collectors.joining(", "));
+                        emitter.send(new JSONObject().set("content", "\n**2. 执行策略**：代码检索完成。引用文件：[" + fileList + "]\n").toString());
+                    } catch (Exception ignored) {}
                 }
                 
                 sb.append("\n【系统提示】检索已完成。以上代码已包含足够信息，请根据这些内容直接回答用户问题，不要再次调用工具。");
