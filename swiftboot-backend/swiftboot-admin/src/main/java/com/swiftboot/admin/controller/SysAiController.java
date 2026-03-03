@@ -68,6 +68,9 @@ public class SysAiController {
     private SysAiSessionService aiSessionService;
     
     @Resource
+    private com.swiftboot.admin.service.SysAiTraceService aiTraceService;
+
+    @Resource
     private SysOperLogService operLogService;
 
     // Redis 历史记录 Key 前缀
@@ -462,6 +465,7 @@ public class SysAiController {
 
         new Thread(() -> {
             long startTime = System.currentTimeMillis();
+            com.swiftboot.admin.context.AiTraceContext.init();
             StringBuilder fullReply = new StringBuilder();
             
             try {
@@ -476,23 +480,27 @@ public class SysAiController {
                 // 获取 Redis 中最近的一条用户提问
                 String redisKey = HISTORY_KEY_PREFIX + userId;
                 String lastUserMsgJson = null;
-                List<String> history = stringRedisTemplate.opsForList().range(redisKey, -2, -2); // 获取倒数第2条 (assistant, user, assistant, user) -> user
-                if (history != null && !history.isEmpty()) {
-                     // 简单判断，实际 Redis 存储结构是 {"role":"user","content":"..."}
-                     // 这里为了简化，我们遍历找到最后一条 role=user 的消息
-                     List<String> allHistory = stringRedisTemplate.opsForList().range(redisKey, 0, -1);
-                     if (allHistory != null) {
-                         for (int i = allHistory.size() - 1; i >= 0; i--) {
-                             JSONObject msg = JSONUtil.parseObj(allHistory.get(i));
-                             if ("user".equals(msg.getStr("role"))) {
-                                 lastUserMsgJson = msg.getStr("content");
-                                 break;
+                
+                // 优化：仅当 Redis 中确实存在历史记录时才尝试获取
+                Long historySize = stringRedisTemplate.opsForList().size(redisKey);
+                if (historySize != null && historySize > 0) {
+                    List<String> history = stringRedisTemplate.opsForList().range(redisKey, -2, -2);
+                    if (history != null && !history.isEmpty()) {
+                         List<String> allHistory = stringRedisTemplate.opsForList().range(redisKey, 0, -1);
+                         if (allHistory != null) {
+                             for (int i = allHistory.size() - 1; i >= 0; i--) {
+                                 JSONObject msg = JSONUtil.parseObj(allHistory.get(i));
+                                 if ("user".equals(msg.getStr("role"))) {
+                                     lastUserMsgJson = msg.getStr("content");
+                                     break;
+                                 }
                              }
                          }
-                     }
+                    }
                 }
                 
                 boolean shouldIncludeHistory = true;
+                // 优化：仅当存在历史提问时才进行相似度检查
                 if (lastUserMsgJson != null) {
                     try {
                         JSONObject simRequest = new JSONObject();
@@ -500,7 +508,7 @@ public class SysAiController {
                         simRequest.set("text2", lastUserMsgJson);
                         
                         String simResult = HttpRequest.post(NLP_SIMILARITY_URL)
-                                .timeout(1000) // 1s 超时
+                                .timeout(500) // 进一步降低超时时间到 500ms
                                 .body(simRequest.toString())
                                 .execute()
                                 .body();
@@ -517,6 +525,9 @@ public class SysAiController {
                     } catch (Exception e) {
                         System.err.println("Similarity check failed: " + e.getMessage());
                     }
+                } else {
+                    // 历史为空，无需包含历史
+                    shouldIncludeHistory = false;
                 }
                 
                 // 4. 注入近期对话历史 (如果判定为相关)
@@ -529,6 +540,11 @@ public class SysAiController {
                 
                 // 5. 添加用户消息
                 messages.add(new JSONObject().set("role", "user").set("content", content));
+                
+                // 【新增】：在进入阻塞的工具调用判断前，先给前端发送一个“正在思考”的状态，激活折叠面板
+                try {
+                    emitter.send(new JSONObject().set("content", "<thought>### 🧠 深度思考中...\n\n**1. 意图分析**：正在解析用户提问的核心诉求...\n").toString());
+                } catch (Exception ignored) {}
                 
                 // 6. Agent 循环：仅允许 1 轮工具调用，以提高响应速度
                 int maxToolCalls = 1;
@@ -584,6 +600,11 @@ public class SysAiController {
                         
                         System.out.println("[Agent] 执行工具: " + functionName + ", 参数: " + argumentsStr);
                         
+                        // 【新增】：通知前端正在调用工具，增强可解释性
+                        try {
+                            emitter.send(new JSONObject().set("content", "\n**2. 执行策略**：正在调用工具 `" + functionName + "` 深入检索项目代码库，以获取最准确的实现细节...\n").toString());
+                        } catch (Exception ignored) {}
+                        
                         String toolResult = executeAgentTool(functionName, argumentsStr);
                         
                         JSONObject toolMessage = new JSONObject();
@@ -610,7 +631,12 @@ public class SysAiController {
             }
             
             // 关键修正：无论是否达到调用上限，在进入最终回答阶段前，都必须强制注入禁止指令
-            // 只有当 messages 最后一条不是系统指令时才添加，避免重复
+                // 【新增】：在进入最终流式回答前，先闭合 <thought> 标签
+                try {
+                    emitter.send(new JSONObject().set("content", "\n**3. 逻辑推演**：代码检索已完成，正在根据上下文构建逻辑清晰的回答内容。\n\n分析完成，正在生成最终回答。</thought>\n").toString());
+                } catch (Exception ignored) {}
+                
+                // 只有当 messages 最后一条不是系统指令时才添加，避免重复
             JSONObject lastMsg = messages.getJSONObject(messages.size() - 1);
             if (!"system".equals(lastMsg.getStr("role")) || !lastMsg.getStr("content").contains("禁止输出 <|DSML|")) {
                 messages.add(new JSONObject()
@@ -686,8 +712,60 @@ public class SysAiController {
                 
                 // 7. 存储对话历史
                 if (fullReply.length() > 0) {
-                    saveConversationHistory(userId, content, fullReply.toString(), startTime, userIp);
+                    // 解析 thought
+                    String fullContent = fullReply.toString();
+                    String thought = null;
+                    String finalAnswer = fullContent;
+                    
+                    // 尝试提取 <thought> 标签内容
+                    try {
+                        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("<thought>(.*?)</thought>", java.util.regex.Pattern.DOTALL | java.util.regex.Pattern.CASE_INSENSITIVE);
+                        java.util.regex.Matcher matcher = pattern.matcher(fullContent);
+                        if (matcher.find()) {
+                            thought = matcher.group(1).trim();
+                            // 记录到 TraceContext
+                            com.swiftboot.admin.context.AiTraceContext.addThought(thought);
+                            
+                            // 移除 thought 标签及其内容，只保留最终回答存入会话记录
+                            finalAnswer = matcher.replaceAll("").trim();
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Failed to parse thought tag: " + e.getMessage());
+                    }
+                    
+                    // 保存会话记录
+                    SysAiSession savedSession = saveConversationHistory(userId, content, finalAnswer, startTime, userIp);
                     System.out.println("[Agent] 流式响应正常结束，回复长度: " + fullReply.length());
+                    
+                    // 保存 Trace
+                    try {
+                        com.swiftboot.admin.context.AiTraceContext.AiTraceData traceData = com.swiftboot.admin.context.AiTraceContext.get();
+                        if (traceData != null) {
+                            com.swiftboot.admin.domain.SysAiTrace trace = new com.swiftboot.admin.domain.SysAiTrace();
+                            trace.setTraceId(traceData.getTraceId());
+                            if (savedSession != null && savedSession.getId() != null) {
+                                trace.setSessionId(savedSession.getId());
+                            }
+                            
+                            trace.setThoughtPath(JSONUtil.toJsonStr(traceData.getThoughtPath()));
+                            trace.setToolCalls(JSONUtil.toJsonStr(traceData.getToolCalls()));
+                            trace.setContextInfo(traceData.getContextInfo());
+                            trace.setFinalAnswer(finalAnswer);
+                            trace.setDuration(System.currentTimeMillis() - traceData.getStartTime());
+                            trace.setCreateTime(java.time.LocalDateTime.now());
+                            trace.setUpdateTime(java.time.LocalDateTime.now());
+                            
+                            aiTraceService.save(trace);
+                            System.out.println("[Trace] Saved trace record: " + trace.getTraceId());
+                        }
+                    } catch (Exception e) {
+                        System.err.println("[Trace] Failed to save trace: " + e.getMessage());
+                        e.printStackTrace();
+                    } finally {
+                        // 清理上下文
+                        com.swiftboot.admin.context.AiTraceContext.clear();
+                    }
+                    
                 } else {
                     System.out.println("[Agent] 流式响应结束，但回复为空");
                 }
@@ -735,7 +813,13 @@ public class SysAiController {
             prompt.append("4. **直接回答问题**：不要说根据代码上下文...、根据检索结果...这类铺垫的话。\n");
             prompt.append("5. **避免重复搜索**：每次工具调用都会返回最相关的 10 个代码片段。请充分利用这些上下文，尽量一次性解决问题，除非检索结果完全不相关，否则不要反复调用搜索工具。\n");
             prompt.append("6. **禁止输出 DSML**：严禁在回答中包含 <|DSML|... 等标签。\n");
-            prompt.append("7. **格式规范**：使用标准的 Markdown 格式输出。\n");
+            prompt.append("7. **深度思考要求（Mandatory）**：在处理用户问题时，你必须首先在 `<thought>` 标签内进行极其详细的逻辑推导。内容必须包含：\n");
+            prompt.append("   - **意图拆解**：用户真实想解决的问题是什么？\n");
+            prompt.append("   - **知识关联**：涉及项目中哪些核心模块（如权限、数据库、前端等）？\n");
+            prompt.append("   - **执行策略**：是否需要检索代码？检索哪些类？如果已经有上下文，如何利用？\n");
+            prompt.append("   - **逻辑推演**：根据现有信息，推导出的初步结论是什么？\n");
+            prompt.append("   只有在完成上述深度思考后，才能开始输出最终回答或调用工具。\n");
+            prompt.append("8. **格式规范**：使用标准的 Markdown 格式输出。\n");
         }
         
         return prompt.toString();
@@ -767,7 +851,11 @@ public class SysAiController {
                         .execute()
                         .body();
                 
-                System.out.println("[Agent Tool] RAG 响应耗时: " + (System.currentTimeMillis() - ragStartTime) + "ms");
+                long ragDuration = System.currentTimeMillis() - ragStartTime;
+                System.out.println("[Agent Tool] RAG 响应耗时: " + ragDuration + "ms");
+                
+                // 记录 Trace 工具调用
+                com.swiftboot.admin.context.AiTraceContext.addToolCall("search_codebase", args, "RAG_SEARCH_RESULT", ragDuration);
                 
                 JSONObject ragJson = JSONUtil.parseObj(ragResponse);
                 JSONArray results = ragJson.getJSONArray("results");
@@ -775,6 +863,9 @@ public class SysAiController {
                 if (results == null || results.isEmpty()) {
                     return "未找到与 \"" + query + "\" 相关的代码。请尝试使用更具体的类名、方法名或功能描述。";
                 }
+                
+                // 记录 Trace 上下文
+                com.swiftboot.admin.context.AiTraceContext.setContextInfo(results.toString());
                 
                 StringBuilder sb = new StringBuilder();
                 sb.append("找到 ").append(results.size()).append(" 个相关代码片段：\n\n");
@@ -871,8 +962,9 @@ public class SysAiController {
 
     /**
      * 保存对话历史（Redis + 向量库 + MySQL）
+     * @return 保存的 SysAiSession 对象
      */
-    private void saveConversationHistory(Long userId, String question, String answer, long startTime, String userIp) {
+    private SysAiSession saveConversationHistory(Long userId, String question, String answer, long startTime, String userIp) {
         long now = System.currentTimeMillis();
         
         // 1. 存入 Redis 短期历史
@@ -908,10 +1000,10 @@ public class SysAiController {
             e.printStackTrace();
         }
         
+        SysAiSession aiSession = new SysAiSession();
         // 3. 持久化到 MySQL
         try {
             long duration = System.currentTimeMillis() - startTime;
-            SysAiSession aiSession = new SysAiSession();
             aiSession.setUserId(userId);
             aiSession.setQuestion(question);
             aiSession.setAnswer(answer);
@@ -970,6 +1062,8 @@ public class SysAiController {
                 e.printStackTrace();
             }
         }
+        
+        return aiSession;
     }
 
     /**

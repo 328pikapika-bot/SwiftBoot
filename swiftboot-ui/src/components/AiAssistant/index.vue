@@ -213,7 +213,7 @@ const loadHistory = async () => {
     const res: any = await request.get('/system/ai/history')
     if (res.code === 200 && res.data) {
         messages.value = res.data
-        scrollToBottom()
+        scrollToBottom(true)
     } else {
         messages.value = []
     }
@@ -304,7 +304,52 @@ const ensureVisible = () => {
 }
 
 const renderMarkdown = (content: string) => {
-  return md.render(content)
+  // 提取 thought
+  let thoughtContent = ''
+  // 匹配 <thought>...</thought> (闭合)
+  const thoughtMatch = content.match(/<thought>([\s\S]*?)<\/thought>/i)
+  // 匹配 <thought>... (未闭合，正在生成)
+  const thoughtStartMatch = content.match(/<thought>([\s\S]*)$/i)
+  
+  let cleanContent = content
+  let isOpen = false // 是否默认展开
+  
+  if (thoughtMatch) {
+    // 已闭合
+    thoughtContent = thoughtMatch[1].trim()
+    cleanContent = content.replace(thoughtMatch[0], '').trim()
+    isOpen = false // 生成完毕后默认折叠
+  } else if (thoughtStartMatch) {
+    // 未闭合 (正在生成)
+    thoughtContent = thoughtStartMatch[1].trim()
+    cleanContent = content.substring(0, thoughtStartMatch.index).trim()
+    isOpen = true // 正在生成时必须展开
+  }
+  
+  // 过滤 DSML 工具调用标签 (防止乱码显示)
+  cleanContent = cleanContent.replace(/<\|DSML\|[\s\S]*?(\|\/DSML\|>|<\/\|DSML\|function_calls>)/g, '')
+                             .replace(/<\|DSML\|[\s\S]*$/g, '') // 过滤未闭合的
+                             .trim()
+  
+  let html = ''
+  
+  // 如果有思考过程，添加折叠面板
+  if (thoughtContent) {
+    html += `
+      <details class="ai-thought-details" ${isOpen ? 'open' : ''}>
+        <summary class="ai-thought-summary">
+          <span class="ai-thought-icon">🤔</span> 深度思考过程 ${isOpen ? '(生成中...)' : ''}
+        </summary>
+        <div class="ai-thought-content">
+          ${md.render(thoughtContent)}
+        </div>
+      </details>
+    `
+  }
+  
+  html += md.render(cleanContent)
+  
+  return html
 }
 
 const copyContent = async (text: string) => {
@@ -316,10 +361,17 @@ const copyContent = async (text: string) => {
   }
 }
 
-const scrollToBottom = () => {
+const scrollToBottom = (force = false) => {
   nextTick(() => {
     if (messagesRef.value) {
-      messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+      const { scrollTop, scrollHeight, clientHeight } = messagesRef.value
+      // 这里的 100 是一个阈值，表示用户离底部多远时算作“在底部”
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
+      
+      // 如果强制滚动，或者用户当前就在底部，则执行置底
+      if (force || isNearBottom) {
+        messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+      }
     }
   })
 }
@@ -391,7 +443,7 @@ const sendMessage = async () => {
   messages.value.push({ role: 'user', content })
   inputContent.value = ''
   loading.value = true
-  scrollToBottom()
+  scrollToBottom(true)
 
   try {
     const assistantMessage = reactive({ role: 'assistant', content: '' })
@@ -1290,6 +1342,57 @@ $bg-input: #f8fafc;
     margin: 0;
     border-spacing: 0;
     border-collapse: collapse;
+  }
+  /* 思考过程折叠面板 */
+  :deep(.ai-thought-details) {
+    margin-bottom: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  
+  :deep(.ai-thought-summary) {
+    padding: 8px 12px;
+    background: #f1f5f9;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s;
+    
+    &:hover {
+      background: #e2e8f0;
+    }
+    
+    &::marker {
+      color: #94a3b8;
+    }
+  }
+  
+  :deep(.ai-thought-content) {
+    padding: 12px;
+    font-size: 13px;
+    color: #475569;
+    border-top: 1px solid #e2e8f0;
+    background: #ffffff;
+    
+    /* 调整内部 Markdown 样式 */
+    p {
+      margin-bottom: 8px;
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+    
+    ul, ol {
+      padding-left: 20px;
+      margin-bottom: 8px;
+    }
   }
 }
 </style>
