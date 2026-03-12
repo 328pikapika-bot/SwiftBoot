@@ -525,6 +525,8 @@ public class SysAiController {
                         }
                     } catch (Exception e) {
                         System.err.println("Similarity check failed: " + e.getMessage());
+                        // 相似度检查失败时，默认不包含历史，避免不相关的上下文干扰
+                        shouldIncludeHistory = false;
                     }
                 } else {
                     // 历史为空，无需包含历史
@@ -545,7 +547,10 @@ public class SysAiController {
                 // 【新增】：在进入阻塞的工具调用判断前，先给前端发送一个“正在思考”的状态，激活折叠面板
                 // 注意：这里不闭合 <thought> 标签，让后续流式输出无缝衔接
                 try {
-                    emitter.send(new JSONObject().set("content", "<thought>**1. 意图分析**：正在解析用户提问的核心诉求...\n").toString());
+                    emitter.send(new JSONObject().set("content", 
+                        "<thought>**1. 意图拆解**：正在分析用户问题的核心诉求和关键词...\n\n" +
+                        "**2. 知识关联**：正在定位涉及的核心模块和技术栈...\n\n" +
+                        "**3. 执行策略**：").toString());
                 } catch (Exception ignored) {}
                 
                 // 6. Agent 循环：允许 2 轮工具调用，以应对复杂问题
@@ -613,6 +618,13 @@ public class SysAiController {
                         System.out.println("[Agent] 工具执行完成，结果长度: " + toolResult.length());
                         
                         toolCallCount++;
+                        
+                        // 如果达到最大轮次，强制结束循环，不再给模型尝试的机会
+                        if (toolCallCount >= maxToolCalls) {
+                            System.out.println("[Agent] 达到工具调用上限 (" + maxToolCalls + " 轮)，强制生成回答");
+                            toolCallLimitReached = true;
+                            break;
+                        }
                         continue;
                     }
                     
@@ -620,29 +632,35 @@ public class SysAiController {
                     break;
                 }
                 
-                // 只有当 messages 最后一条不是系统指令时才添加，避免重复
-            JSONObject lastMsg = messages.getJSONObject(messages.size() - 1);
-            if (!"system".equals(lastMsg.getStr("role")) || !lastMsg.getStr("content").contains("禁止输出 <|DSML|")) {
+                // 添加强化的系统指令，防止模型幻觉
                 messages.add(new JSONObject()
                     .set("role", "system")
-                    .set("content", "【系统指令】工具调用阶段已彻底结束。\n" +
-                                    "1. 现在你没有可用的工具，严禁尝试再次调用任何工具。\n" +
-                                    "2. 严禁输出 <|DSML| 或 function_calls 标签。\n" +
-                                    "3. **关键**：当前的思考块 `<thought>` 尚未关闭。请继续你的逻辑推演（如果需要），并在完成后务必输出 `</thought>` 闭合标签，然后开始回答正文。\n" +
-                                    "4. 请直接根据上方提供的上下文代码回答用户问题。"));
-            }
+                    .set("content", "【系统状态通知】工具调用已完成，现在进入回答生成阶段。\n\n" +
+                                    "你已获得足够的代码上下文。请直接用自然语言回答用户问题。\n\n" +
+                                    "【强制约束】\n" +
+                                    "- 你现在没有任何可用工具\n" +
+                                    "- 禁止输出 <function_calls>、<invoke>、<parameter> 等标签\n" +
+                                    "- 禁止输出任何 XML 格式的内容\n" +
+                                    "- 严禁输出任何尝试调用工具的字符串（如 invokename=... 等）\n" +
+                                    "- 严禁输出 <thought> 或 </thought> 标签（系统已自动处理）"));
+            
+            // 【重要】：在生成最终回答前，必须闭合思考标签，否则前端会一直显示加载状态
+            try {
+                emitter.send(new JSONObject().set("content", "\n**4. 最终回复**：已准备好回答。\n</thought>\n").toString());
+            } catch (Exception ignored) {}
             
             // 6. 流式输出最终回答
-            // 策略调整：保留 tools 定义但强制 tool_choice="none"，避免模型因上下文结构不一致而困惑
-            // 同时移除 stop 参数，防止误杀正常输出
+            // 【重要修改】：完全移除 tools 定义，避免模型在回答中输出工具调用格式
+            // 这是防止幻觉的根本措施
             JSONObject streamRequest = new JSONObject();
             streamRequest.set("model", deepseekModel);
             streamRequest.set("stream", true);
             streamRequest.set("messages", messages);
-            streamRequest.set("tools", this.agentTools);
-            streamRequest.set("tool_choice", "none"); // 强制不调用工具
+            // 不再携带 tools 定义，彻底切断模型调用工具的可能性
+            // streamRequest.set("tools", this.agentTools);  // 已移除
+            // streamRequest.set("tool_choice", "none");     // 已移除
             
-            System.out.println("[Agent] 开始生成最终回答 (Stream Mode), tool_choice=none");
+            System.out.println("[Agent] 开始生成最终回答 (Stream Mode), 已移除tools定义");
                 
                 try (HttpResponse streamResponse = HttpRequest.post(deepseekApiUrl)
                         .timeout(300000) // 延长超时时间到 5分钟，避免长文本生成中断
@@ -661,6 +679,10 @@ public class SysAiController {
                     try (InputStream inputStream = streamResponse.bodyStream();
                          BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
                         String line;
+                        // 【缓冲区机制】：用于累积检测跨chunk的幻觉标签
+                        StringBuilder pendingBuffer = new StringBuilder();
+                        final int BUFFER_THRESHOLD = 100; // 缓冲区阈值，避免无限累积
+                        
                         while ((line = reader.readLine()) != null) {
                             if (line.isEmpty() || !line.startsWith("data:")) {
                                 continue;
@@ -684,10 +706,90 @@ public class SysAiController {
                                 if (delta != null && delta.containsKey("content")) {
                                     String chunk = delta.getStr("content");
                                     if (chunk != null) {
-                                        fullReply.append(chunk);
-                                        emitter.send(new JSONObject().set("content", chunk).toString());
+                                        // 将新chunk加入缓冲区
+                                        pendingBuffer.append(chunk);
+                                        String bufferContent = pendingBuffer.toString();
+                                        
+                                        // 【核心拦截逻辑】：检测缓冲区中的幻觉标签
+                                        // 检测完整的幻觉标签模式（不区分大小写）
+                                        String lowerBuffer = bufferContent.toLowerCase();
+                                        boolean containsHallucination = 
+                                            bufferContent.toUpperCase().contains("DSML") ||
+                                            lowerBuffer.contains("<function_calls>") ||
+                                            lowerBuffer.contains("</function_calls>") ||
+                                            lowerBuffer.contains("<function_calls") ||
+                                            lowerBuffer.contains("<invoke") ||
+                                            lowerBuffer.contains("</invoke>") ||
+                                            lowerBuffer.contains("<parameter") ||
+                                            lowerBuffer.contains("</parameter>") ||
+                                            lowerBuffer.contains("name=\"search_codebase\"") ||
+                                            lowerBuffer.contains("name=\"query\"");
+                                        
+                                        // 检测可能正在形成的标签（部分匹配）
+                                        boolean possibleHallucination = 
+                                            lowerBuffer.contains("<function") ||
+                                            lowerBuffer.contains("<invok") ||
+                                            lowerBuffer.contains("<param") ||
+                                            lowerBuffer.contains("name=\"") ||
+                                            bufferContent.endsWith("<") ||
+                                            bufferContent.endsWith("</") ||
+                                            bufferContent.endsWith("<f") ||
+                                            bufferContent.endsWith("<fu") ||
+                                            bufferContent.endsWith("<fun");
+                                        
+                                        if (containsHallucination) {
+                                            // 检测到完整的幻觉标签，清除整个缓冲区
+                                            System.out.println("[Security] 拦截到幻觉标签，清除缓冲区: " + bufferContent.substring(0, Math.min(50, bufferContent.length())) + "...");
+                                            pendingBuffer.setLength(0);
+                                            continue;
+                                        }
+                                        
+                                        if (possibleHallucination && pendingBuffer.length() < BUFFER_THRESHOLD) {
+                                            // 可能正在形成幻觉标签，继续累积观察
+                                            continue;
+                                        }
+                                        
+                                        // 安全内容，发送给前端
+                                        // 但只发送到最后一个安全断点（避免发送不完整的标签）
+                                        String safeContent = bufferContent;
+                                        int lastSafePoint = safeContent.length();
+                                        
+                                        // 查找最后一个 '<' 的位置，如果它后面没有 '>'，则不发送这部分
+                                        int lastOpenBracket = safeContent.lastIndexOf('<');
+                                        if (lastOpenBracket >= 0 && safeContent.indexOf('>', lastOpenBracket) < 0) {
+                                            lastSafePoint = lastOpenBracket;
+                                        }
+                                        
+                                        if (lastSafePoint > 0) {
+                                            String toSend = safeContent.substring(0, lastSafePoint);
+                                            
+                                            // 【最终过滤】：发送前再次检查并清除任何残留的幻觉标签
+                                            toSend = cleanHallucinationTags(toSend);
+                                            
+                                            if (toSend != null && !toSend.isEmpty()) {
+                                                fullReply.append(toSend);
+                                                emitter.send(new JSONObject().set("content", toSend).toString());
+                                            }
+                                            
+                                            // 保留未发送的部分到缓冲区
+                                            pendingBuffer.setLength(0);
+                                            if (lastSafePoint < safeContent.length()) {
+                                                pendingBuffer.append(safeContent.substring(lastSafePoint));
+                                            }
+                                        }
                                     }
                                 }
+                            }
+                        }
+                        
+                        // 处理缓冲区中剩余的内容
+                        if (pendingBuffer.length() > 0) {
+                            String remaining = pendingBuffer.toString();
+                            // 清洗残留内容
+                            remaining = cleanHallucinationTags(remaining);
+                            if (remaining != null && !remaining.isEmpty()) {
+                                fullReply.append(remaining);
+                                emitter.send(new JSONObject().set("content", remaining).toString());
                             }
                         }
                     }
@@ -715,6 +817,27 @@ public class SysAiController {
                     } catch (Exception e) {
                         System.err.println("Failed to parse thought tag: " + e.getMessage());
                     }
+                    
+                    // 【二次清洗】：防止幻觉标签泄漏到数据库
+                    // 多重正则清洗策略：
+                    // 1. DSML标签（全角半角、各种变体）
+                    // 2. XML工具调用格式
+                    // 3. 其他可能的幻觉内容
+                    finalAnswer = finalAnswer
+                        // 清除DSML标签（全角竖线）
+                        .replaceAll("<[｜]DSML[｜][\\s\\S]*?([｜]/DSML[｜]>|</[｜]DSML[｜]function_calls>)", "")
+                        // 清除DSML标签（半角竖线）
+                        .replaceAll("<[|]DSML[|][\\s\\S]*?([|]/DSML[|]>|</[|]DSML[|]function_calls>)", "")
+                        // 清除标准function_calls格式
+                        .replaceAll("<function_calls>[\\s\\S]*?</function_calls>", "")
+                        // 清除invoke标签
+                        .replaceAll("<invoke[\\s\\S]*?</invoke>", "")
+                        // 清除parameter标签
+                        .replaceAll("<parameter[\\s\\S]*?</parameter>", "")
+                        // 清除未闭合的标签开头
+                        .replaceAll("<function_calls>.*$", "")
+                        .replaceAll("<invoke.*$", "")
+                        .trim();
                     
                     // 保存会话记录
                     SysAiSession savedSession = saveConversationHistory(userId, content, finalAnswer, startTime, userIp);
@@ -785,27 +908,70 @@ public class SysAiController {
         if (StrUtil.isNotEmpty(agentRuleContext)) {
             prompt.append(agentRuleContext);
         } else {
-            prompt.append("## 输出行为约束\n");
-            prompt.append("1. **严禁直接粘贴代码**：除非用户明确说看代码或写代码，否则将代码逻辑翻译为自然语言的业务规则。\n");
-            prompt.append("2. **识别关键模式**：\n");
-            prompt.append("   - 看到 `LEFT JOIN` → 解释为查询时自动关联了XX信息\n");
-            prompt.append("   - 看到 `if (isAdmin)` 或权限注解 → 解释为管理员和普通用户的权限差异\n");
-            prompt.append("   - 看到 `del_flag = 0` → 解释为默认过滤已删除数据\n");
-            prompt.append("   - 看到 `@DataScope` → 解释为数据权限控制，用户只能看到自己权限范围内的数据\n");
-            prompt.append("3. **引用而非堆砌**：可以提及关键类名（如 `SysProjectService`），但不展开实现代码。\n");
-            prompt.append("4. **直接回答问题**：不要说根据代码上下文...、根据检索结果...这类铺垫的话。\n");
-            prompt.append("5. **避免重复搜索**：每次工具调用都会返回最相关的 10 个代码片段。请充分利用这些上下文，尽量一次性解决问题，除非检索结果完全不相关，否则不要反复调用搜索工具。\n");
-            prompt.append("6. **禁止输出 DSML**：严禁在回答中包含 <|DSML|... 等标签。\n");
-            prompt.append("7. **深度思考要求（Mandatory）**：在处理用户问题时，你必须首先在 `<thought>` 标签内进行极其详细的逻辑推导。内容必须包含：\n");
-            prompt.append("   - **意图拆解**：用户真实想解决的问题是什么？\n");
-            prompt.append("   - **知识关联**：涉及项目中哪些核心模块（如权限、数据库、前端等）？\n");
-            prompt.append("   - **执行策略**：是否需要检索代码？检索哪些类？如果已经有上下文，如何利用？\n");
-            prompt.append("   - **逻辑推演**：根据现有信息，推导出的初步结论是什么？\n");
-            prompt.append("   只有在完成上述深度思考后，才能开始输出最终回答或调用工具。\n");
-            prompt.append("8. **格式规范**：使用标准的 Markdown 格式输出。\n");
+            // Fallback规则（如果agent_rule.md加载失败）
+            prompt.append("## 核心约束\n");
+            prompt.append("1. **深度思考（Mandatory）**：必须在 `<thought>` 标签内进行详细推理，包含：意图拆解、知识关联、执行策略、逻辑推演、回答规划\n");
+            prompt.append("2. **严禁幻觉标签**：禁止输出 DSML、function_calls、invoke 等任何非标准Markdown的标签\n");
+            prompt.append("3. **业务化表达**：将代码逻辑翻译为业务规则，避免直接粘贴代码\n");
+            prompt.append("4. **直接回答**：不要说\"根据代码上下文\"等铺垫语\n");
         }
         
+        // 额外强化：防止DSML幻觉
+        prompt.append("\n\n## 严禁输出的内容\n");
+        prompt.append("- ❌ 任何包含 `DSML`、`｜DSML｜`、`<|DSML|` 的标签\n");
+        prompt.append("- ❌ 任何 `<function_calls>`、`<invoke>`、`<parameter>` 等XML格式\n");
+        prompt.append("- ❌ 任何尝试调用工具的语法（你只能在系统允许时通过标准接口调用工具）\n");
+        prompt.append("- ✅ 只输出标准的Markdown格式内容\n");
+        
         return prompt.toString();
+    }
+    
+    /**
+     * 清洗幻觉标签
+     * 用于在发送内容给前端之前，移除任何可能的幻觉标签
+     */
+    private String cleanHallucinationTags(String content) {
+        if (content == null || content.isEmpty()) {
+            return content;
+        }
+        
+        // 使用正则表达式清除各种幻觉标签
+        String cleaned = content
+            // 清除 function_calls 标签（完整闭合，带或不带尖括号）
+            .replaceAll("(?i)<?function_calls>?[\\s\\S]*?</?function_calls>?", "")
+            // 清除 invoke 标签（完整闭合，带或不带尖括号）
+            .replaceAll("(?i)<?invoke[^>]*>?[\\s\\S]*?</?invoke>?", "")
+            // 清除 parameter 标签（完整闭合，带或不带尖括号）
+            .replaceAll("(?i)<?parameter[^>]*>?[\\s\\S]*?</?parameter>?", "")
+            // 清除 DSML 标签（全角和半角竖线）
+            .replaceAll("(?i)<?[｜|]?DSML[｜|]?[\\s\\S]*?[｜|]?/?DSML[｜|]?>?", "")
+            // 清除未闭合的 function_calls 开始标签及其后续内容
+            .replaceAll("(?i)<?function_calls>?[\\s\\S]*$", "")
+            // 清除未闭合的 invoke 标签
+            .replaceAll("(?i)<?invoke[^>]*>?[\\s\\S]*$", "")
+            // 清除残留的单独标签（带或不带尖括号）
+            .replaceAll("(?i)</?function_calls>?", "")
+            .replaceAll("(?i)</?invoke>?", "")
+            .replaceAll("(?i)</?parameter>?", "")
+            // 清除残留的无尖括号标签文本
+            .replaceAll("(?i)function_calls>", "")
+            .replaceAll("(?i)invokename=", "")
+            .replaceAll("(?i)parametername=", "")
+            .replaceAll("(?i)string=\"true\">", "")
+            // 清除残留的引号和属性（针对不带尖括号的残留）
+            .replaceAll("(?i)name=\"[^\"]*\">?", "")
+            .replaceAll("(?i)string=\"[^\"]*\">?", "")
+            .replaceAll("(?i)>", ""); // 清除残留的单独大于号
+        
+        // 如果清洗后内容基本上是空的或只剩下乱码，返回空字符串
+        // 修改：放宽清洗条件，只移除纯符号或明显无意义的内容，避免误杀正常短回复（如 "s" 是 "search" 的一部分被截断）
+        // 原来的正则 ^[\\s<>=/\"]*$ 太过严格
+        String trimmed = cleaned.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        
+        return trimmed;
     }
     
     /**
@@ -887,7 +1053,7 @@ public class SysAiController {
                     } catch (Exception ignored) {}
                 }
                 
-                sb.append("\n【系统提示】检索已完成。以上代码已包含足够信息，请根据这些内容直接回答用户问题，不要再次调用工具。");
+                sb.append("\n【重要提示】检索已完成。以上代码已包含回答问题所需的全部核心逻辑。请现在停止调用工具，直接利用这些代码片段生成最终回答。");
                 
                 return sb.toString();
             }

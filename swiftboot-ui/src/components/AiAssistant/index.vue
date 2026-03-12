@@ -317,6 +317,44 @@ const randomDotPos = () => {
   }
 }
 
+// 【工具函数】清除幻觉标签
+const cleanHallucinationTags = (text: string): string => {
+  if (!text) return ''
+  let cleaned = text
+    // DSML标签（全角竖线，各种变体）
+    .replace(/<?\|?[｜]?DSML[｜|]?[\s\S]*?[｜|]?\/?DSML[｜|]?>?/gi, '')
+    // function_calls标签（完整闭合，带或不带尖括号）
+    .replace(/<?function_calls>?[\s\S]*?<?\/?function_calls>?/gi, '')
+    // invoke标签（完整闭合，带或不带尖括号）
+    .replace(/<?invoke[^>]*>?[\s\S]*?<?\/?invoke>?/gi, '')
+    // parameter标签（完整闭合，带或不带尖括号）
+    .replace(/<?parameter[^>]*>?[\s\S]*?<?\/?parameter>?/gi, '')
+    // 未闭合的function_calls标签
+    .replace(/<?function_calls>?[\s\S]*$/gi, '')
+    // 未闭合的invoke标签
+    .replace(/<?invoke[\s\S]*$/gi, '')
+    // 未闭合的parameter标签
+    .replace(/<?parameter[\s\S]*$/gi, '')
+    // 残留的无尖括号标签文本
+    .replace(/function_calls>/gi, '')
+    .replace(/invokename=/gi, '')
+    .replace(/parametername=/gi, '')
+    .replace(/string="true">/gi, '')
+    // 清除残留的标签片段和属性
+    .replace(/name="[^"]*"/gi, '')
+    .replace(/string="[^"]*"/gi, '')
+    .replace(/<?\/?function_calls>?/gi, '')
+    .replace(/<?\/?invoke>?/gi, '')
+    .replace(/<?\/?parameter>?/gi, '')
+  
+  // 如果清洗后只剩下乱码字符，返回空字符串
+  const trimmed = cleaned.trim()
+  if (/^[\s<>=/\"]*$/.test(trimmed)) {
+    return ''
+  }
+  return trimmed
+}
+
 const parseMessage = (content: string) => {
   if (!content) return { thought: '', answer: '', isThinking: false }
   
@@ -336,13 +374,9 @@ const parseMessage = (content: string) => {
     isThinking = true
   }
   
-  // 过滤所有形式的 DSML 标签
-  cleanContent = cleanContent
-    .replace(/<[\s\S]*?DSML[\s\S]*?>[\s\S]*?<\/[\s\S]*?DSML[\s\S]*?>/gi, '')
-    .replace(/<[\s\S]*?DSML[\s\S]*?>[\s\S]*$/gi, '')
-    .replace(/<[\s\S]*?DSML[\s\S]*?$/gi, '')
-    .replace(/<\|DSML\|[\s\S]*?(\|\/DSML\|>|<\/\|DSML\|function_calls>)/g, '')
-    .trim()
+  // 【前端强化过滤】：对思考内容和回答内容都进行清洗
+  thoughtContent = cleanHallucinationTags(thoughtContent)
+  cleanContent = cleanHallucinationTags(cleanContent)
   
   return {
     thought: thoughtContent ? md.render(thoughtContent) : '',
@@ -386,16 +420,53 @@ const sendMessage = async () => {
   let isTyping = false
   let isStreamFinished = false
   
+  // 流式缓冲区，用于检测跨chunk的幻觉标签
+  let streamBuffer = ''
+  
+  // 检测是否包含可能的幻觉标签前缀
+  const hasPossibleHallucinationPrefix = (text: string): boolean => {
+    const lower = text.toLowerCase()
+    return lower.endsWith('<') || 
+           lower.endsWith('</') ||
+           lower.endsWith('<f') ||
+           lower.endsWith('<fu') ||
+           lower.endsWith('<fun') ||
+           lower.endsWith('<func') ||
+           lower.includes('<function') ||
+           lower.includes('<invoke') ||
+           lower.includes('<param')
+  }
+  
   const typeLoop = () => {
     if (pendingText.length > 0) {
       // 动态速度：更丝滑
       const speed = Math.max(1, Math.floor(pendingText.length / 8))
       const chunk = pendingText.slice(0, speed)
       pendingText = pendingText.slice(speed)
-      assistantMessage.content += chunk
+      
+      // 将chunk加入缓冲区
+      streamBuffer += chunk
+      
+      // 检测并清洗幻觉标签
+      let safeContent = cleanHallucinationTags(streamBuffer)
+      
+      // 如果缓冲区末尾可能正在形成幻觉标签，保留等待
+      if (hasPossibleHallucinationPrefix(safeContent) && streamBuffer.length < 100) {
+        // 保持缓冲，不输出
+      } else {
+        // 输出安全内容
+        if (safeContent) {
+          assistantMessage.content = safeContent
+        }
+        streamBuffer = '' // 清空缓冲区
+      }
       scrollToBottom()
     }
     if (isStreamFinished && pendingText.length === 0) {
+      // 流结束时，输出缓冲区剩余内容（清洗后）
+      if (streamBuffer) {
+        assistantMessage.content = cleanHallucinationTags(streamBuffer)
+      }
       isTyping = false
       loading.value = false
       return
