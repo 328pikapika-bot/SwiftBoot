@@ -55,7 +55,11 @@ public class AuthServiceImpl implements AuthService {
         loginLog.setLoginTime(LocalDateTime.now());
         String clientIp = getClientIp();
         loginLog.setLoginIp(clientIp);
-        loginLog.setLoginLocation(AddressUtils.getRealAddressByIP(clientIp));
+        try {
+            loginLog.setLoginLocation(AddressUtils.getRealAddressByIP(clientIp));
+        } catch (Exception e) {
+            loginLog.setLoginLocation("内网IP");
+        }
 
         // 获取浏览器和操作系统
         try {

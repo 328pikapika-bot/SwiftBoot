@@ -55,6 +55,51 @@ const systemRoutes: RouteRecordRaw[] = [
           title: '字典管理',
           icon: 'Collection'
         }
+      },
+      {
+        path: 'post',
+        name: 'Post',
+        component: () => import('@/views/system/post/index.vue'),
+        meta: {
+          title: '岗位管理',
+          icon: 'Briefcase'
+        }
+      },
+      {
+        path: 'job',
+        name: 'Job',
+        component: () => import('@/views/system/job/index.vue'),
+        meta: {
+          title: '定时任务',
+          icon: 'Timer'
+        }
+      },
+      {
+        path: 'notice',
+        name: 'Notice',
+        component: () => import('@/views/system/notice/index.vue'),
+        meta: {
+          title: '系统公告',
+          icon: 'Bell'
+        }
+      },
+      {
+        path: 'message',
+        name: 'Message',
+        component: () => import('@/views/system/message/index.vue'),
+        meta: {
+          title: '站内消息',
+          icon: 'Message'
+        }
+      },
+      {
+        path: 'file',
+        name: 'File',
+        component: () => import('@/views/system/file/index.vue'),
+        meta: {
+          title: '文件管理',
+          icon: 'Folder'
+        }
       }
     ]
   }

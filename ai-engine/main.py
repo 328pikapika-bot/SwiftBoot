@@ -334,4 +334,4 @@ async def extract_topic(request: TopicRequest):
 
 if __name__ == "__main__":
     print("启动 AI 知识检索引擎 API...")
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8081)

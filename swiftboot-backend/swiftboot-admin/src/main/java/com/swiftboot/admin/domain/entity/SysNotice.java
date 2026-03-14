@@ -1,0 +1,53 @@
+package com.swiftboot.admin.domain.entity;
+
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Data;
+
+import java.io.Serializable;
+import java.time.LocalDateTime;
+
+/**
+ * 系统公告实体
+ */
+@Data
+@TableName("sys_notice")
+@Schema(description = "系统公告")
+public class SysNotice implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    @TableId(value = "notice_id", type = IdType.AUTO)
+    @Schema(description = "公告ID")
+    private Long noticeId;
+
+    @Schema(description = "公告标题")
+    private String noticeTitle;
+
+    @Schema(description = "公告类型(1通知 2公告)")
+    private String noticeType;
+
+    @Schema(description = "公告内容")
+    private String noticeContent;
+
+    @Schema(description = "状态(0正常 1关闭)")
+    private Integer status;
+
+    @Schema(description = "创建者")
+    private String createBy;
+
+    @Schema(description = "创建时间")
+    private LocalDateTime createTime;
+
+    @Schema(description = "更新者")
+    private String updateBy;
+
+    @Schema(description = "更新时间")
+    private LocalDateTime updateTime;
+
+    @Schema(description = "备注")
+    private String remark;
+}

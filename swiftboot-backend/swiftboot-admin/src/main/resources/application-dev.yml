@@ -35,3 +35,8 @@ ai:
     # 后端日志 API 地址 (Python 脚本完成索引更新后回调此接口)
     # 部署时请注意修改 host (如 http://swiftboot-backend:8080/...)
     backend-log-api: http://localhost:8080/monitor/operlog/inner/add
+
+# 文件上传配置
+swiftboot:
+  file:
+    uploadPath: D:/upload

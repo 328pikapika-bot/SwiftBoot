@@ -37,8 +37,13 @@ public class AddressUtils {
         if (StrUtil.isBlank(ip)) {
             return UNKNOWN;
         }
-        // 内网IP
-        if (NetUtil.isInnerIP(ip)) {
+        // 内网IP或无效IP
+        try {
+            if (NetUtil.isInnerIP(ip)) {
+                return "内网IP";
+            }
+        } catch (Exception e) {
+            // 无效IP直接返回内网
             return "内网IP";
         }
         if (searcher == null) {
