@@ -1,10 +1,17 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from vector_store import VectorStore, ChatMemoryStore
 import uvicorn
+import os
 import jieba.analyse
 import jieba
+import time
+import signal
+import sys
+from threading import Thread, Lock
+from knowledge_ingest import JavaParser, PythonParser, VueComponentParser, MarkdownParser, TypeScriptParser
 
 # 加载自定义词典
 # 实际项目中，这里应该从 vector_store 中动态读取项目中的类名、方法名作为词典
@@ -27,6 +34,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 全局异常捕获
+@app.middleware("http")
+async def catch_exceptions_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as e:
+        print(f"Unhandled Exception: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 # 初始化向量数据库
 db = VectorStore()
@@ -288,6 +306,138 @@ async def delete_memory(request: MemoryDeleteRequest):
 def health_check():
     return {"status": "ok", "db_path": db.client._system.settings.persist_directory}
 
+ALLOWED_ROOT_DIRS = [
+    "swiftboot-backend",
+    "swiftboot-ui",
+    "devDoc",
+    "project-skills",
+    "ai-engine",
+    "快速启动",
+    "release_notes"
+]
+
+IGNORE_DIRS = [
+    ".git",
+    "target",
+    "build",
+    "node_modules",
+    "dist",
+    ".idea",
+    ".vscode",
+    "__pycache__",
+    "chroma_db",
+    "logs",
+    "javadoc",
+    "classes",
+    "generated-sources",
+    "public"
+]
+
+IGNORE_FILENAMES = [
+    "auto-imports.d.ts",
+    "components.d.ts",
+    "tsconfig.tsbuildinfo",
+    "vite-env.d.ts",
+    "typed-router.d.ts"
+]
+
+WATCH_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+index_rebuild_lock = Lock()
+index_rebuild_state = {
+    "running": False,
+    "started_at": None,
+    "finished_at": None,
+    "indexed_chunks": 0,
+    "error": None
+}
+
+class IndexRebuildRequest(BaseModel):
+    force: bool = False
+
+def _rebuild_index_worker(force: bool):
+    started_at = time.time()
+    indexed_chunks = 0
+    error = None
+
+    try:
+        java_parser = JavaParser()
+        py_parser = PythonParser()
+        vue_parser = VueComponentParser()
+        md_parser = MarkdownParser()
+        ts_parser = TypeScriptParser()
+
+        for root, dirs, files in os.walk(WATCH_DIR):
+            if os.path.normpath(root) == os.path.normpath(WATCH_DIR):
+                dirs[:] = [d for d in dirs if d in ALLOWED_ROOT_DIRS]
+            else:
+                dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
+
+            for file in files:
+                if file in IGNORE_FILENAMES:
+                    continue
+                if file.lower().endswith(".d.ts"):
+                    continue
+                if not file.lower().endswith((".java", ".py", ".vue", ".md", ".doc", ".ts", ".js")):
+                    continue
+
+                file_path = os.path.join(root, file)
+                source_id = file_path.replace("\\", "/")
+
+                chunks = []
+                if file.lower().endswith(".java"):
+                    chunks = java_parser.parse_file(file_path)
+                elif file.lower().endswith(".py"):
+                    chunks = py_parser.parse_file(file_path)
+                elif file.lower().endswith(".vue"):
+                    chunks = vue_parser.parse_file(file_path)
+                elif file.lower().endswith((".md", ".doc")):
+                    chunks = md_parser.parse_file(file_path)
+                elif file.lower().endswith((".ts", ".js")):
+                    chunks = ts_parser.parse_file(file_path)
+
+                if not chunks:
+                    continue
+
+                for chunk in chunks:
+                    chunk["source"] = source_id
+
+                if force:
+                    db.delete_by_source(source_id)
+                db.add_documents(chunks)
+                indexed_chunks += len(chunks)
+
+    except Exception as e:
+        error = str(e)
+    finally:
+        finished_at = time.time()
+        with index_rebuild_lock:
+            index_rebuild_state["running"] = False
+            index_rebuild_state["started_at"] = started_at
+            index_rebuild_state["finished_at"] = finished_at
+            index_rebuild_state["indexed_chunks"] = indexed_chunks
+            index_rebuild_state["error"] = error
+
+@app.post("/index/rebuild")
+async def rebuild_index(request: IndexRebuildRequest):
+    with index_rebuild_lock:
+        if index_rebuild_state["running"]:
+            return {"status": "running", **index_rebuild_state}
+        index_rebuild_state["running"] = True
+        index_rebuild_state["started_at"] = time.time()
+        index_rebuild_state["finished_at"] = None
+        index_rebuild_state["indexed_chunks"] = 0
+        index_rebuild_state["error"] = None
+
+    Thread(target=_rebuild_index_worker, args=(request.force,), daemon=True).start()
+    with index_rebuild_lock:
+        return {"status": "started", **index_rebuild_state}
+
+@app.get("/index/rebuild/status")
+def rebuild_index_status():
+    with index_rebuild_lock:
+        return dict(index_rebuild_state)
+
 class TopicRequest(BaseModel):
     text: str
 
@@ -332,6 +482,24 @@ async def extract_topic(request: TopicRequest):
         print(f"Topic extraction failed: {e}")
         return {"topic": None}
 
+def signal_handler(sig, frame):
+    print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] 接收到系统信号 {sig}，准备退出...")
+    sys.exit(0)
+
 if __name__ == "__main__":
-    print("启动 AI 知识检索引擎 API...")
-    uvicorn.run(app, host="0.0.0.0", port=8081)
+    try:
+        # 注册信号处理器
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 启动 AI 知识检索引擎 API...")
+        uvicorn.run(app, host="0.0.0.0", port=8001)
+    except KeyboardInterrupt:
+        print("\nAI 引擎已手动停止")
+    except SystemExit:
+        print("\nAI 引擎正常退出")
+    except Exception as e:
+        print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] AI 引擎发生异常退出: {e}")
+        import traceback
+        traceback.print_exc()
+        input("按回车键退出...")

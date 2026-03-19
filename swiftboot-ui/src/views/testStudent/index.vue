@@ -167,7 +167,6 @@ const queryParams = reactive({
 
 const formData = reactive({
   id: undefined,
-  id: undefined,
   studentName: undefined,
   age: undefined,
   sex: undefined,

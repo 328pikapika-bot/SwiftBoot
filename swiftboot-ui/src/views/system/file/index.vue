@@ -173,7 +173,7 @@ const submitUpload = async () => {
     const formData = new FormData()
     formData.append('file', item.raw)
     try {
-      const res = await request({
+      const res: any = await request({
         url: '/system/file/upload',
         method: 'post',
         data: formData,

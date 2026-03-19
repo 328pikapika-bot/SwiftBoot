@@ -7,7 +7,7 @@
           <el-tree-select
             v-model="queryParams.deptId"
             :data="deptOptions"
-            :props="{ label: 'deptName', children: 'children', value: 'id' }"
+            :props="({ label: 'deptName', children: 'children', value: 'id' } as any)"
             placeholder="选择部门"
             check-strictly
             clearable
@@ -84,7 +84,7 @@
           <el-tree-select
             v-model="formData.deptId"
             :data="deptOptions"
-            :props="{ label: 'deptName', children: 'children', value: 'id' }"
+            :props="({ label: 'deptName', children: 'children', value: 'id' } as any)"
             placeholder="选择所属部门"
             check-strictly
             clearable

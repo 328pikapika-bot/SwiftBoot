@@ -43,9 +43,15 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
     public Page<SysRole> selectRolePage(SysRole role, PageQuery pageQuery) {
         Page<SysRole> page = new Page<>(pageQuery.getPageNum(), pageQuery.getPageSize());
         LambdaQueryWrapper<SysRole> wrapper = new LambdaQueryWrapper<>();
-        wrapper.like(role.getRoleName() != null, SysRole::getRoleName, role.getRoleName());
-        wrapper.like(role.getRoleKey() != null, SysRole::getRoleKey, role.getRoleKey());
-        wrapper.eq(role.getStatus() != null, SysRole::getStatus, role.getStatus());
+        if (role.getRoleName() != null) {
+            wrapper.like(SysRole::getRoleName, role.getRoleName());
+        }
+        if (role.getRoleKey() != null) {
+            wrapper.like(SysRole::getRoleKey, role.getRoleKey());
+        }
+        if (role.getStatus() != null) {
+            wrapper.eq(SysRole::getStatus, role.getStatus());
+        }
         wrapper.orderByAsc(SysRole::getSort);
         return page(page, wrapper);
     }

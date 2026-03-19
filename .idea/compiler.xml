@@ -14,7 +14,6 @@
         </processorPath>
         <module name="swiftboot-generator" />
         <module name="common-security" />
-        <module name="swiftboot-admin" />
         <module name="common-log" />
         <module name="common-redis" />
         <module name="common-core" />
@@ -24,6 +23,15 @@
         <sourceTestOutputDir name="../target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name=".mvn" />
+      </profile>
+      <profile name="Annotation profile for swiftboot-admin" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="false">
+          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.30/lombok-1.18.30.jar" />
+        </processorPath>
+        <module name="swiftboot-admin" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>

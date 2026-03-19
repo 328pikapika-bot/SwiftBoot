@@ -1,6 +1,8 @@
 import chromadb
+from chromadb.config import Settings
 import os
 import time
+import hashlib
 from knowledge_ingest import JavaParser
 from typing import List, Dict
 import uuid
@@ -24,6 +26,7 @@ def load_config():
         "vector_db": {
             "persist_directory": os.path.join(os.path.dirname(__file__), "chroma_db"),
             "collection_name": "swiftboot_codebase",
+            "doc_collection_name": "swiftboot_docs",
             "memory_collection_name": "swiftboot_chat_memory"
         }
     }
@@ -51,6 +54,9 @@ def load_config():
                     if 'collection-name' in engine_config:
                         default_config["vector_db"]["collection_name"] = engine_config['collection-name']
                         
+                    if 'doc-collection-name' in engine_config:
+                        default_config["vector_db"]["doc_collection_name"] = engine_config['doc-collection-name']
+                        
                     if 'memory-collection-name' in engine_config:
                         default_config["vector_db"]["memory_collection_name"] = engine_config['memory-collection-name']
                         
@@ -69,6 +75,7 @@ config = load_config()
 # ==========================================
 PERSIST_DIRECTORY = config["vector_db"]["persist_directory"]
 COLLECTION_NAME = config["vector_db"]["collection_name"]
+DOC_COLLECTION_NAME = config["vector_db"]["doc_collection_name"]
 MEMORY_COLLECTION_NAME = config["vector_db"]["memory_collection_name"]
 BACKEND_LOG_API = config["backend"]["api_url"]
 
@@ -81,12 +88,17 @@ class VectorStore:
         print(f"[{self._now()}]正在初始化向量数据库，存储路径: {PERSIST_DIRECTORY}")
         # 初始化 ChromaDB 客户端
         # PersistentClient 会自动把数据保存到磁盘，类似 SQLite
-        self.client = chromadb.PersistentClient(path=PERSIST_DIRECTORY)
+        self.client = chromadb.PersistentClient(
+            path=PERSIST_DIRECTORY,
+            settings=Settings(anonymized_telemetry=False)
+        )
         
         # 获取或创建集合（类似于 SQL 中的 Table）
-        # ChromaDB 默认使用 all-MiniLM-L6-v2 模型进行文本向量化
+        # collection: 存储代码
+        # doc_collection: 存储文档
         self.collection = self.client.get_or_create_collection(name=COLLECTION_NAME)
-        print(f"[{self._now()}]数据库连接成功！")
+        self.doc_collection = self.client.get_or_create_collection(name=DOC_COLLECTION_NAME)
+        print(f"[{self._now()}]数据库连接成功！Code Collection: {COLLECTION_NAME}, Doc Collection: {DOC_COLLECTION_NAME}")
 
     def calculate_similarity(self, text1: str, text2: str) -> float:
         """
@@ -168,6 +180,7 @@ class VectorStore:
     def add_documents(self, chunks: List[Dict]):
         """
         将解析后的代码块存入向量数据库
+        根据类型分别存入代码集合或文档集合
         :param chunks: 代码块列表，包含 content, name, type, source 等信息
         """
         if not chunks:
@@ -176,50 +189,162 @@ class VectorStore:
             
         print(f"[{self._now()}]正在准备存储 {len(chunks)} 个代码块...")
         
+        # 分离代码和文档
+        code_chunks = []
+        doc_chunks = []
+        
+        for chunk in chunks:
+            is_doc = False
+            # 判断逻辑：markdown_section 类型，或者文件名以 .md, .txt 结尾
+            if chunk.get('type') == 'markdown_section':
+                is_doc = True
+            elif chunk.get('file_path', '').lower().endswith(('.md', '.txt')):
+                is_doc = True
+                
+            if is_doc:
+                doc_chunks.append(chunk)
+            else:
+                code_chunks.append(chunk)
+        
+        self._add_to_collection(self.collection, code_chunks, "Code")
+        self._add_to_collection(self.doc_collection, doc_chunks, "Doc")
+
+    def _add_to_collection(self, collection, chunks, label):
+        if not chunks:
+            return
+
         ids = []
         documents = []
         metadatas = []
         
-        for chunk in chunks:
+        for idx, chunk in enumerate(chunks):
             # 生成唯一ID (UUID v4)
-            ids.append(str(uuid.uuid4()))
+            source = chunk.get('source', 'unknown')
+            # 兼容旧字段 file_path (如果 source 为空)
+            if source == 'unknown' and 'file_path' in chunk:
+                source = chunk['file_path']
+                
+            unique_key = f"{source}|{chunk['name']}|{chunk['type']}|{idx}"
+            ids.append(hashlib.sha1(unique_key.encode('utf-8')).hexdigest())
             # 存入主要文本内容（ChromaDB 会自动将其转为 384 维向量）
             documents.append(chunk['content'])
             # 存入元数据（用于后续的过滤或前端展示）
             metadatas.append({
                 'name': chunk['name'], 
                 'type': chunk['type'], 
-                'source': chunk.get('source', 'unknown')
+                'source': source
             })
+            
+        # 批量写入 (Batch upsert)
+        batch_size = 100
+        total = len(chunks)
+        print(f"[{self._now()}]开始写入 {label} 集合 (共 {total} 条)...")
         
-        # 批量写入
-        # ChromaDB 会在这里自动调用 Embedding 模型，把 documents 变成向量
-        self.collection.add(
-            documents=documents,
-            metadatas=metadatas,
-            ids=ids
-        )
-        print(f"[{self._now()}]成功！已将数据持久化保存到: {PERSIST_DIRECTORY}")
+        for i in range(0, total, batch_size):
+            end = min(i + batch_size, total)
+            try:
+                collection.upsert(
+                    ids=ids[i:end],
+                    documents=documents[i:end],
+                    metadatas=metadatas[i:end]
+                )
+                print(f"[{self._now()}][{label}] 已处理 {end}/{total}")
+            except Exception as e:
+                print(f"[{self._now()}][{label}] 写入失败 (Batch {i}-{end}): {e}")
+                self._log_to_backend(f"[{label}] 向量写入失败", str(e), 1)
+                
+        print(f"[{self._now()}][{label}] 写入完成。")
+        self._log_to_backend(f"[{label}] 知识库更新完成", f"新增/更新 {total} 个切片")
 
-    def query(self, query_text: str, n_results: int = 3):
+    def query(self, question: str, n_results: int = 5):
         """
-        检索最相似的代码块
-        :param query_text: 用户的自然语言问题
-        :param n_results: 返回最相似的 N 个结果
+        检索最相似的代码或文档
+        策略：同时检索代码库和文档库，然后合并结果
         """
-        print(f"[{self._now()}]正在检索问题: [{query_text}]")
-        results = self.collection.query(
-            query_texts=[query_text],
-            n_results=n_results
-        )
-        return results
+        print(f"[{self._now()}]正在检索: {question}")
+        
+        all_results = {
+            'ids': [[]],
+            'distances': [[]],
+            'metadatas': [[]],
+            'documents': [[]]
+        }
+        
+        try:
+            # 1. 检索代码库
+            # 稍微多取一点，以便混合
+            code_results = self.collection.query(
+                query_texts=[question],
+                n_results=n_results
+            )
+            
+            # 2. 检索文档库
+            # 文档通常较少，取 n_results 即可
+            doc_results = self.doc_collection.query(
+                query_texts=[question],
+                n_results=n_results
+            )
+            
+            # 3. 合并结果
+            # ChromaDB 返回的是列表的列表 [[...]]
+            c_ids = code_results['ids'][0] if code_results['ids'] else []
+            c_dists = code_results['distances'][0] if code_results['distances'] else []
+            c_metas = code_results['metadatas'][0] if code_results['metadatas'] else []
+            c_docs = code_results['documents'][0] if code_results['documents'] else []
+            
+            d_ids = doc_results['ids'][0] if doc_results['ids'] else []
+            d_dists = doc_results['distances'][0] if doc_results['distances'] else []
+            d_metas = doc_results['metadatas'][0] if doc_results['metadatas'] else []
+            d_docs = doc_results['documents'][0] if doc_results['documents'] else []
+            
+            # 简单的合并策略：按距离排序
+            # 构建 (distance, id, meta, doc, type) 元组列表
+            combined = []
+            for i in range(len(c_ids)):
+                combined.append({
+                    'distance': c_dists[i],
+                    'id': c_ids[i],
+                    'metadata': c_metas[i],
+                    'document': c_docs[i],
+                    'origin': 'code'
+                })
+            for i in range(len(d_ids)):
+                combined.append({
+                    'distance': d_dists[i],
+                    'id': d_ids[i],
+                    'metadata': d_metas[i],
+                    'document': d_docs[i],
+                    'origin': 'doc'
+                })
+                
+            # 按距离升序排序 (越小越相似)
+            combined.sort(key=lambda x: x['distance'])
+            
+            # 取 Top N
+            final_top = combined[:n_results]
+            
+            # 重构回 ChromaDB 结果格式
+            all_results['ids'][0] = [x['id'] for x in final_top]
+            all_results['distances'][0] = [x['distance'] for x in final_top]
+            all_results['metadatas'][0] = [x['metadata'] for x in final_top]
+            all_results['documents'][0] = [x['document'] for x in final_top]
+            
+            return all_results
+            
+        except Exception as e:
+            print(f"[{self._now()}]检索失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return {'ids': [], 'distances': [], 'metadatas': [], 'documents': []}
 
     def count(self):
         """
-        获取向量库中的文档总数
+        获取向量库中的文档总数 (Code + Doc)
         """
         try:
-            return self.collection.count()
+            c_count = self.collection.count()
+            d_count = self.doc_collection.count()
+            return c_count + d_count
         except Exception as e:
             print(f"[{self._now()}]获取数量失败: {e}")
             return 0
@@ -230,18 +355,25 @@ class VectorStore:
         用于在文件更新时，先清理旧版本的数据
         """
         try:
-            # 1. 先查询是否存在（为了打印日志，ChromaDB 的 delete 默认如果不匹配也不会报错）
-            existing = self.collection.get(where={"source": source_path})
-            count = len(existing['ids']) if existing and existing['ids'] else 0
-            
-            if count > 0:
-                print(f"[{self._now()}]检测到旧数据，正在删除 {count} 条来自 {source_path} 的记录...")
-                self.collection.delete(where={"source": source_path})
-                print(f"[{self._now()}]旧数据删除成功。")
-            else:
-                print(f"[{self._now()}]未发现来自 {source_path} 的旧数据，将直接新增。")
+            candidates = {source_path}
+            base = os.path.basename(source_path)
+            if base:
+                candidates.add(base)
+
+            deleted_any = False
+            for candidate in candidates:
+                try:
+                    # 尝试从两个集合中删除
+                    self.collection.delete(where={"source": candidate})
+                    self.doc_collection.delete(where={"source": candidate})
+                    deleted_any = True
+                except Exception as e:
+                    print(f"[{self._now()}]删除来源失败: {candidate}, 错误: {e}")
+
+            if deleted_any:
+                print(f"[{self._now()}]已清理来源: {', '.join(sorted(candidates))}")
         except Exception as e:
-            print(f"[{self._now()}]删除旧数据时出错: {str(e)}")
+            print(f"[{self._now()}]删除来源异常: {e}")
 
     def _now(self):
         return time.strftime("%Y-%m-%d %H:%M:%S")
@@ -253,7 +385,10 @@ class ChatMemoryStore:
     """
     def __init__(self):
         print(f"[{self._now()}]正在初始化向量数据库，存储路径: {PERSIST_DIRECTORY}")
-        self.client = chromadb.PersistentClient(path=PERSIST_DIRECTORY)
+        self.client = chromadb.PersistentClient(
+            path=PERSIST_DIRECTORY,
+            settings=Settings(anonymized_telemetry=False)
+        )
         self.collection = self.client.get_or_create_collection(name=MEMORY_COLLECTION_NAME)
         print(f"[{self._now()}]对话记忆数据库连接成功！")
 

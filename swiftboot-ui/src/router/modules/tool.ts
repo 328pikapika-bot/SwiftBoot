@@ -37,6 +37,15 @@ const toolRoutes: RouteRecordRaw[] = [
           title: '图标选择',
           icon: 'Star'
         }
+      },
+      {
+        path: 'config',
+        name: 'Config',
+        component: () => import('@/views/tool/config/index.vue'),
+        meta: {
+          title: '配置管理',
+          icon: 'Setting'
+        }
       }
     ]
   }

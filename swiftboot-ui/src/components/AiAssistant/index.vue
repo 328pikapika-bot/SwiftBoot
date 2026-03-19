@@ -37,7 +37,7 @@
           </div>
         </div>
         <div class="header-right">
-          <div class="model-tag">模型: DeepSeek-V3</div>
+          <div class="model-tag">模型: {{ currentModelName }}</div>
           <div class="header-actions">
             <button class="icon-btn" @click.stop="clearHistory" title="历史记录"><span class="material-symbols-outlined">history</span></button>
             <button class="icon-btn" @click.stop="toggleMinimize" title="最小化"><span class="material-symbols-outlined">remove</span></button>
@@ -262,25 +262,36 @@ const suggestions = [
   '请说明核心表 sys_user 和 sys_role 的关系'
 ]
 
-// 加载历史记录
-const loadHistory = async () => {
+const currentModelName = ref('加载中...')
+
+// 加载历史记录和配置
+const initChat = async () => {
   if (!userStore.token) {
       messages.value = []
       return
   }
   try {
-    const res: any = await request.get('/system/ai/history')
-    if (res.code === 200 && res.data) {
-        messages.value = res.data
+    // 并行请求历史记录和配置
+    const [historyRes, configRes] = await Promise.all([
+      request.get('/system/ai/history'),
+      request.get('/system/ai/config')
+    ])
+    
+    if (historyRes.code === 200 && historyRes.data) {
+        messages.value = historyRes.data
         scrollToBottom(true)
     }
+    
+    if (configRes.code === 200 && configRes.data) {
+        currentModelName.value = configRes.data.model || '未配置模型'
+    }
   } catch (e) {
-    console.error('Failed to load chat history:', e)
+    console.error('Failed to init chat:', e)
   }
 }
 
-watch(() => userStore.userInfo?.userId, () => loadHistory())
-loadHistory()
+watch(() => userStore.userInfo?.userId, () => initChat())
+initChat()
 
 // 窗口尺寸和位置 (进一步加宽默认尺寸)
 const windowState = reactive({
@@ -347,12 +358,8 @@ const cleanHallucinationTags = (text: string): string => {
     .replace(/<?\/?invoke>?/gi, '')
     .replace(/<?\/?parameter>?/gi, '')
   
-  // 如果清洗后只剩下乱码字符，返回空字符串
-  const trimmed = cleaned.trim()
-  if (/^[\s<>=/\"]*$/.test(trimmed)) {
-    return ''
-  }
-  return trimmed
+  // 直接返回清洗后的内容，保留可能存在的空格和正常标点
+  return cleaned
 }
 
 const parseMessage = (content: string) => {
@@ -456,7 +463,7 @@ const sendMessage = async () => {
       } else {
         // 输出安全内容
         if (safeContent) {
-          assistantMessage.content = safeContent
+          assistantMessage.content += safeContent
         }
         streamBuffer = '' // 清空缓冲区
       }
@@ -465,7 +472,7 @@ const sendMessage = async () => {
     if (isStreamFinished && pendingText.length === 0) {
       // 流结束时，输出缓冲区剩余内容（清洗后）
       if (streamBuffer) {
-        assistantMessage.content = cleanHallucinationTags(streamBuffer)
+        assistantMessage.content += cleanHallucinationTags(streamBuffer)
       }
       isTyping = false
       loading.value = false
@@ -480,7 +487,11 @@ const sendMessage = async () => {
     
     const response = await fetch('/api/system/ai/chat/stream', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': userStore.token || '' },
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Accept': 'text/event-stream',
+        'Authorization': userStore.token || '' 
+      },
       body: JSON.stringify({ content, history: [] }),
       signal: controller.signal
     })
@@ -639,18 +650,27 @@ const sendSuggestion = (content: string) => {
   sendMessage()
 }
 
-const handleRefreshIndex = () => {
-  const loading = ElMessage({
-    message: '正在同步最新代码索引...',
+const handleRefreshIndex = async () => {
+  const msg = ElMessage({
+    message: '正在触发索引重建...',
     type: 'info',
     duration: 0,
     showClose: false
   })
-  
-  setTimeout(() => {
-    loading.close()
-    ElMessage.success('索引已实时同步完成')
-  }, 1500)
+
+  try {
+    const res: any = await request.post('/system/ai/index/rebuild', { force: true })
+    const status = res?.data?.status
+    if (status === 'running') {
+      ElMessage.warning('索引正在重建中，请稍后再试')
+      return
+    }
+    ElMessage.success('已触发索引重建，稍后会自动生效')
+  } catch (e) {
+    ElMessage.error('索引重建失败，请确认 AI 引擎已启动')
+  } finally {
+    msg.close()
+  }
 }
 </script>
 
@@ -889,6 +909,34 @@ $text-muted: #64748b;
     /* 最终回答的 Markdown 样式 */
     h1, h2, h3 { color: #0f172a; margin-top: 20px; margin-bottom: 12px; font-weight: 700; }
     p { margin-bottom: 16px; }
+    
+    /* 表格样式 */
+    :deep(table) {
+      width: 100%;
+      margin: 16px 0;
+      border-collapse: collapse;
+      font-size: 14px;
+      
+      th, td {
+        padding: 10px 12px;
+        border: 1px solid #e2e8f0;
+      }
+      
+      th {
+        background-color: #f8fafc;
+        font-weight: 600;
+        text-align: left;
+        color: #334155;
+      }
+      
+      tr:nth-child(even) {
+        background-color: #f8fafc;
+      }
+      
+      tr:hover {
+        background-color: #f1f5f9;
+      }
+    }
     
     /* 核心优化：深色代码块 */
     :deep(pre.custom-code-block) {

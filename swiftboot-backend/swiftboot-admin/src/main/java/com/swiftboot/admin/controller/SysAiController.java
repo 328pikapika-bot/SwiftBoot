@@ -76,15 +76,23 @@ public class SysAiController {
 
     // Redis 历史记录 Key 前缀
     private static final String HISTORY_KEY_PREFIX = "ai:history:";
+    
+    // Redis AI 配置 Key
+    private static final String AI_CONFIG_KEY = "ai:config";
 
-    // DeepSeek 配置
+    // DeepSeek 配置 (默认值)
     @Value("${ai.deepseek.api-url:}")
-    private String deepseekApiUrl;
+    private String defaultDeepseekApiUrl;
 
     @Value("${ai.deepseek.api-key:}")
-    private String deepseekApiKey;
+    private String defaultDeepseekApiKey;
 
     @Value("${ai.deepseek.model:}")
+    private String defaultDeepseekModel;
+
+    // 运行时使用的配置 (优先从 Redis 读取)
+    private String deepseekApiUrl;
+    private String deepseekApiKey;
     private String deepseekModel;
 
     // 缓存项目内置的 Skills (技能库) 内容
@@ -164,6 +172,10 @@ public class SysAiController {
     private static final String NLP_TOPIC_URL = "http://localhost:8001/nlp/topic";
     private static final String NLP_SIMILARITY_URL = "http://localhost:8001/nlp/similarity";
     private static final String STATS_URL = "http://localhost:8001/stats";
+    private static final String HEALTH_URL = "http://localhost:8001/health";
+    private static final String KNOWLEDGE_STATS_URL = "http://localhost:8001/knowledge/stats";
+    private static final String INDEX_REBUILD_URL = "http://localhost:8001/index/rebuild";
+    private static final String INDEX_REBUILD_STATUS_URL = "http://localhost:8001/index/rebuild/status";
 
     /**
      * 实时索引日志流 (SSE)
@@ -275,19 +287,74 @@ public class SysAiController {
     @Operation(summary = "获取AI引擎统计信息")
     @GetMapping("/stats")
     public R<Map<String, Object>> getStats() {
+        boolean engineUp = false;
         try {
-            String result = HttpRequest.get(STATS_URL)
-                    .timeout(2000)
-                    .execute()
-                    .body();
+            String health = HttpRequest.get(HEALTH_URL).timeout(800).execute().body();
+            engineUp = StrUtil.isNotEmpty(health);
+        } catch (Exception ignored) {
+        }
+
+        if (!engineUp) {
+            return R.ok(Map.of("engine_up", false, "knowledge_count", 0, "memory_count", 0, "total_chunks", 0));
+        }
+
+        try {
+            String result = HttpRequest.get(KNOWLEDGE_STATS_URL).timeout(3000).execute().body();
+            if (StrUtil.isNotEmpty(result)) {
+                Map<String, Object> map = JSONUtil.toBean(result, Map.class);
+                Object totalChunks = map.get("total_chunks");
+                if (totalChunks != null) {
+                    map.put("knowledge_count", totalChunks);
+                }
+                map.put("engine_up", true);
+                return R.ok(map);
+            }
+        } catch (Exception ignored) {
+        }
+
+        try {
+            String result = HttpRequest.get(STATS_URL).timeout(2000).execute().body();
             if (StrUtil.isEmpty(result)) {
-                return R.ok(Map.of("knowledge_count", 0, "memory_count", 0));
+                return R.ok(Map.of("engine_up", true, "knowledge_count", 0, "memory_count", 0, "total_chunks", 0));
             }
             Map<String, Object> map = JSONUtil.toBean(result, Map.class);
+            map.put("engine_up", true);
             return R.ok(map);
         } catch (Exception e) {
-            // 服务未启动或调用失败，返回默认值
-            return R.ok(Map.of("knowledge_count", 0, "memory_count", 0));
+            return R.ok(Map.of("engine_up", true, "knowledge_count", 0, "memory_count", 0, "total_chunks", 0));
+        }
+    }
+
+    @Operation(summary = "触发AI索引重建")
+    @PostMapping("/index/rebuild")
+    public R<Map<String, Object>> rebuildIndex(@RequestBody(required = false) Map<String, Object> body) {
+        boolean force = body != null && Boolean.TRUE.equals(body.get("force"));
+        try {
+            JSONObject req = new JSONObject();
+            req.set("force", force);
+            String resp = HttpRequest.post(INDEX_REBUILD_URL).timeout(2000).body(req.toString()).execute().body();
+            if (StrUtil.isEmpty(resp)) {
+                return R.ok(Map.of("status", "unknown"));
+            }
+            Map<String, Object> map = JSONUtil.toBean(resp, Map.class);
+            return R.ok(map);
+        } catch (Exception e) {
+            return R.fail("AI 引擎未启动或重建失败: " + e.getMessage());
+        }
+    }
+
+    @Operation(summary = "获取AI索引重建状态")
+    @GetMapping("/index/rebuild/status")
+    public R<Map<String, Object>> rebuildIndexStatus() {
+        try {
+            String resp = HttpRequest.get(INDEX_REBUILD_STATUS_URL).timeout(1000).execute().body();
+            if (StrUtil.isEmpty(resp)) {
+                return R.ok(Map.of("running", false));
+            }
+            Map<String, Object> map = JSONUtil.toBean(resp, Map.class);
+            return R.ok(map);
+        } catch (Exception e) {
+            return R.ok(Map.of("running", false));
         }
     }
 
@@ -296,51 +363,39 @@ public class SysAiController {
      */
     @PostConstruct
     public void initSkills() {
+        // 1. 加载 AI 配置 (优先从 Redis，无则使用默认值)
+        loadAiConfig();
+        
         try {
-            // 加载 RAG 规则文件（旧模式，保留作为降级方案）
-            try {
-                ClassPathResource resource = new ClassPathResource("ai/rules/rag_rule.md");
-                if (resource.exists()) {
-                    ragRuleContext = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
-                    System.out.println("RAG Rule loaded successfully, length: " + ragRuleContext.length());
-                }
-            } catch (Exception e) {
-                System.err.println("Failed to load RAG rule: " + e.getMessage());
-            }
-            
-            // 加载 Agent 模式规则文件
-            try {
-                ClassPathResource agentResource = new ClassPathResource("ai/rules/agent_rule.md");
-                if (agentResource.exists()) {
-                    agentRuleContext = StreamUtils.copyToString(agentResource.getInputStream(), StandardCharsets.UTF_8);
-                    System.out.println("Agent Rule loaded successfully, length: " + agentRuleContext.length());
-                }
-            } catch (Exception e) {
-                System.err.println("Failed to load Agent rule: " + e.getMessage());
-            }
-            
-            // 加载工具搜索规则文件
-            try {
-                ClassPathResource searchRuleResource = new ClassPathResource("ai/rules/tool_search_codebase_rule.md");
-                if (searchRuleResource.exists()) {
-                    toolSearchRuleContext = StreamUtils.copyToString(searchRuleResource.getInputStream(), StandardCharsets.UTF_8);
-                    System.out.println("Tool Search Rule loaded successfully, length: " + toolSearchRuleContext.length());
-                }
-            } catch (Exception e) {
-                System.err.println("Failed to load Tool Search rule: " + e.getMessage());
-            }
-            
-            // 初始化工具定义 (需在规则加载后执行)
-            this.agentTools = buildAgentTools();
-
-            // 扫描项目根目录下的 project-skills 目录
+            // 定义外部规则目录 (项目根目录/ai_rule)
             String projectRoot = System.getProperty("user.dir");
             if (projectRoot.endsWith("swiftboot-admin")) {
                 projectRoot = new File(projectRoot).getParentFile().getParent();
             } else if (projectRoot.endsWith("swiftboot-backend")) {
                 projectRoot = new File(projectRoot).getParent();
             }
+            File ruleDir = new File(projectRoot, "ai_rule");
             
+            // 优先加载 system_identity.md
+            File identityFile = new File(ruleDir, "system_identity.md");
+            if (identityFile.exists()) {
+                agentRuleContext = FileUtil.readString(identityFile, StandardCharsets.UTF_8);
+                System.out.println("System Identity Rule loaded from external: " + identityFile.getAbsolutePath());
+            } else {
+                System.err.println("Warning: system_identity.md not found in " + ruleDir.getAbsolutePath());
+            }
+            
+            // 加载工具搜索规则文件
+            File searchRuleFile = new File(ruleDir, "tool_search_codebase_rule.md");
+            if (searchRuleFile.exists()) {
+                toolSearchRuleContext = FileUtil.readString(searchRuleFile, StandardCharsets.UTF_8);
+                System.out.println("Tool Search Rule loaded from external: " + searchRuleFile.getAbsolutePath());
+            }
+            
+            // 初始化工具定义 (需在规则加载后执行)
+            this.agentTools = buildAgentTools();
+
+            // 扫描项目根目录下的 project-skills 目录
             File skillsDir = new File(projectRoot, "project-skills");
             if (skillsDir.exists() && skillsDir.isDirectory()) {
                 StringBuilder sb = new StringBuilder();
@@ -371,6 +426,50 @@ public class SysAiController {
             e.printStackTrace();
             System.err.println("Failed to load skills: " + e.getMessage());
         }
+    }
+
+    /**
+     * 加载 AI 配置
+     * 优先从 Redis 读取，无则使用 application.yml 中的默认值
+     */
+    private void loadAiConfig() {
+        // 先尝试从 Redis 获取
+        String configJson = stringRedisTemplate.opsForValue().get(AI_CONFIG_KEY);
+        
+        if (StrUtil.isNotEmpty(configJson)) {
+            try {
+                JSONObject config = JSONUtil.parseObj(configJson);
+                this.deepseekApiUrl = config.getStr("apiUrl");
+                this.deepseekApiKey = config.getStr("apiKey");
+                this.deepseekModel = config.getStr("model");
+                System.out.println("AI Config loaded from Redis, provider: " + config.getStr("provider") + ", model: " + this.deepseekModel);
+            } catch (Exception e) {
+                System.err.println("Failed to load AI config from Redis: " + e.getMessage());
+                // 回退到默认值
+                useDefaultConfig();
+            }
+        } else {
+            // 使用 application.yml 中的默认值
+            useDefaultConfig();
+        }
+    }
+
+    /**
+     * 使用默认配置
+     */
+    private void useDefaultConfig() {
+        this.deepseekApiUrl = defaultDeepseekApiUrl;
+        this.deepseekApiKey = defaultDeepseekApiKey;
+        this.deepseekModel = defaultDeepseekModel;
+        System.out.println("Using default AI Config from application.yml, model: " + this.deepseekModel);
+    }
+
+    /**
+     * 刷新 AI 配置
+     * 用于配置更新后立即生效
+     */
+    public void refreshAiConfig() {
+        loadAiConfig();
     }
 
     /**
@@ -464,12 +563,33 @@ public class SysAiController {
             return emitter;
         }
 
-        new Thread(() -> {
+        java.lang.Thread thread = new java.lang.Thread(() -> {
             long startTime = System.currentTimeMillis();
             com.swiftboot.admin.context.AiTraceContext.init();
             StringBuilder fullReply = new StringBuilder();
             
             try {
+                // 从 Redis 获取并加载当前 AI 配置 (确保线程内变量一致性)
+                String configJson = stringRedisTemplate.opsForValue().get(AI_CONFIG_KEY);
+                final String currentApiUrl;
+                final String currentApiKey;
+                final String currentModel;
+                final String currentProvider;
+                if (StrUtil.isNotEmpty(configJson)) {
+                    JSONObject config = JSONUtil.parseObj(configJson);
+                    currentApiUrl = config.getStr("apiUrl", defaultDeepseekApiUrl);
+                    currentApiKey = config.getStr("apiKey", defaultDeepseekApiKey);
+                    currentModel = config.getStr("model", defaultDeepseekModel);
+                    currentProvider = config.getStr("provider", "");
+                } else {
+                    currentApiUrl = defaultDeepseekApiUrl;
+                    currentApiKey = defaultDeepseekApiKey;
+                    currentModel = defaultDeepseekModel;
+                    currentProvider = "";
+                }
+                
+                final boolean isAnthropic = "anthropic".equalsIgnoreCase(currentProvider) || currentApiUrl.contains("/anthropic/");
+                
                 // 1. 构建 Agent 模式的 System Prompt
                 String systemPrompt = buildAgentSystemPrompt();
                 
@@ -536,21 +656,18 @@ public class SysAiController {
                 // 4. 注入近期对话历史 (如果判定为相关)
                 if (shouldIncludeHistory) {
                     addRecentHistory(messages, userId);
-                } else {
-                    // 即使不引入历史，也可以考虑引入最后一条 AI 的回复（如果需要连贯性），但在 RAG 场景下，切断通常更安全
-                    // 这里我们选择彻底切断，只保留 System Prompt
                 }
                 
                 // 5. 添加用户消息
                 messages.add(new JSONObject().set("role", "user").set("content", content));
                 
-                // 【新增】：在进入阻塞的工具调用判断前，先给前端发送一个“正在思考”的状态，激活折叠面板
-                // 注意：这里不闭合 <thought> 标签，让后续流式输出无缝衔接
+                // 【修改】：优化流式输出的前置思考过程，如果是简单问题（不需要调用工具），这部分也会很快被实际回答覆盖
                 try {
+                    // 如果是大模型，先发送一个占位，让前端显示思考状态
+                    // 但不要写死复杂的步骤，保持简洁
                     emitter.send(new JSONObject().set("content", 
-                        "<thought>**1. 意图拆解**：正在分析用户问题的核心诉求和关键词...\n\n" +
-                        "**2. 知识关联**：正在定位涉及的核心模块和技术栈...\n\n" +
-                        "**3. 执行策略**：").toString());
+                        "<thought>\n" +
+                        "正在分析您的问题...\n").toString());
                 } catch (Exception ignored) {}
                 
                 // 6. Agent 循环：允许 2 轮工具调用，以应对复杂问题
@@ -560,18 +677,125 @@ public class SysAiController {
                 
                 while (toolCallCount < maxToolCalls) {
                     JSONObject requestBody = new JSONObject();
-                    requestBody.set("model", deepseekModel);
+                    requestBody.set("model", currentModel);
                     requestBody.set("stream", false);
-                    requestBody.set("messages", messages);
-                    requestBody.set("tools", this.agentTools);
-                    requestBody.set("tool_choice", "auto");
                     
-                    System.out.println("[Agent] 发送请求到 LLM，当前工具调用轮次: " + (toolCallCount + 1));
+                    if (isAnthropic) {
+                        // Anthropic 格式转换
+                        requestBody.set("max_tokens", 4096);
+                        JSONArray anthropicMessages = new JSONArray();
+                        String systemContent = "";
+                        for (int i = 0; i < messages.size(); i++) {
+                            JSONObject m = messages.getJSONObject(i);
+                            String role = m.getStr("role");
+                            
+                            if ("system".equals(role)) {
+                                systemContent = m.getStr("content");
+                                continue;
+                            }
+                            
+                            JSONObject am = new JSONObject();
+                            am.set("role", role);
+                            
+                            if ("assistant".equals(role) && m.containsKey("tool_calls")) {
+                                JSONArray contentArray = new JSONArray();
+                                String textContent = m.getStr("content");
+                                if (StrUtil.isNotEmpty(textContent)) {
+                                    contentArray.add(new JSONObject().set("type", "text").set("text", textContent));
+                                }
+                                
+                                JSONArray tcs = m.getJSONArray("tool_calls");
+                                for (int j = 0; j < tcs.size(); j++) {
+                                    JSONObject tc = tcs.getJSONObject(j);
+                                    JSONObject f = tc.getJSONObject("function");
+                                    JSONObject toolUse = new JSONObject();
+                                    toolUse.set("type", "tool_use");
+                                    toolUse.set("id", tc.getStr("id"));
+                                    toolUse.set("name", f.getStr("name"));
+                                    toolUse.set("input", JSONUtil.parseObj(f.getStr("arguments")));
+                                    contentArray.add(toolUse);
+                                }
+                                am.set("content", contentArray);
+                            } else if ("tool".equals(role)) {
+                                // 理论上内部 messages 应该保持 OpenAI 格式，由这里统一转
+                                am.set("role", "user");
+                                JSONArray contentArray = new JSONArray();
+                                JSONObject tr = new JSONObject();
+                                tr.set("type", "tool_result");
+                                tr.set("tool_use_id", m.getStr("tool_call_id"));
+                                tr.set("content", m.getStr("content"));
+                                contentArray.add(tr);
+                                am.set("content", contentArray);
+                            } else {
+                                am.set("content", m.getStr("content"));
+                            }
+                            
+                            // 检查连续角色并合并 (Anthropic 不允许连续同角色)
+                            if (!anthropicMessages.isEmpty()) {
+                                JSONObject lastMsg = anthropicMessages.getJSONObject(anthropicMessages.size() - 1);
+                                if (lastMsg.getStr("role").equals(am.getStr("role"))) {
+                                    // 合并 content
+                                    Object lastContent = lastMsg.get("content");
+                                    Object currentContent = am.get("content");
+                                    
+                                    JSONArray mergedContent = new JSONArray();
+                                    if (lastContent instanceof JSONArray) {
+                                        mergedContent.addAll((JSONArray) lastContent);
+                                    } else {
+                                        mergedContent.add(new JSONObject().set("type", "text").set("text", String.valueOf(lastContent)));
+                                    }
+                                    
+                                    if (currentContent instanceof JSONArray) {
+                                        mergedContent.addAll((JSONArray) currentContent);
+                                    } else {
+                                        mergedContent.add(new JSONObject().set("type", "text").set("text", String.valueOf(currentContent)));
+                                    }
+                                    lastMsg.set("content", mergedContent);
+                                    continue;
+                                }
+                            }
+                            
+                            anthropicMessages.add(am);
+                        }
+                        if (StrUtil.isNotEmpty(systemContent)) {
+                            requestBody.set("system", systemContent);
+                        }
+                        requestBody.set("messages", anthropicMessages);
+                        
+                        // Anthropic 工具格式 (M2.7 Native)
+                        if (this.agentTools != null) {
+                            JSONArray anthropicTools = new JSONArray();
+                            for (int i = 0; i < this.agentTools.size(); i++) {
+                                JSONObject t = this.agentTools.getJSONObject(i);
+                                if ("function".equals(t.getStr("type"))) {
+                                    JSONObject f = t.getJSONObject("function");
+                                    JSONObject at = new JSONObject();
+                                    at.set("name", f.getStr("name"));
+                                    at.set("description", f.getStr("description"));
+                                    at.set("input_schema", f.getJSONObject("parameters"));
+                                    anthropicTools.add(at);
+                                }
+                            }
+                            requestBody.set("tools", anthropicTools);
+                        }
+                    } else {
+                        requestBody.set("messages", messages);
+                        // 如果是大模型为 minimax 且不是 anthropic 模式，暂时不开启 tools
+                        if (!"minimax".equalsIgnoreCase(currentModel) && !currentModel.contains("abab")) {
+                            requestBody.set("tools", this.agentTools);
+                            requestBody.set("tool_choice", "auto");
+                        }
+                    }
                     
-                    HttpResponse response = HttpRequest.post(deepseekApiUrl)
-                            .timeout(90000)
-                            .header("Authorization", "Bearer " + deepseekApiKey)
+                    System.out.println("[Agent] 发送请求到 LLM，当前工具调用轮次: " + (toolCallCount + 1) + " URL: " + currentApiUrl);
+                    
+                    // 设置更长的超时时间 (120s)，有些模型第一次请求或复杂 prompt 会比较慢
+                    HttpResponse response = HttpRequest.post(currentApiUrl)
+                            .timeout(120000)
+                            .header("Authorization", "Bearer " + currentApiKey)
                             .header("Content-Type", "application/json")
+                            // 必须添加 Accept 头，否则可能会报 400 甚至引起连接被服务端异常关闭
+                            .header("Accept", "application/json")
                             .body(requestBody.toString())
                             .execute();
                     
@@ -588,34 +812,83 @@ public class SysAiController {
                         return;
                     }
                     
-                    JSONObject choice = jsonResponse.getJSONArray("choices").getJSONObject(0);
-                    JSONObject assistantMessage = choice.getJSONObject("message");
-                    String finishReason = choice.getStr("finish_reason");
+                    JSONObject assistantMessage;
+                    String finishReason;
+                    
+                    if (isAnthropic) {
+                        // Anthropic 响应转换
+                        if (jsonResponse.containsKey("stop_reason")) {
+                            finishReason = jsonResponse.getStr("stop_reason");
+                        } else {
+                            finishReason = "stop";
+                        }
+                        
+                        JSONArray contentBlocks = jsonResponse.getJSONArray("content");
+                        assistantMessage = new JSONObject();
+                        assistantMessage.set("role", "assistant");
+                        
+                        JSONArray toolCalls = new JSONArray();
+                        if (contentBlocks != null) {
+                            for (int i = 0; i < contentBlocks.size(); i++) {
+                                JSONObject block = contentBlocks.getJSONObject(i);
+                                if ("tool_use".equals(block.getStr("type"))) {
+                                    JSONObject tc = new JSONObject();
+                                    tc.set("id", block.getStr("id"));
+                                    tc.set("type", "function");
+                                    JSONObject fn = new JSONObject();
+                                    fn.set("name", block.getStr("name"));
+                                    fn.set("arguments", JSONUtil.toJsonStr(block.getJSONObject("input")));
+                                    tc.set("function", fn);
+                                    toolCalls.add(tc);
+                                } else if ("text".equals(block.getStr("type"))) {
+                                    assistantMessage.set("content", block.getStr("text"));
+                                }
+                            }
+                        }
+                        
+                        if (!toolCalls.isEmpty()) {
+                            assistantMessage.set("tool_calls", toolCalls);
+                            finishReason = "tool_calls"; // 兼容后续逻辑
+                        }
+                    } else {
+                        JSONArray choices = jsonResponse.getJSONArray("choices");
+                        if (choices != null && !choices.isEmpty()) {
+                            JSONObject choice = choices.getJSONObject(0);
+                            assistantMessage = choice.getJSONObject("message");
+                            finishReason = choice.getStr("finish_reason");
+                        } else {
+                            assistantMessage = new JSONObject();
+                            finishReason = "stop";
+                        }
+                    }
                     
                     // 检查是否需要调用工具
-                    if ("tool_calls".equals(finishReason) && assistantMessage.containsKey("tool_calls")) {
+                    if ("tool_calls".equals(finishReason) || "tool_use".equals(finishReason)) {
                         JSONArray toolCalls = assistantMessage.getJSONArray("tool_calls");
-                        System.out.println("[Agent] LLM 请求调用工具，数量: " + toolCalls.size());
+                        System.out.println("[Agent] LLM 请求调用工具，数量: " + (toolCalls != null ? toolCalls.size() : 0));
                         
                         messages.add(assistantMessage);
                         
-                        JSONObject toolCall = toolCalls.getJSONObject(0);
-                        String toolCallId = toolCall.getStr("id");
-                        JSONObject functionObj = toolCall.getJSONObject("function");
-                        String functionName = functionObj.getStr("name");
-                        String argumentsStr = functionObj.getStr("arguments");
-                        
-                        System.out.println("[Agent] 执行工具: " + functionName + ", 参数: " + argumentsStr);
-                        
-                        String toolResult = executeAgentTool(functionName, argumentsStr, emitter);
-                        
-                        JSONObject toolMessage = new JSONObject();
-                        toolMessage.set("role", "tool");
-                        toolMessage.set("tool_call_id", toolCallId);
-                        toolMessage.set("content", toolResult);
-                        messages.add(toolMessage);
-                        
-                        System.out.println("[Agent] 工具执行完成，结果长度: " + toolResult.length());
+                        if (toolCalls != null && !toolCalls.isEmpty()) {
+                            for (int i = 0; i < toolCalls.size(); i++) {
+                                JSONObject toolCall = toolCalls.getJSONObject(i);
+                                String toolCallId = toolCall.getStr("id");
+                                JSONObject functionObj = toolCall.getJSONObject("function");
+                                String functionName = functionObj.getStr("name");
+                                String argumentsStr = functionObj.getStr("arguments");
+                                
+                                System.out.println("[Agent] 执行工具: " + functionName + ", 参数: " + argumentsStr);
+                                
+                                String toolResult = executeAgentTool(functionName, argumentsStr, emitter);
+                                
+                                JSONObject toolMessage = new JSONObject();
+                                toolMessage.set("role", "tool");
+                                toolMessage.set("tool_call_id", toolCallId);
+                                toolMessage.set("content", toolResult);
+                                messages.add(toolMessage);
+                                System.out.println("[Agent] 工具执行完成，结果长度: " + toolResult.length());
+                            }
+                        }
                         
                         toolCallCount++;
                         
@@ -632,164 +905,253 @@ public class SysAiController {
                     break;
                 }
                 
-                // 添加强化的系统指令，防止模型幻觉
-                messages.add(new JSONObject()
-                    .set("role", "system")
-                    .set("content", "【系统状态通知】工具调用已完成，现在进入回答生成阶段。\n\n" +
-                                    "你已获得足够的代码上下文。请直接用自然语言回答用户问题。\n\n" +
-                                    "【强制约束】\n" +
-                                    "- 你现在没有任何可用工具\n" +
-                                    "- 禁止输出 <function_calls>、<invoke>、<parameter> 等标签\n" +
-                                    "- 禁止输出任何 XML 格式的内容\n" +
-                                    "- 严禁输出任何尝试调用工具的字符串（如 invokename=... 等）\n" +
-                                    "- 严禁输出 <thought> 或 </thought> 标签（系统已自动处理）"));
-            
-            // 【重要】：在生成最终回答前，必须闭合思考标签，否则前端会一直显示加载状态
-            try {
-                emitter.send(new JSONObject().set("content", "\n**4. 最终回复**：已准备好回答。\n</thought>\n").toString());
-            } catch (Exception ignored) {}
-            
-            // 6. 流式输出最终回答
-            // 【重要修改】：完全移除 tools 定义，避免模型在回答中输出工具调用格式
-            // 这是防止幻觉的根本措施
-            JSONObject streamRequest = new JSONObject();
-            streamRequest.set("model", deepseekModel);
-            streamRequest.set("stream", true);
-            streamRequest.set("messages", messages);
-            // 不再携带 tools 定义，彻底切断模型调用工具的可能性
-            // streamRequest.set("tools", this.agentTools);  // 已移除
-            // streamRequest.set("tool_choice", "none");     // 已移除
-            
-            System.out.println("[Agent] 开始生成最终回答 (Stream Mode), 已移除tools定义");
+                // 如果没有调用任何工具，说明模型直接回答了，这时候需要先把占位的 thought 标签闭合掉
+                if (toolCallCount == 0) {
+                    try {
+                        emitter.send(new JSONObject().set("content", "\n</thought>\n\n").toString());
+                    } catch (Exception ignored) {}
+                }
                 
-                try (HttpResponse streamResponse = HttpRequest.post(deepseekApiUrl)
+                // 6. 流式输出最终回答
+                // 【重要修改】：对于 DeepSeek 模型，如果之前强制使用了 tools，流式请求中必须保持 messages 格式一致
+                // 由于我们前面为了避免幻觉去掉了 tools，但部分模型（特别是 DeepSeek）会因为之前的 assistant 消息中带有 tool_calls 而强制要求当前请求也带 tools 或者要求更严格的上下文格式。
+                // 解决策略：在最后一步生成最终回答时，重构 messages 数组，将 tool_calls 和 tool_result 转换为普通的文本上下文，彻底切断模型与 Function Calling 的关联。
+                JSONObject streamRequest = new JSONObject();
+                streamRequest.set("model", currentModel);
+                streamRequest.set("stream", true);
+                
+                JSONArray finalMessages = new JSONArray();
+                String systemContent = "";
+                
+                for (int i = 0; i < messages.size(); i++) {
+                    JSONObject m = messages.getJSONObject(i);
+                    String role = m.getStr("role");
+                    
+                    if ("system".equals(role)) {
+                        systemContent += m.getStr("content") + "\n";
+                        continue;
+                    }
+                    
+                    if (isAnthropic) {
+                        finalMessages.add(m); // Anthropic 已经在前面处理过合并了
+                    } else {
+                        // 针对 DeepSeek/OpenAI 格式：将 tool_calls 和 tool_result 压平为文本
+                        if ("assistant".equals(role) && m.containsKey("tool_calls")) {
+                            // 忽略 assistant 发出的 tool_calls 消息，避免触发严格的校验
+                            continue;
+                        } else if ("tool".equals(role)) {
+                            // 将工具返回的结果转换为普通的 user 消息，作为补充上下文
+                            JSONObject flatMsg = new JSONObject();
+                            flatMsg.set("role", "user");
+                            flatMsg.set("content", "【检索到的参考信息】\n" + m.getStr("content"));
+                            finalMessages.add(flatMsg);
+                        } else {
+                            finalMessages.add(m);
+                        }
+                    }
+                }
+                
+                // 追加最后一条强制约束
+                systemContent += "\n【系统提示】请根据以上提供的参考信息，直接用自然语言回答用户的问题。严禁输出任何 XML 标签、function_calls 或 DSML 格式。";
+                
+                if (isAnthropic) {
+                    streamRequest.set("max_tokens", 4096);
+                    if (StrUtil.isNotEmpty(systemContent)) {
+                        streamRequest.set("system", systemContent);
+                    }
+                    streamRequest.set("messages", finalMessages);
+                } else {
+                    // OpenAI 格式，把 system 放在第一条
+                    JSONArray oaiMessages = new JSONArray();
+                    if (StrUtil.isNotEmpty(systemContent)) {
+                        oaiMessages.add(new JSONObject().set("role", "system").set("content", systemContent));
+                    }
+                    oaiMessages.addAll(finalMessages);
+                    streamRequest.set("messages", oaiMessages);
+                }
+                
+                System.out.println("[Agent] 开始生成最终回答 (Stream Mode), 已重构上下文切断幻觉源");
+                
+                try (HttpResponse streamResponse = HttpRequest.post(currentApiUrl)
                         .timeout(300000) // 延长超时时间到 5分钟，避免长文本生成中断
-                        .header("Authorization", "Bearer " + deepseekApiKey)
+                        .header("Authorization", "Bearer " + currentApiKey)
                         .header("Content-Type", "application/json")
+                        .header("Accept", "text/event-stream")
                         .body(streamRequest.toString())
                         .execute(true)) {
                     
                     if (!streamResponse.isOk()) {
-                        System.err.println("[Agent] AI 服务响应异常: " + streamResponse.getStatus());
-                        emitter.send(new JSONObject().set("content", "AI 服务响应异常: " + streamResponse.getStatus()).toString());
-                        emitter.complete();
-                        return;
-                    }
-                    
-                    try (InputStream inputStream = streamResponse.bodyStream();
-                         BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
-                        String line;
-                        // 【缓冲区机制】：用于累积检测跨chunk的幻觉标签
-                        StringBuilder pendingBuffer = new StringBuilder();
-                        final int BUFFER_THRESHOLD = 100; // 缓冲区阈值，避免无限累积
-                        
-                        while ((line = reader.readLine()) != null) {
-                            if (line.isEmpty() || !line.startsWith("data:")) {
-                                continue;
-                            }
-                            String data = line.substring(5).trim();
-                            if (data.isEmpty() || "[DONE]".equals(data)) {
-                                continue;
-                            }
+                        String fallbackText = completeNonStream(isAnthropic, currentApiUrl, currentApiKey, currentModel, finalMessages, systemContent);
+                        if (StrUtil.isNotEmpty(fallbackText)) {
+                            fullReply.append(fallbackText);
+                            emitter.send(new JSONObject().set("content", fallbackText).toString());
+                        } else {
+                            System.err.println("[Agent] AI 服务响应异常: " + streamResponse.getStatus());
+                            emitter.send(new JSONObject().set("content", "AI 服务响应异常: " + streamResponse.getStatus()).toString());
+                            emitter.complete();
+                            return;
+                        }
+                    } else {
+                        try (InputStream inputStream = streamResponse.bodyStream();
+                             BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+                            String line;
+                            // 【缓冲区机制】：用于累积检测跨chunk的幻觉标签
+                            StringBuilder pendingBuffer = new StringBuilder();
+                            final int BUFFER_THRESHOLD = 100; // 缓冲区阈值，避免无限累积
+                            boolean nativeThinkingStarted = false;
                             
-                            JSONObject json = JSONUtil.parseObj(data);
-                            if (json.containsKey("error")) {
-                                String errorMsg = json.getStr("error");
-                                System.err.println("[Agent] AI 服务返回错误: " + errorMsg);
-                                emitter.send(new JSONObject().set("content", errorMsg).toString());
-                                break;
-                            }
-                            
-                            JSONArray choices = json.getJSONArray("choices");
-                            if (choices != null && !choices.isEmpty()) {
-                                JSONObject delta = choices.getJSONObject(0).getJSONObject("delta");
-                                if (delta != null && delta.containsKey("content")) {
-                                    String chunk = delta.getStr("content");
-                                    if (chunk != null) {
-                                        // 将新chunk加入缓冲区
-                                        pendingBuffer.append(chunk);
-                                        String bufferContent = pendingBuffer.toString();
-                                        
-                                        // 【核心拦截逻辑】：检测缓冲区中的幻觉标签
-                                        // 检测完整的幻觉标签模式（不区分大小写）
-                                        String lowerBuffer = bufferContent.toLowerCase();
-                                        boolean containsHallucination = 
-                                            bufferContent.toUpperCase().contains("DSML") ||
-                                            lowerBuffer.contains("<function_calls>") ||
-                                            lowerBuffer.contains("</function_calls>") ||
-                                            lowerBuffer.contains("<function_calls") ||
-                                            lowerBuffer.contains("<invoke") ||
-                                            lowerBuffer.contains("</invoke>") ||
-                                            lowerBuffer.contains("<parameter") ||
-                                            lowerBuffer.contains("</parameter>") ||
-                                            lowerBuffer.contains("name=\"search_codebase\"") ||
-                                            lowerBuffer.contains("name=\"query\"");
-                                        
-                                        // 检测可能正在形成的标签（部分匹配）
-                                        boolean possibleHallucination = 
-                                            lowerBuffer.contains("<function") ||
-                                            lowerBuffer.contains("<invok") ||
-                                            lowerBuffer.contains("<param") ||
-                                            lowerBuffer.contains("name=\"") ||
-                                            bufferContent.endsWith("<") ||
-                                            bufferContent.endsWith("</") ||
-                                            bufferContent.endsWith("<f") ||
-                                            bufferContent.endsWith("<fu") ||
-                                            bufferContent.endsWith("<fun");
-                                        
-                                        if (containsHallucination) {
-                                            // 检测到完整的幻觉标签，清除整个缓冲区
-                                            System.out.println("[Security] 拦截到幻觉标签，清除缓冲区: " + bufferContent.substring(0, Math.min(50, bufferContent.length())) + "...");
-                                            pendingBuffer.setLength(0);
-                                            continue;
-                                        }
-                                        
-                                        if (possibleHallucination && pendingBuffer.length() < BUFFER_THRESHOLD) {
-                                            // 可能正在形成幻觉标签，继续累积观察
-                                            continue;
-                                        }
-                                        
-                                        // 安全内容，发送给前端
-                                        // 但只发送到最后一个安全断点（避免发送不完整的标签）
-                                        String safeContent = bufferContent;
-                                        int lastSafePoint = safeContent.length();
-                                        
-                                        // 查找最后一个 '<' 的位置，如果它后面没有 '>'，则不发送这部分
-                                        int lastOpenBracket = safeContent.lastIndexOf('<');
-                                        if (lastOpenBracket >= 0 && safeContent.indexOf('>', lastOpenBracket) < 0) {
-                                            lastSafePoint = lastOpenBracket;
-                                        }
-                                        
-                                        if (lastSafePoint > 0) {
-                                            String toSend = safeContent.substring(0, lastSafePoint);
-                                            
-                                            // 【最终过滤】：发送前再次检查并清除任何残留的幻觉标签
-                                            toSend = cleanHallucinationTags(toSend);
-                                            
-                                            if (toSend != null && !toSend.isEmpty()) {
-                                                fullReply.append(toSend);
-                                                emitter.send(new JSONObject().set("content", toSend).toString());
+                            while ((line = reader.readLine()) != null) {
+                                if (line.isEmpty() || !line.startsWith("data:")) {
+                                    continue;
+                                }
+                                String data = line.substring(5).trim();
+                                if (data.isEmpty() || "[DONE]".equals(data)) {
+                                    continue;
+                                }
+                                
+                                JSONObject json = JSONUtil.parseObj(data);
+                                if (json.containsKey("error")) {
+                                    String errorMsg = json.getStr("error");
+                                    System.err.println("[Agent] AI 服务返回错误: " + errorMsg);
+                                    emitter.send(new JSONObject().set("content", errorMsg).toString());
+                                    break;
+                                }
+                                
+                                String chunk = null;
+                                if (isAnthropic) {
+                                    String type = json.getStr("type");
+                                    if ("content_block_delta".equals(type)) {
+                                        JSONObject delta = json.getJSONObject("delta");
+                                        if (delta != null) {
+                                            String deltaType = delta.getStr("type");
+                                            if ("text_delta".equals(deltaType)) {
+                                                String text = delta.getStr("text");
+                                                if (nativeThinkingStarted) {
+                                                    // 当模型从 thinking 切换到 text 时，自动闭合 thought 标签
+                                                    chunk = "\n</thought>\n\n" + text;
+                                                    nativeThinkingStarted = false;
+                                                } else {
+                                                    chunk = text;
+                                                }
+                                            } else if ("thinking_delta".equals(deltaType)) {
+                                                String thinking = delta.getStr("thinking");
+                                                if (StrUtil.isNotEmpty(thinking)) {
+                                                    if (!nativeThinkingStarted) {
+                                                        // 首次遇到 thinking，如果不发送前缀，直接累加
+                                                        chunk = thinking;
+                                                        nativeThinkingStarted = true;
+                                                    } else {
+                                                        chunk = thinking;
+                                                    }
+                                                }
                                             }
-                                            
-                                            // 保留未发送的部分到缓冲区
-                                            pendingBuffer.setLength(0);
-                                            if (lastSafePoint < safeContent.length()) {
-                                                pendingBuffer.append(safeContent.substring(lastSafePoint));
-                                            }
+                                        }
+                                    } else if ("message_delta".equals(type)) {
+                                        // 处理 message_delta
+                                    } else if ("message_stop".equals(type)) {
+                                        // 确保结束时如果还有未闭合的 thought 标签则闭合
+                                        if (nativeThinkingStarted) {
+                                            chunk = "\n</thought>\n\n";
+                                            nativeThinkingStarted = false;
+                                        }
+                                    }
+                                } else {
+                                    JSONArray choices = json.getJSONArray("choices");
+                                    if (choices != null && !choices.isEmpty()) {
+                                        JSONObject delta = choices.getJSONObject(0).getJSONObject("delta");
+                                        if (delta != null && delta.containsKey("content")) {
+                                            chunk = delta.getStr("content");
+                                        }
+                                    }
+                                }
+                                
+                                if (chunk != null) {
+                                    // 将新chunk加入缓冲区
+                                    pendingBuffer.append(chunk);
+                                    String bufferContent = pendingBuffer.toString();
+                                    
+                                    // 【核心拦截逻辑】：检测缓冲区中的幻觉标签
+                                    // 检测完整的幻觉标签模式（不区分大小写）
+                                    String lowerBuffer = bufferContent.toLowerCase();
+                                    boolean containsHallucination = 
+                                        bufferContent.toUpperCase().contains("DSML") ||
+                                        lowerBuffer.contains("<function_calls>") ||
+                                        lowerBuffer.contains("</function_calls>") ||
+                                        lowerBuffer.contains("<function_calls") ||
+                                        lowerBuffer.contains("<invoke") ||
+                                        lowerBuffer.contains("</invoke>") ||
+                                        lowerBuffer.contains("<parameter") ||
+                                        lowerBuffer.contains("</parameter>") ||
+                                        lowerBuffer.contains("name=\"search_codebase\"") ||
+                                        lowerBuffer.contains("name=\"query\"");
+                                    
+                                    // 检测可能正在形成的标签（部分匹配）
+                                    boolean possibleHallucination = 
+                                        lowerBuffer.contains("<function") ||
+                                        lowerBuffer.contains("<invok") ||
+                                        lowerBuffer.contains("<param") ||
+                                        lowerBuffer.contains("name=\"") ||
+                                        bufferContent.endsWith("<") ||
+                                        bufferContent.endsWith("</") ||
+                                        bufferContent.endsWith("<f") ||
+                                        bufferContent.endsWith("<fu") ||
+                                        bufferContent.endsWith("<fun");
+                                    
+                                    if (containsHallucination) {
+                                        // 检测到完整的幻觉标签，清除整个缓冲区
+                                        System.out.println("[Security] 拦截到幻觉标签，清除缓冲区: " + bufferContent.substring(0, Math.min(50, bufferContent.length())) + "...");
+                                        pendingBuffer.setLength(0);
+                                        continue;
+                                    }
+                                    
+                                    if (possibleHallucination && pendingBuffer.length() < BUFFER_THRESHOLD) {
+                                        // 可能正在形成幻觉标签，继续累积观察
+                                        continue;
+                                    }
+                                    
+                                    // 安全内容，发送给前端
+                                    // 但只发送到最后一个安全断点（避免发送不完整的标签）
+                                    String safeContent = bufferContent;
+                                    int lastSafePoint = safeContent.length();
+                                    
+                                    // 查找最后一个 '<' 的位置，如果它后面没有 '>'，则不发送这部分
+                                    int lastOpenBracket = safeContent.lastIndexOf('<');
+                                    if (lastOpenBracket >= 0 && safeContent.indexOf('>', lastOpenBracket) < 0) {
+                                        lastSafePoint = lastOpenBracket;
+                                    }
+                                    
+                                    if (lastSafePoint > 0) {
+                                        String toSend = safeContent.substring(0, lastSafePoint);
+                                        
+                                        // 【最终过滤】：发送前再次检查并清除任何残留的幻觉标签
+                                        toSend = cleanHallucinationTags(toSend);
+                                        
+                                        if (toSend != null && !toSend.isEmpty()) {
+                                            fullReply.append(toSend);
+                                            emitter.send(new JSONObject().set("content", toSend).toString());
+                                        }
+                                        
+                                        // 保留未发送的部分到缓冲区
+                                        pendingBuffer.setLength(0);
+                                        if (lastSafePoint < safeContent.length()) {
+                                            pendingBuffer.append(safeContent.substring(lastSafePoint));
                                         }
                                     }
                                 }
                             }
-                        }
-                        
-                        // 处理缓冲区中剩余的内容
-                        if (pendingBuffer.length() > 0) {
-                            String remaining = pendingBuffer.toString();
-                            // 清洗残留内容
-                            remaining = cleanHallucinationTags(remaining);
-                            if (remaining != null && !remaining.isEmpty()) {
-                                fullReply.append(remaining);
-                                emitter.send(new JSONObject().set("content", remaining).toString());
+                            
+                            // 处理缓冲区中剩余的内容
+                            if (pendingBuffer.length() > 0) {
+                                String remaining = pendingBuffer.toString();
+                                if (nativeThinkingStarted) {
+                                    remaining += "\n</thought>";
+                                }
+                                // 清洗残留内容
+                                remaining = cleanHallucinationTags(remaining);
+                                if (remaining != null && !remaining.isEmpty()) {
+                                    fullReply.append(remaining);
+                                    emitter.send(new JSONObject().set("content", remaining).toString());
+                                }
                             }
                         }
                     }
@@ -797,7 +1159,6 @@ public class SysAiController {
                 
                 // 7. 存储对话历史
                 if (fullReply.length() > 0) {
-                    // 解析 thought
                     String fullContent = fullReply.toString();
                     String thought = null;
                     String finalAnswer = fullContent;
@@ -840,7 +1201,7 @@ public class SysAiController {
                         .trim();
                     
                     // 保存会话记录
-                    SysAiSession savedSession = saveConversationHistory(userId, content, finalAnswer, startTime, userIp);
+                    SysAiSession savedSession = saveConversationHistory(userId, content, finalAnswer, startTime, userIp, currentModel);
                     System.out.println("[Agent] 流式响应正常结束，回复长度: " + fullReply.length());
                     
                     // 保存 Trace
@@ -866,7 +1227,6 @@ public class SysAiController {
                         }
                     } catch (Exception e) {
                         System.err.println("[Trace] Failed to save trace: " + e.getMessage());
-                        e.printStackTrace();
                     } finally {
                         // 清理上下文
                         com.swiftboot.admin.context.AiTraceContext.clear();
@@ -889,38 +1249,104 @@ public class SysAiController {
                 }
                 emitter.complete();
             }
-        }).start();
+        });
+        thread.start();
         
         return emitter;
     }
     
+    private String completeNonStream(boolean isAnthropic, String apiUrl, String apiKey, String model, JSONArray messages, String systemPrompt) {
+        try {
+            JSONObject requestBody = new JSONObject();
+            requestBody.set("model", model);
+            requestBody.set("stream", false);
+            
+            if (isAnthropic) {
+                requestBody.set("max_tokens", 4096);
+                if (StrUtil.isNotEmpty(systemPrompt)) {
+                    requestBody.set("system", systemPrompt);
+                }
+                requestBody.set("messages", messages);
+            } else {
+                JSONArray oaiMessages = new JSONArray();
+                if (StrUtil.isNotEmpty(systemPrompt)) {
+                    oaiMessages.add(new JSONObject().set("role", "system").set("content", systemPrompt));
+                }
+                oaiMessages.addAll(messages);
+                requestBody.set("messages", oaiMessages);
+            }
+            
+            HttpResponse response = HttpRequest.post(apiUrl)
+                    .timeout(120000)
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
+                    .body(requestBody.toString())
+                    .execute();
+                    
+            if (response.isOk()) {
+                JSONObject jsonResponse = JSONUtil.parseObj(response.body());
+                if (isAnthropic) {
+                    JSONArray contentBlocks = jsonResponse.getJSONArray("content");
+                    if (contentBlocks != null && !contentBlocks.isEmpty()) {
+                        for (int i = 0; i < contentBlocks.size(); i++) {
+                            JSONObject block = contentBlocks.getJSONObject(i);
+                            if ("text".equals(block.getStr("type"))) {
+                                return block.getStr("text");
+                            }
+                        }
+                    }
+                } else {
+                    JSONArray choices = jsonResponse.getJSONArray("choices");
+                    if (choices != null && !choices.isEmpty()) {
+                        JSONObject choice = choices.getJSONObject(0);
+                        return choice.getJSONObject("message").getStr("content");
+                    }
+                }
+            } else {
+                System.err.println("[Agent] Non-stream fallback failed: " + response.getStatus() + " " + response.body());
+            }
+        } catch (Exception e) {
+            System.err.println("[Agent] Non-stream fallback exception: " + e.getMessage());
+        }
+        return null;
+    }
+
     /**
      * 构建 Agent 模式的 System Prompt
      */
     private String buildAgentSystemPrompt() {
         StringBuilder prompt = new StringBuilder();
-        prompt.append("你是 SwiftBoot 的智能助手，一个专业的全栈开发专家。\n\n");
-        
-        if (StrUtil.isNotEmpty(skillsContext)) {
-            prompt.append(skillsContext).append("\n\n");
-        }
         
         if (StrUtil.isNotEmpty(agentRuleContext)) {
-            prompt.append(agentRuleContext);
+            prompt.append(agentRuleContext).append("\n\n");
         } else {
             // Fallback规则（如果agent_rule.md加载失败）
+            prompt.append("【身份设定】\n");
+            prompt.append("你是一个名为“SwiftBoot 智能助手”的全栈开发专家。你的核心职责是帮助开发者理解、维护和扩展当前基于 Spring Boot 3 和 Vue 3 的 SwiftBoot 框架项目。\n");
+            prompt.append("你需要时刻保持你的专家身份，语气专业、直接、乐于助人。当用户问你是谁时，请明确回答你是“SwiftBoot 智能助手”。\n\n");
+            
+            prompt.append("【工作流程与原则】\n");
+            prompt.append("1. **直接回答优先**：如果用户的问题是通用技术问题、闲聊、或你不需要查阅代码就能准确回答的问题，请**直接回答**，不需要调用任何工具。\n");
+            prompt.append("2. **代码检索**：只有当用户明确询问项目的具体实现、业务逻辑、接口定义或排查项目内的 Bug 时，才调用 `search_codebase` 工具查阅代码库。\n\n");
+            
             prompt.append("## 核心约束\n");
-            prompt.append("1. **深度思考（Mandatory）**：必须在 `<thought>` 标签内进行详细推理，包含：意图拆解、知识关联、执行策略、逻辑推演、回答规划\n");
+            prompt.append("1. **深度思考**：在生成回答前，可以先梳理思路，但不要在最终输出中暴露繁琐的格式。\n");
             prompt.append("2. **严禁幻觉标签**：禁止输出 DSML、function_calls、invoke 等任何非标准Markdown的标签\n");
-            prompt.append("3. **业务化表达**：将代码逻辑翻译为业务规则，避免直接粘贴代码\n");
+            prompt.append("3. **业务化表达**：将代码逻辑翻译为业务规则，避免大段直接粘贴代码\n");
             prompt.append("4. **直接回答**：不要说\"根据代码上下文\"等铺垫语\n");
         }
         
-        // 额外强化：防止DSML幻觉
+        if (StrUtil.isNotEmpty(skillsContext)) {
+            prompt.append("【项目背景知识】\n");
+            prompt.append(skillsContext).append("\n\n");
+        }
+        
+        // 额外强化：防止DSML幻觉 (这部分非常核心，保留硬编码以防规则文件丢失导致灾难性输出)
         prompt.append("\n\n## 严禁输出的内容\n");
         prompt.append("- ❌ 任何包含 `DSML`、`｜DSML｜`、`<|DSML|` 的标签\n");
         prompt.append("- ❌ 任何 `<function_calls>`、`<invoke>`、`<parameter>` 等XML格式\n");
-        prompt.append("- ❌ 任何尝试调用工具的语法（你只能在系统允许时通过标准接口调用工具）\n");
+        prompt.append("- ❌ 任何尝试调用工具的特殊语法（如果需要查代码，请使用标准的 function call 机制，否则直接输出纯文本回答）\n");
         prompt.append("- ✅ 只输出标准的Markdown格式内容\n");
         
         return prompt.toString();
@@ -935,43 +1361,33 @@ public class SysAiController {
             return content;
         }
         
-        // 使用正则表达式清除各种幻觉标签
+        // 使用更精确的正则表达式清除各种幻觉标签
         String cleaned = content
-            // 清除 function_calls 标签（完整闭合，带或不带尖括号）
-            .replaceAll("(?i)<?function_calls>?[\\s\\S]*?</?function_calls>?", "")
-            // 清除 invoke 标签（完整闭合，带或不带尖括号）
-            .replaceAll("(?i)<?invoke[^>]*>?[\\s\\S]*?</?invoke>?", "")
-            // 清除 parameter 标签（完整闭合，带或不带尖括号）
-            .replaceAll("(?i)<?parameter[^>]*>?[\\s\\S]*?</?parameter>?", "")
-            // 清除 DSML 标签（全角和半角竖线）
-            .replaceAll("(?i)<?[｜|]?DSML[｜|]?[\\s\\S]*?[｜|]?/?DSML[｜|]?>?", "")
-            // 清除未闭合的 function_calls 开始标签及其后续内容
-            .replaceAll("(?i)<?function_calls>?[\\s\\S]*$", "")
-            // 清除未闭合的 invoke 标签
-            .replaceAll("(?i)<?invoke[^>]*>?[\\s\\S]*$", "")
-            // 清除残留的单独标签（带或不带尖括号）
-            .replaceAll("(?i)</?function_calls>?", "")
-            .replaceAll("(?i)</?invoke>?", "")
-            .replaceAll("(?i)</?parameter>?", "")
-            // 清除残留的无尖括号标签文本
-            .replaceAll("(?i)function_calls>", "")
-            .replaceAll("(?i)invokename=", "")
-            .replaceAll("(?i)parametername=", "")
-            .replaceAll("(?i)string=\"true\">", "")
-            // 清除残留的引号和属性（针对不带尖括号的残留）
-            .replaceAll("(?i)name=\"[^\"]*\">?", "")
-            .replaceAll("(?i)string=\"[^\"]*\">?", "")
-            .replaceAll("(?i)>", ""); // 清除残留的单独大于号
+            // 1. 清除 XML 风格的工具调用标签 (OpenAI 常见幻觉)
+            .replaceAll("(?i)<function_calls>[\\s\\S]*?</function_calls>", "")
+            .replaceAll("(?i)<invoke[^>]*>[\\s\\S]*?</invoke>", "")
+            .replaceAll("(?i)<parameter[^>]*>[\\s\\S]*?</parameter>", "")
+            
+            // 2. 清除 DSML 风格标签 (DeepSeek/MiniMax 常见幻觉)
+            .replaceAll("(?i)<[｜|]?DSML[｜|]?[\\s\\S]*?[｜|]?/?DSML[｜|]?>", "")
+            
+            // 3. 清除未闭合的标签开头 (流式输出中常见的残留)
+            .replaceAll("(?i)<function_calls[\\s\\S]*$", "")
+            .replaceAll("(?i)<invoke[\\s\\S]*$", "")
+            .replaceAll("(?i)<parameter[\\s\\S]*$", "")
+            .replaceAll("(?i)<[｜|]?DSML[\\s\\S]*$", "")
+            
+            // 4. 清除残留的属性文本 (针对标签尖括号被截断的情况)
+            .replaceAll("(?i)invokename=\"[^\"]*\"", "")
+            .replaceAll("(?i)parametername=\"[^\"]*\"", "")
+            .replaceAll("(?i)string=\"(?:true|false)\"", "");
         
-        // 如果清洗后内容基本上是空的或只剩下乱码，返回空字符串
-        // 修改：放宽清洗条件，只移除纯符号或明显无意义的内容，避免误杀正常短回复（如 "s" 是 "search" 的一部分被截断）
-        // 原来的正则 ^[\\s<>=/\"]*$ 太过严格
-        String trimmed = cleaned.trim();
-        if (trimmed.isEmpty()) {
+        // 如果清洗后内容只剩下空白，则返回空
+        if (cleaned.trim().isEmpty() && !content.trim().isEmpty()) {
             return "";
         }
         
-        return trimmed;
+        return cleaned;
     }
     
     /**
@@ -1026,22 +1442,18 @@ public class SysAiController {
                     JSONObject meta = item.getJSONObject("metadata");
                     String codeContent = item.getStr("content");
                     String source = meta != null ? meta.getStr("source") : "unknown";
-                    String name = meta != null ? meta.getStr("name") : "";
-                    String type = meta != null ? meta.getStr("type") : "";
                     
-                    if (StrUtil.isNotBlank(source) && !fileNames.contains(source)) {
-                        fileNames.add(source);
+                    // 仅提取文件名，不包含路径
+                    String fileName = source;
+                    if (source.contains("/") || source.contains("\\")) {
+                        fileName = new File(source).getName();
                     }
                     
-                    sb.append("### 代码片段 ").append(i + 1);
-                    if (StrUtil.isNotBlank(name)) {
-                        sb.append(" - ").append(name);
+                    if (StrUtil.isNotBlank(fileName) && !fileNames.contains(fileName)) {
+                        fileNames.add(fileName);
                     }
-                    if (StrUtil.isNotBlank(type)) {
-                        sb.append(" (").append(type).append(")");
-                    }
-                    sb.append("\n");
-                    sb.append("**来源**: ").append(source).append("\n");
+                    
+                    sb.append("### 引用 ").append(i + 1).append(": ").append(fileName).append("\n");
                     sb.append("```java\n").append(codeContent).append("\n```\n\n");
                 }
                 
@@ -1049,7 +1461,7 @@ public class SysAiController {
                 if (emitter != null) {
                     try {
                         String fileList = fileNames.stream().collect(Collectors.joining(", "));
-                        emitter.send(new JSONObject().set("content", "\n**2. 执行策略**：代码检索完成。引用文件：[" + fileList + "]\n").toString());
+                        emitter.send(new JSONObject().set("content", "\n**知识检索**：已查阅相关文件：[" + fileList + "]\n").toString());
                     } catch (Exception ignored) {}
                 }
                 
@@ -1127,7 +1539,7 @@ public class SysAiController {
      * 保存对话历史（Redis + 向量库 + MySQL）
      * @return 保存的 SysAiSession 对象
      */
-    private SysAiSession saveConversationHistory(Long userId, String question, String answer, long startTime, String userIp) {
+    private SysAiSession saveConversationHistory(Long userId, String question, String answer, long startTime, String userIp, String modelName) {
         long now = System.currentTimeMillis();
         
         // 1. 存入 Redis 短期历史
@@ -1170,7 +1582,7 @@ public class SysAiController {
             aiSession.setUserId(userId);
             aiSession.setQuestion(question);
             aiSession.setAnswer(answer);
-            aiSession.setModel(deepseekModel);
+            aiSession.setModel(modelName);
             int tokens = (question.length() + answer.length()) * 2;
             aiSession.setTokens(tokens);
             aiSession.setDuration((int) duration);

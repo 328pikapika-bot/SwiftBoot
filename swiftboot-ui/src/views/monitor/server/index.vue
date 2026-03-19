@@ -399,7 +399,7 @@ const initMiniChart = (dom: HTMLElement, color: string, data: number[]) => {
       }
     }]
   }
-  chart.setOption(option)
+  chart.setOption(option as any)
   return chart
 }
 
@@ -513,7 +513,7 @@ const initMainChart = () => {
         }
       ]
     }
-    mainChart.setOption(option)
+    mainChart.setOption(option as any)
   }
 }
 

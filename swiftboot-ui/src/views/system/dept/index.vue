@@ -59,7 +59,7 @@
           <el-tree-select
             v-model="formData.parentId"
             :data="deptOptions"
-            :props="{ label: 'deptName', children: 'children', value: 'id' }"
+            :props="({ label: 'deptName', children: 'children', value: 'id' } as any)"
             placeholder="选择上级部门"
             check-strictly
             clearable

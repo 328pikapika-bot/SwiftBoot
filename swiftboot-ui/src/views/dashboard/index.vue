@@ -107,7 +107,7 @@
           <span class="text-xs font-medium text-purple-500">RAG Ready</span>
         </div>
         <div class="text-sm text-slate-500 dark:text-slate-400">智能索引</div>
-        <div class="text-2xl font-bold mt-1 text-slate-900 dark:text-white">{{ aiStats.knowledge_count ? aiStats.knowledge_count.toLocaleString() : '...' }} 件</div>
+        <div class="text-2xl font-bold mt-1 text-slate-900 dark:text-white">{{ aiIndexDisplay }}</div>
       </div>
 
       <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
@@ -270,15 +270,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
+import { ref, onMounted, onUnmounted, onActivated, onDeactivated, computed } from 'vue'
 import { getServer } from '@/api/monitor/server'
 import { list as getOperLogs } from '@/api/monitor/operlog'
 import request, { ApiResponse } from '@/utils/request'
 
+interface AiStats {
+  knowledge_count: number
+  memory_count: number
+  total_chunks?: number
+  engine_up?: boolean
+}
+
 const serverStats = ref<any>({})
 const responseTime = ref(0)
 const uptime = ref('')
-const aiStats = ref({ knowledge_count: 0, memory_count: 0 })
+const aiStats = ref<AiStats>({ knowledge_count: 0, memory_count: 0, total_chunks: 0 })
 const operLogs = ref<any[]>([])
 const vectorLogs = ref<any[]>([])
 const isLogsLoading = ref(false)
@@ -294,6 +301,14 @@ const quickLinks = [
   { title: '代码生成', path: '/tool/gen', icon: 'terminal' },
   { title: '监控大屏', path: '/monitor/server', icon: 'monitoring' }
 ]
+
+const aiIndexDisplay = computed(() => {
+  if (aiStats.value.engine_up === false) return '未启动'
+  const total = aiStats.value.total_chunks
+  const knowledge = aiStats.value.knowledge_count
+  const count = typeof total === 'number' ? total : typeof knowledge === 'number' ? knowledge : 0
+  return `${count.toLocaleString()} 件`
+})
 
 const loadOperLogs = async () => {
   isLogsLoading.value = true
