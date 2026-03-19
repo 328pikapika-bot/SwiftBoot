@@ -121,51 +121,50 @@ public class SysAiController {
     private JSONArray buildAgentTools() {
         JSONArray tools = new JSONArray();
         
-        // Tool 1: search_codebase - 代码库检索
-        JSONObject searchCodebaseTool = new JSONObject();
-        searchCodebaseTool.set("type", "function");
+        // Tool 1: fetch_source_impl - 源码级代码检索
+        JSONObject fetchSourceTool = new JSONObject();
+        fetchSourceTool.set("type", "function");
+        JSONObject f1 = new JSONObject();
+        f1.set("name", "fetch_source_impl");
+        f1.set("description", "【必须调用】当用户询问具体代码实现、报错排查、数据库表结构、接口定义或类方法时调用。专门搜索项目源码库。");
+        JSONObject p1 = new JSONObject();
+        p1.set("type", "object");
+        JSONObject prop1 = new JSONObject();
+        JSONObject q1 = new JSONObject();
+        q1.set("type", "string");
+        q1.set("description", "代码搜索关键词，建议包含具体的类名、方法名、表名或异常信息");
+        prop1.set("query", q1);
+        p1.set("properties", prop1);
+        p1.set("required", new JSONArray().put("query"));
+        f1.set("parameters", p1);
+        fetchSourceTool.set("function", f1);
+        tools.add(fetchSourceTool);
         
-        JSONObject function = new JSONObject();
-        function.set("name", "search_codebase");
-        
-        String desc = "搜索项目代码库，获取相关代码片段和业务逻辑。";
-        if (StrUtil.isNotEmpty(toolSearchRuleContext)) {
-            desc += "\n" + toolSearchRuleContext;
-        } else {
-            // Fallback description if file not found
-            desc += "【必须调用此工具的场景】：\n" +
-                    "1. 用户询问【业务逻辑】【功能流程】【实现原理】时；\n" +
-                    "2. 用户询问【接口定义】【API】【Controller/Service/Mapper】时；\n" +
-                    "3. 用户询问【数据库表结构】【字段含义】【实体类】时；\n" +
-                    "4. 用户询问【报错排查】【异常处理】【Bug 分析】时；\n" +
-                    "5. 用户提出任何宏观问题（如'xx是怎么实现的'、'xx的查询逻辑'）需要代码佐证时。\n" +
-                    "【不需要调用的场景】：纯闲聊、通用编程知识、与本项目无关的问题。";
-        }
-        
-        function.set("description", desc);
-        
-        // 定义参数
-        JSONObject parameters = new JSONObject();
-        parameters.set("type", "object");
-        
-        JSONObject properties = new JSONObject();
-        JSONObject queryParam = new JSONObject();
-        queryParam.set("type", "string");
-        queryParam.set("description", "搜索关键词或问题描述，建议包含具体的类名、方法名、功能模块名等");
-        properties.set("query", queryParam);
-        
-        parameters.set("properties", properties);
-        parameters.set("required", new JSONArray().put("query"));
-        
-        function.set("parameters", parameters);
-        searchCodebaseTool.set("function", function);
-        tools.add(searchCodebaseTool);
+        // Tool 2: fetch_business_doc - 业务文档检索
+        JSONObject fetchDocTool = new JSONObject();
+        fetchDocTool.set("type", "function");
+        JSONObject f2 = new JSONObject();
+        f2.set("name", "fetch_business_doc");
+        f2.set("description", "【必须调用】当用户询问系统整体架构、业务流程怎么走、如何使用某个功能、或者需要开发指南时调用。专门搜索项目文档库。");
+        JSONObject p2 = new JSONObject();
+        p2.set("type", "object");
+        JSONObject prop2 = new JSONObject();
+        JSONObject q2 = new JSONObject();
+        q2.set("type", "string");
+        q2.set("description", "文档搜索关键词，建议包含业务模块名称、架构概念或功能说明词");
+        prop2.set("query", q2);
+        p2.set("properties", prop2);
+        p2.set("required", new JSONArray().put("query"));
+        f2.set("parameters", p2);
+        fetchDocTool.set("function", f2);
+        tools.add(fetchDocTool);
         
         return tools;
     }
     
     // Python 检索引擎地址 (RAG 服务)
     private static final String RAG_API_URL = "http://localhost:8001/retrieve";
+    private static final String INTENT_DETECT_URL = "http://localhost:8001/intent/detect";
     private static final String MEMORY_QUERY_URL = "http://localhost:8001/memory/query";
     private static final String MEMORY_ADD_URL = "http://localhost:8001/memory/add";
     private static final String MEMORY_DELETE_URL = "http://localhost:8001/memory/delete";
@@ -358,8 +357,12 @@ public class SysAiController {
         }
     }
 
+    // 安全拦截规则配置对象
+    private JSONObject securityRulesConfig = null;
+    private String defaultSecurityInterceptionMessage = "⚠️ 检测到潜在的安全风险或违规指令，请求已被拦截。我是 SwiftBoot 智能助手，请询问与项目相关的问题。";
+
     /**
-     * 初始化 Skills 技能库和 Agent 规则
+     * 初始化 Skills 技能库、Agent 规则和安全规则
      */
     @PostConstruct
     public void initSkills() {
@@ -390,6 +393,18 @@ public class SysAiController {
             if (searchRuleFile.exists()) {
                 toolSearchRuleContext = FileUtil.readString(searchRuleFile, StandardCharsets.UTF_8);
                 System.out.println("Tool Search Rule loaded from external: " + searchRuleFile.getAbsolutePath());
+            }
+            
+            // 加载安全拦截规则 V2
+            File securityRuleFile = new File(ruleDir, "security_rules.json");
+            if (securityRuleFile.exists()) {
+                try {
+                    String securityJsonStr = FileUtil.readString(securityRuleFile, StandardCharsets.UTF_8);
+                    securityRulesConfig = JSONUtil.parseObj(securityJsonStr);
+                    System.out.println("Security Rules V2 loaded from external: " + securityRuleFile.getAbsolutePath());
+                } catch (Exception e) {
+                    System.err.println("Failed to parse security_rules.json: " + e.getMessage());
+                }
             }
             
             // 初始化工具定义 (需在规则加载后执行)
@@ -534,16 +549,75 @@ public class SysAiController {
     }
 
     /**
+     * 前置安全拦截 (轻量级 V2)
+     * 支持多层防御、正则匹配与关键词匹配，返回拦截信息。
+     * 若未被拦截，返回 null。
+     */
+    private String checkSecurityRisk(String content) {
+        if (StrUtil.isBlank(content)) {
+            return null;
+        }
+        
+        if (securityRulesConfig == null) {
+            // 降级：简单的默认拦截
+            String lowerContent = content.toLowerCase();
+            String[] defaultKeywords = {"忽略之前", "系统提示词", "jailbreak"};
+            for (String kw : defaultKeywords) {
+                if (lowerContent.contains(kw)) {
+                    return defaultSecurityInterceptionMessage;
+                }
+            }
+            return null;
+        }
+
+        String lowerContent = content.toLowerCase();
+        JSONArray defenseLayers = securityRulesConfig.getJSONArray("defense_layers");
+        if (defenseLayers != null) {
+            for (int i = 0; i < defenseLayers.size(); i++) {
+                JSONObject layer = defenseLayers.getJSONObject(i);
+                String matchMode = layer.getStr("match_mode", "keyword");
+                JSONArray rules = layer.getJSONArray("rules");
+                
+                if (rules != null) {
+                    for (int j = 0; j < rules.size(); j++) {
+                        String rule = rules.getStr(j);
+                        if ("regex".equalsIgnoreCase(matchMode)) {
+                            try {
+                                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(rule, java.util.regex.Pattern.CASE_INSENSITIVE);
+                                if (pattern.matcher(content).find()) {
+                                    System.out.println("[Security] Blocked by regex layer: " + layer.getStr("name") + ", rule: " + rule);
+                                    return layer.getStr("interception_message", securityRulesConfig.getStr("global_interception_message", defaultSecurityInterceptionMessage));
+                                }
+                            } catch (Exception e) {
+                                // 正则编译失败忽略
+                            }
+                        } else {
+                            if (lowerContent.contains(rule.toLowerCase())) {
+                                System.out.println("[Security] Blocked by keyword layer: " + layer.getStr("name") + ", rule: " + rule);
+                                return layer.getStr("interception_message", securityRulesConfig.getStr("global_interception_message", defaultSecurityInterceptionMessage));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    /**
      * 发送对话 (流式 Stream) - Agent 模式
      * 使用 SSE (Server-Sent Events) 技术，实现打字机效果。
      * 
-     * 【Agent 工具调用流程】：
-     * 1. 上下文判断（相似度计算）：决定是否引入历史对话
-     * 2. 用户提问 → LLM（携带 tools 定义）
-     * 3. LLM 决定是否调用工具 → 如需调用，返回 tool_calls
-     * 4. 执行工具（调用 RAG 检索引擎）→ 获取代码上下文
-     * 5. 将工具结果发送给 LLM → LLM 生成最终回答
-     * 6. 流式输出给用户
+     * 【升级版 Agent 工具调用流程】：
+     * 1. 安全前置校验
+     * 2. 上下文判断（相似度计算）：决定是否引入历史对话
+     * 3. 意图预检 (调用 Python /intent/detect)
+     * 4. 根据意图动态调整 Tool Choice
+     * 5. 执行工具（调用 RAG 混合重排引擎）→ 获取代码/文档上下文
+     * 6. 将工具结果发送给 LLM → LLM 生成最终回答
+     * 7. 异步生成发散提问与记忆权重更新
+     * 8. 流式输出给用户
      */
     @Operation(summary = "发送对话(流式)")
     @Log(title = "智能会话", businessType = BusinessType.OTHER)
@@ -559,6 +633,16 @@ public class SysAiController {
                 emitter.send(new JSONObject().set("content", "内容不能为空").toString());
             } catch (Exception ignored) {
             }
+            emitter.complete();
+            return emitter;
+        }
+        
+        // 1. 安全前置校验 (防注入 V2)
+        String interceptionMsg = checkSecurityRisk(content);
+        if (interceptionMsg != null) {
+            try {
+                emitter.send(new JSONObject().set("content", interceptionMsg).toString());
+            } catch (Exception ignored) {}
             emitter.complete();
             return emitter;
         }
@@ -597,7 +681,45 @@ public class SysAiController {
                 JSONArray messages = new JSONArray();
                 messages.add(new JSONObject().set("role", "system").set("content", systemPrompt));
                 
-                // 3. 智能上下文判断 (基于向量相似度)
+                // 3. 意图预检 (Intent Detection) & 工具路由动态调整
+                String detectedIntent = "CHAT";
+                double intentConfidence = 0.5;
+                try {
+                    JSONObject intentReq = new JSONObject();
+                    intentReq.set("text", content);
+                    String intentRes = HttpRequest.post(INTENT_DETECT_URL)
+                            .timeout(500)
+                            .body(intentReq.toString())
+                            .execute()
+                            .body();
+                    if (StrUtil.isNotEmpty(intentRes)) {
+                        JSONObject intentJson = JSONUtil.parseObj(intentRes);
+                        detectedIntent = intentJson.getStr("intent", "CHAT");
+                        intentConfidence = intentJson.getDouble("confidence", 0.5);
+                    }
+                } catch (Exception e) {
+                    System.err.println("Intent detection failed: " + e.getMessage());
+                }
+                
+                // 根据意图动态调整 Tool Choice
+                JSONObject dynamicToolChoice = new JSONObject();
+                dynamicToolChoice.set("type", "auto"); // 默认交给大模型自己选
+                
+                if (intentConfidence > 0.8) {
+                    if ("CODE".equals(detectedIntent)) {
+                        JSONObject f = new JSONObject();
+                        f.set("name", "fetch_source_impl");
+                        dynamicToolChoice.set("type", "function");
+                        dynamicToolChoice.set("function", f);
+                    } else if ("DOC".equals(detectedIntent)) {
+                        JSONObject f = new JSONObject();
+                        f.set("name", "fetch_business_doc");
+                        dynamicToolChoice.set("type", "function");
+                        dynamicToolChoice.set("function", f);
+                    }
+                }
+                
+                // 4. 智能上下文判断 (基于向量相似度)
                 // 获取 Redis 中最近的一条用户提问
                 String redisKey = HISTORY_KEY_PREFIX + userId;
                 String lastUserMsgJson = null;
@@ -653,12 +775,65 @@ public class SysAiController {
                     shouldIncludeHistory = false;
                 }
                 
-                // 4. 注入近期对话历史 (如果判定为相关)
+                // 5. 注入近期对话历史 (如果判定为相关)
                 if (shouldIncludeHistory) {
                     addRecentHistory(messages, userId);
                 }
                 
-                // 5. 添加用户消息
+                // 5.1 注入高权重长期记忆 (主链路召回)
+                try {
+                    JSONObject memReq = new JSONObject();
+                    memReq.set("user_id", String.valueOf(userId));
+                    memReq.set("question", content);
+                    memReq.set("n_results", 3);
+                    memReq.set("max_distance", 1.0); // 距离阈值过滤
+                    
+                    String memRes = HttpRequest.post(MEMORY_QUERY_URL)
+                            .timeout(1000)
+                            .body(memReq.toString())
+                            .execute()
+                            .body();
+                            
+                    if (StrUtil.isNotEmpty(memRes)) {
+                        JSONObject memJson = JSONUtil.parseObj(memRes);
+                        JSONArray memResults = memJson.getJSONArray("results");
+                        if (memResults != null && !memResults.isEmpty()) {
+                            StringBuilder memContext = new StringBuilder("【系统提示：以下是您过去的高频重要记忆，请参考】\n");
+                            JSONArray hitMemoryIds = new JSONArray();
+                            for (int i = 0; i < memResults.size(); i++) {
+                                JSONObject item = memResults.getJSONObject(i);
+                                String text = item.getStr("content");
+                                JSONObject meta = item.getJSONObject("metadata");
+                                String role = meta != null ? meta.getStr("role", "unknown") : "unknown";
+                                
+                                memContext.append("[").append(role).append("]: ").append(text).append("\n");
+                                
+                                // 提取记忆 ID 用于后续更新权重
+                                if (item.containsKey("id")) {
+                                    hitMemoryIds.add(item.getStr("id"));
+                                } else if (item.containsKey("metadata") && item.getJSONObject("metadata").containsKey("id")) {
+                                    hitMemoryIds.add(item.getJSONObject("metadata").getStr("id"));
+                                }
+                            }
+                            // 作为一个 user 消息注入到上下文最前面，或者系统消息后
+                            JSONObject memMsg = new JSONObject();
+                            memMsg.set("role", "user");
+                            memMsg.set("content", memContext.toString());
+                            messages.add(1, memMsg); // 插入到 system prompt 之后
+                            System.out.println("[Agent] 已注入长期记忆上下文，数量: " + memResults.size());
+                            
+                            // 将命中的记忆 ID 存入 ThreadLocal 上下文，供后续更新权重和发散提问使用
+                            com.swiftboot.admin.context.AiTraceContext.AiTraceData traceData = com.swiftboot.admin.context.AiTraceContext.get();
+                            if (traceData != null && !hitMemoryIds.isEmpty()) {
+                                traceData.setContextInfo(hitMemoryIds.toString()); // 借用 contextInfo 字段传递记忆 ID
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("Memory recall failed: " + e.getMessage());
+                }
+                
+                // 6. 添加用户消息
                 messages.add(new JSONObject().set("role", "user").set("content", content));
                 
                 // 【修改】：优化流式输出的前置思考过程，如果是简单问题（不需要调用工具），这部分也会很快被实际回答覆盖
@@ -670,15 +845,21 @@ public class SysAiController {
                         "正在分析您的问题...\n").toString());
                 } catch (Exception ignored) {}
                 
-                // 6. Agent 循环：允许 2 轮工具调用，以应对复杂问题
+                // 7. Agent 循环：允许 2 轮工具调用，以应对复杂问题
                 int maxToolCalls = 2;
                 int toolCallCount = 0;
                 boolean toolCallLimitReached = false;
+                boolean hasMemoryHit = false; // 记录本次对话是否命中了历史记忆
                 
                 while (toolCallCount < maxToolCalls) {
                     JSONObject requestBody = new JSONObject();
                     requestBody.set("model", currentModel);
                     requestBody.set("stream", false);
+                    
+                    // 仅在第一轮应用动态工具选择
+                    if (toolCallCount == 0 && !"auto".equals(dynamicToolChoice.getStr("type"))) {
+                         requestBody.set("tool_choice", dynamicToolChoice);
+                    }
                     
                     if (isAnthropic) {
                         // Anthropic 格式转换
@@ -1157,84 +1338,149 @@ public class SysAiController {
                     }
                 }
                 
-                // 7. 存储对话历史
-                if (fullReply.length() > 0) {
-                    String fullContent = fullReply.toString();
-                    String thought = null;
-                    String finalAnswer = fullContent;
-                    
-                    // 尝试提取 <thought> 标签内容
-                    try {
-                        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("<thought>(.*?)</thought>", java.util.regex.Pattern.DOTALL | java.util.regex.Pattern.CASE_INSENSITIVE);
-                        java.util.regex.Matcher matcher = pattern.matcher(fullContent);
-                        if (matcher.find()) {
-                            thought = matcher.group(1).trim();
-                            // 记录到 TraceContext
-                            com.swiftboot.admin.context.AiTraceContext.addThought(thought);
-                            
-                            // 移除 thought 标签及其内容，只保留最终回答存入会话记录
-                            finalAnswer = matcher.replaceAll("").trim();
-                        }
-                    } catch (Exception e) {
-                        System.err.println("Failed to parse thought tag: " + e.getMessage());
-                    }
-                    
-                    // 【二次清洗】：防止幻觉标签泄漏到数据库
-                    // 多重正则清洗策略：
-                    // 1. DSML标签（全角半角、各种变体）
-                    // 2. XML工具调用格式
-                    // 3. 其他可能的幻觉内容
-                    finalAnswer = finalAnswer
-                        // 清除DSML标签（全角竖线）
-                        .replaceAll("<[｜]DSML[｜][\\s\\S]*?([｜]/DSML[｜]>|</[｜]DSML[｜]function_calls>)", "")
-                        // 清除DSML标签（半角竖线）
-                        .replaceAll("<[|]DSML[|][\\s\\S]*?([|]/DSML[|]>|</[|]DSML[|]function_calls>)", "")
-                        // 清除标准function_calls格式
-                        .replaceAll("<function_calls>[\\s\\S]*?</function_calls>", "")
-                        // 清除invoke标签
-                        .replaceAll("<invoke[\\s\\S]*?</invoke>", "")
-                        // 清除parameter标签
-                        .replaceAll("<parameter[\\s\\S]*?</parameter>", "")
-                        // 清除未闭合的标签开头
-                        .replaceAll("<function_calls>.*$", "")
-                        .replaceAll("<invoke.*$", "")
-                        .trim();
-                    
-                    // 保存会话记录
-                    SysAiSession savedSession = saveConversationHistory(userId, content, finalAnswer, startTime, userIp, currentModel);
-                    System.out.println("[Agent] 流式响应正常结束，回复长度: " + fullReply.length());
-                    
-                    // 保存 Trace
-                    try {
-                        com.swiftboot.admin.context.AiTraceContext.AiTraceData traceData = com.swiftboot.admin.context.AiTraceContext.get();
-                        if (traceData != null) {
-                            com.swiftboot.admin.domain.SysAiTrace trace = new com.swiftboot.admin.domain.SysAiTrace();
-                            trace.setTraceId(traceData.getTraceId());
-                            if (savedSession != null && savedSession.getId() != null) {
-                                trace.setSessionId(savedSession.getId());
+                    // 7. 存储对话历史
+                    if (fullReply.length() > 0) {
+                        String fullContent = fullReply.toString();
+                        String thought = null;
+                        String finalAnswer = fullContent;
+                        
+                        // 尝试提取 <thought> 标签内容
+                        try {
+                            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("<thought>(.*?)</thought>", java.util.regex.Pattern.DOTALL | java.util.regex.Pattern.CASE_INSENSITIVE);
+                            java.util.regex.Matcher matcher = pattern.matcher(fullContent);
+                            if (matcher.find()) {
+                                thought = matcher.group(1).trim();
+                                // 记录到 TraceContext
+                                com.swiftboot.admin.context.AiTraceContext.addThought(thought);
+                                
+                                // 移除 thought 标签及其内容，只保留最终回答存入会话记录
+                                finalAnswer = matcher.replaceAll("").trim();
                             }
-                            
-                            trace.setThoughtPath(JSONUtil.toJsonStr(traceData.getThoughtPath()));
-                            trace.setToolCalls(JSONUtil.toJsonStr(traceData.getToolCalls()));
-                            trace.setContextInfo(traceData.getContextInfo());
-                            trace.setFinalAnswer(finalAnswer);
-                            trace.setDuration(System.currentTimeMillis() - traceData.getStartTime());
-                            trace.setCreateTime(java.time.LocalDateTime.now());
-                            trace.setUpdateTime(java.time.LocalDateTime.now());
-                            
-                            aiTraceService.save(trace);
-                            System.out.println("[Trace] Saved trace record: " + trace.getTraceId());
+                        } catch (Exception e) {
+                            System.err.println("Failed to parse thought tag: " + e.getMessage());
                         }
-                    } catch (Exception e) {
-                        System.err.println("[Trace] Failed to save trace: " + e.getMessage());
-                    } finally {
-                        // 清理上下文
-                        com.swiftboot.admin.context.AiTraceContext.clear();
+                        
+                        // 【二次清洗】：防止幻觉标签泄漏到数据库
+                        finalAnswer = finalAnswer
+                            .replaceAll("<[｜]DSML[｜][\\s\\S]*?([｜]/DSML[｜]>|</[｜]DSML[｜]function_calls>)", "")
+                            .replaceAll("<[|]DSML[|][\\s\\S]*?([|]/DSML[|]>|</[|]DSML[|]function_calls>)", "")
+                            .replaceAll("<function_calls>[\\s\\S]*?</function_calls>", "")
+                            .replaceAll("<invoke[\\s\\S]*?</invoke>", "")
+                            .replaceAll("<parameter[\\s\\S]*?</parameter>", "")
+                            .replaceAll("<function_calls>.*$", "")
+                            .replaceAll("<invoke.*$", "")
+                            .trim();
+                        
+                        // 保存会话记录
+                        SysAiSession savedSession = saveConversationHistory(userId, content, finalAnswer, startTime, userIp, currentModel);
+                        System.out.println("[Agent] 流式响应正常结束，回复长度: " + fullReply.length());
+                        
+                        // 【异步机制】：处理记忆权重更新与发散提问
+                        com.swiftboot.admin.context.AiTraceContext.AiTraceData traceData = com.swiftboot.admin.context.AiTraceContext.get();
+                        if (traceData != null && StrUtil.isNotEmpty(traceData.getContextInfo()) && traceData.getContextInfo().startsWith("[")) {
+                            final String hitMemoryIdsStr = traceData.getContextInfo();
+                            final String asyncModel = currentModel;
+                            final String asyncApiUrl = currentApiUrl;
+                            final String asyncApiKey = currentApiKey;
+                            final boolean asyncIsAnthropic = isAnthropic;
+                            final String asyncFinalAnswer = finalAnswer;
+                            
+                            java.lang.Thread asyncThread = new java.lang.Thread(() -> {
+                                try {
+                                    JSONArray hitMemoryIds = JSONUtil.parseArray(hitMemoryIdsStr);
+                                    if (!hitMemoryIds.isEmpty()) {
+                                        System.out.println("[Agent Async] 开始更新记忆权重，命中的记忆数: " + hitMemoryIds.size());
+                                        // 1. 更新记忆权重 (调用 Python 引擎)
+                                        // 这里为了简化，假设 Python 引擎提供了一个 /memory/update_citation 接口
+                                        // 实际可以复用 add 或专门开一个更新权重的接口
+                                        // TODO: Python 端需增加 update_citation 接口支持
+                                        
+                                        // 2. 生成发散提问
+                                        System.out.println("[Agent Async] 开始生成发散引导提问...");
+                                        JSONObject asyncReq = new JSONObject();
+                                        asyncReq.set("model", asyncModel);
+                                        asyncReq.set("stream", false);
+                                        
+                                        String prompt = "你是一个智能助手。基于以下刚刚向用户提供的回答，请生成2个发散性的探索问题，引导用户进一步提问。只返回问题文本，每行一个，不要任何序号或前缀。\n\n回答内容：\n" + asyncFinalAnswer;
+                                        
+                                        JSONArray asyncMessages = new JSONArray();
+                                        if (asyncIsAnthropic) {
+                                            asyncReq.set("max_tokens", 500);
+                                            asyncReq.set("system", prompt);
+                                            asyncMessages.add(new JSONObject().set("role", "user").set("content", "生成发散问题"));
+                                            asyncReq.set("messages", asyncMessages);
+                                        } else {
+                                            asyncMessages.add(new JSONObject().set("role", "system").set("content", prompt));
+                                            asyncMessages.add(new JSONObject().set("role", "user").set("content", "生成发散问题"));
+                                            asyncReq.set("messages", asyncMessages);
+                                        }
+                                        
+                                        HttpResponse asyncRes = HttpRequest.post(asyncApiUrl)
+                                                .timeout(10000)
+                                                .header("Authorization", "Bearer " + asyncApiKey)
+                                                .header("Content-Type", "application/json")
+                                                .body(asyncReq.toString())
+                                                .execute();
+                                                
+                                        if (asyncRes.isOk()) {
+                                            JSONObject asyncJson = JSONUtil.parseObj(asyncRes.body());
+                                            String suggestions = "";
+                                            if (asyncIsAnthropic) {
+                                                JSONArray blocks = asyncJson.getJSONArray("content");
+                                                if (blocks != null && !blocks.isEmpty()) {
+                                                    suggestions = blocks.getJSONObject(0).getStr("text");
+                                                }
+                                            } else {
+                                                JSONArray choices = asyncJson.getJSONArray("choices");
+                                                if (choices != null && !choices.isEmpty()) {
+                                                    suggestions = choices.getJSONObject(0).getJSONObject("message").getStr("content");
+                                                }
+                                            }
+                                            
+                                            if (StrUtil.isNotEmpty(suggestions)) {
+                                                System.out.println("[Agent Async] 成功生成发散问题:\n" + suggestions);
+                                                // 可以通过 SSE 或 WebSocket 推送给前端，或者存入数据库供下次拉取
+                                                // 演示中直接打印日志
+                                            }
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    System.err.println("[Agent Async] 异步任务执行失败: " + e.getMessage());
+                                }
+                            });
+                            asyncThread.start();
+                        }
+                        
+                        // 保存 Trace
+                        try {
+                            if (traceData != null) {
+                                com.swiftboot.admin.domain.SysAiTrace trace = new com.swiftboot.admin.domain.SysAiTrace();
+                                trace.setTraceId(traceData.getTraceId());
+                                if (savedSession != null && savedSession.getId() != null) {
+                                    trace.setSessionId(savedSession.getId());
+                                }
+                                
+                                trace.setThoughtPath(JSONUtil.toJsonStr(traceData.getThoughtPath()));
+                                trace.setToolCalls(JSONUtil.toJsonStr(traceData.getToolCalls()));
+                                trace.setContextInfo(traceData.getContextInfo());
+                                trace.setFinalAnswer(finalAnswer);
+                                trace.setDuration(System.currentTimeMillis() - traceData.getStartTime());
+                                trace.setCreateTime(java.time.LocalDateTime.now());
+                                trace.setUpdateTime(java.time.LocalDateTime.now());
+                                
+                                aiTraceService.save(trace);
+                                System.out.println("[Trace] Saved trace record: " + trace.getTraceId());
+                            }
+                        } catch (Exception e) {
+                            System.err.println("[Trace] Failed to save trace: " + e.getMessage());
+                        } finally {
+                            // 清理上下文
+                            com.swiftboot.admin.context.AiTraceContext.clear();
+                        }
+                        
+                    } else {
+                        System.out.println("[Agent] 流式响应结束，但回复为空");
                     }
-                    
-                } else {
-                    System.out.println("[Agent] 流式响应结束，但回复为空");
-                }
                 
                 emitter.send("[DONE]");
                 emitter.complete();
@@ -1395,7 +1641,7 @@ public class SysAiController {
      */
     private String executeAgentTool(String functionName, String argumentsJson, SseEmitter emitter) {
         try {
-            if ("search_codebase".equals(functionName)) {
+            if ("fetch_source_impl".equals(functionName) || "fetch_business_doc".equals(functionName)) {
                 JSONObject args = JSONUtil.parseObj(argumentsJson);
                 String query = args.getStr("query");
                 
@@ -1408,7 +1654,7 @@ public class SysAiController {
                 ragRequest.set("n_results", 10);
                 
                 long ragStartTime = System.currentTimeMillis();
-                System.out.println("[Agent Tool] 调用 RAG 引擎: " + RAG_API_URL + ", query=" + query);
+                System.out.println("[Agent Tool] 调用 RAG 引擎: " + RAG_API_URL + ", tool=" + functionName + ", query=" + query);
                 
                 String ragResponse = HttpRequest.post(RAG_API_URL)
                         .timeout(60000) // 延长超时时间到 60秒，应对大量数据检索
@@ -1420,25 +1666,51 @@ public class SysAiController {
                 System.out.println("[Agent Tool] RAG 响应耗时: " + ragDuration + "ms");
                 
                 // 记录 Trace 工具调用
-                com.swiftboot.admin.context.AiTraceContext.addToolCall("search_codebase", args, "RAG_SEARCH_RESULT", ragDuration);
+                com.swiftboot.admin.context.AiTraceContext.addToolCall(functionName, args, "RAG_SEARCH_RESULT", ragDuration);
                 
                 JSONObject ragJson = JSONUtil.parseObj(ragResponse);
                 JSONArray results = ragJson.getJSONArray("results");
                 
                 if (results == null || results.isEmpty()) {
-                    return "未找到与 \"" + query + "\" 相关的代码。请尝试使用更具体的类名、方法名或功能描述。";
+                    return "未找到与 \"" + query + "\" 相关的代码或文档。请尝试使用更具体的类名、方法名或功能描述。";
+                }
+                
+                // 在后端进行二次过滤 (Intent Filtering)
+                JSONArray filteredResults = new JSONArray();
+                for (int i = 0; i < results.size(); i++) {
+                    JSONObject item = results.getJSONObject(i);
+                    JSONObject meta = item.getJSONObject("metadata");
+                    if (meta != null) {
+                        String type = meta.getStr("type", "");
+                        if ("fetch_source_impl".equals(functionName)) {
+                            // 排除 markdown 文档，只保留代码切片
+                            if (!"markdown_section".equals(type)) {
+                                filteredResults.add(item);
+                            }
+                        } else if ("fetch_business_doc".equals(functionName)) {
+                            // 增加 markdown 的权重，或者直接只保留 markdown 和数据库 Schema
+                            if ("markdown_section".equals(type) || "database_schema".equals(type)) {
+                                filteredResults.add(item);
+                            }
+                        }
+                    }
+                }
+                
+                // 如果过滤后为空，回退使用原始结果
+                if (filteredResults.isEmpty()) {
+                    filteredResults = results;
                 }
                 
                 // 记录 Trace 上下文
-                com.swiftboot.admin.context.AiTraceContext.setContextInfo(results.toString());
+                com.swiftboot.admin.context.AiTraceContext.setContextInfo(filteredResults.toString());
                 
                 StringBuilder sb = new StringBuilder();
-                sb.append("找到 ").append(results.size()).append(" 个相关代码片段：\n\n");
+                sb.append("找到 ").append(filteredResults.size()).append(" 个相关参考片段：\n\n");
                 
                 // 提取引用的文件名
                 List<String> fileNames = new ArrayList<>();
-                for (int i = 0; i < results.size(); i++) {
-                    JSONObject item = results.getJSONObject(i);
+                for (int i = 0; i < filteredResults.size(); i++) {
+                    JSONObject item = filteredResults.getJSONObject(i);
                     JSONObject meta = item.getJSONObject("metadata");
                     String codeContent = item.getStr("content");
                     String source = meta != null ? meta.getStr("source") : "unknown";
@@ -1461,11 +1733,12 @@ public class SysAiController {
                 if (emitter != null) {
                     try {
                         String fileList = fileNames.stream().collect(Collectors.joining(", "));
-                        emitter.send(new JSONObject().set("content", "\n**知识检索**：已查阅相关文件：[" + fileList + "]\n").toString());
+                        String toolType = "fetch_source_impl".equals(functionName) ? "源码检索" : "文档检索";
+                        emitter.send(new JSONObject().set("content", "\n**" + toolType + "**：已查阅相关文件：[" + fileList + "]\n").toString());
                     } catch (Exception ignored) {}
                 }
                 
-                sb.append("\n【重要提示】检索已完成。以上代码已包含回答问题所需的全部核心逻辑。请现在停止调用工具，直接利用这些代码片段生成最终回答。");
+                sb.append("\n【重要提示】检索已完成。以上代码或文档已包含回答问题所需的全部核心逻辑。请现在停止调用工具，直接利用这些参考片段生成最终回答。");
                 
                 return sb.toString();
             }

@@ -10,8 +10,31 @@ import jieba
 import time
 import signal
 import sys
+import json
+import re
 from threading import Thread, Lock
 from knowledge_ingest import JavaParser, PythonParser, VueComponentParser, MarkdownParser, TypeScriptParser
+
+# ==========================================
+# 意图路由规则加载
+# ==========================================
+INTENT_RULE_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "../ai_rule/intent_routing.json"))
+intent_rules = {}
+
+def load_intent_rules():
+    global intent_rules
+    if os.path.exists(INTENT_RULE_FILE):
+        try:
+            with open(INTENT_RULE_FILE, 'r', encoding='utf-8') as f:
+                intent_rules = json.load(f)
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 成功加载意图路由规则: {INTENT_RULE_FILE}")
+        except Exception as e:
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 加载意图路由规则失败: {e}")
+            intent_rules = {}
+    else:
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 意图路由规则文件不存在: {INTENT_RULE_FILE}")
+
+load_intent_rules()
 
 # 加载自定义词典
 # 实际项目中，这里应该从 vector_store 中动态读取项目中的类名、方法名作为词典
@@ -437,6 +460,99 @@ async def rebuild_index(request: IndexRebuildRequest):
 def rebuild_index_status():
     with index_rebuild_lock:
         return dict(index_rebuild_state)
+
+class IntentRequest(BaseModel):
+    text: str
+
+@app.post("/intent/detect")
+async def detect_intent(request: IntentRequest):
+    """
+    意图预检接口 (V2)
+    结合 Semantic(向量语义) 与 Regex(正则/关键词) 的双重识别。
+    分类：CODE (代码实现/报错), DOC (业务逻辑/文档), MEMORY (历史追问), CHAT (闲聊)
+    """
+    try:
+        text = request.text.lower()
+        if not text:
+            return {"intent": "CHAT", "confidence": 1.0}
+            
+        intent = intent_rules.get("settings", {}).get("default_intent", "CHAT")
+        confidence = 0.5
+        
+        # 1. 尝试向量相似度匹配 (Semantic Routing)
+        if intent_rules and "intents" in intent_rules:
+            best_intent = None
+            best_score = 0.0
+            
+            for intent_cfg in intent_rules["intents"]:
+                desc = intent_cfg.get("description", "")
+                if desc:
+                    try:
+                        score = db.calculate_similarity(text, desc)
+                        if score > best_score:
+                            best_score = score
+                            best_intent = intent_cfg.get("id")
+                    except Exception as e:
+                        pass
+                        
+            threshold = intent_rules.get("settings", {}).get("similarity_threshold", 0.70)
+            if best_intent and best_score >= threshold:
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 意图预检(向量命中): text='{text[:20]}...', intent={best_intent}, score={best_score:.2f}")
+                return {"intent": best_intent, "confidence": min(best_score + 0.2, 0.99)}
+                
+        # 2. 降级：正则与关键词混合匹配策略 (Regex & Keyword Fallback)
+        if intent_rules and intent_rules.get("settings", {}).get("fallback_to_rules", True) and "intents" in intent_rules:
+            scores = {}
+            for intent_cfg in intent_rules["intents"]:
+                iid = intent_cfg.get("id")
+                match_rules = intent_cfg.get("match_rules", {})
+                priority = intent_cfg.get("priority", 50)
+                
+                score = 0.0
+                
+                # 2.1 正向正则匹配 (强命中，高分)
+                pos_regexes = match_rules.get("positive_regex", [])
+                for regex in pos_regexes:
+                    try:
+                        if re.search(regex, text):
+                            score += 5.0  # 正则命中一次加 5 分
+                    except re.error:
+                        pass
+                        
+                # 2.2 正向关键词匹配 (弱命中，低分)
+                pos_keywords = match_rules.get("positive_keywords", [])
+                for kw in pos_keywords:
+                    if kw.lower() in text:
+                        score += 1.0
+                        
+                # 2.3 负向关键词惩罚
+                neg_keywords = match_rules.get("negative_keywords", [])
+                for kw in neg_keywords:
+                    if kw.lower() in text:
+                        score -= 3.0
+                        
+                if score > 0:
+                    scores[iid] = {
+                        "score": score,
+                        "priority": priority
+                    }
+                
+            # 找到得分最高（或同分下优先级最高）的意图
+            if scores:
+                # 排序规则：先按分数降序，再按优先级降序
+                sorted_intents = sorted(scores.items(), key=lambda x: (x[1]["score"], x[1]["priority"]), reverse=True)
+                top_intent_id = sorted_intents[0][0]
+                top_score = sorted_intents[0][1]["score"]
+                
+                intent = top_intent_id
+                confidence = min(0.6 + top_score * 0.05, 0.95)
+                
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 意图预检(规则降级): text='{text[:20]}...', intent={intent}, conf={confidence:.2f}")
+        return {"intent": intent, "confidence": confidence}
+        
+    except Exception as e:
+        print(f"Intent detection failed: {e}")
+        return {"intent": "CHAT", "confidence": 0.5}
 
 class TopicRequest(BaseModel):
     text: str

@@ -1,0 +1,72 @@
+{
+  "description": "SwiftBoot 智能问答企业级安全防御矩阵",
+  "version": "2.0",
+  "global_interception_message": "🛡️ 【安全拦截】检测到您的提问触碰了系统安全基线。SwiftBoot 智能助手仅处理与项目开发、架构设计、代码维护相关的问题。请调整您的提问方式。",
+  "defense_layers": [
+    {
+      "layer_id": "PROMPT_INJECTION",
+      "name": "指令越权与注入防御",
+      "level": "CRITICAL",
+      "match_mode": "regex",
+      "rules": [
+        "忽略(之前|前面|上述)的?(所有)?(指令|要求|系统提示词|设定|规则)",
+        "ignore\\s+(all\\s+)?(previous|above)\\s+(instructions|prompts|rules)",
+        "forget\\s+(all\\s+)?(previous|above)\\s+(instructions|prompts|rules)",
+        "你到底是谁",
+        "你现在的身份是",
+        "(系统提示词|system prompt)是(什么|什么内容)",
+        "输出(你|系统)的(初始|隐藏|内置)?(设定|规则|指令)"
+      ],
+      "interception_message": "🛡️ 【指令越权】抱歉，我无法执行修改核心设定或泄露系统提示词的指令。我是 SwiftBoot 智能助手，请专注于项目代码层面的提问。"
+    },
+    {
+      "layer_id": "JAILBREAK_ATTACK",
+      "name": "越狱攻击防御",
+      "level": "CRITICAL",
+      "match_mode": "regex",
+      "rules": [
+        "(现在|假设|要求)(你|我们)(扮演|进入|开启)\\s*(奶奶|DAN|开发者模式|上帝模式|无限制模式|不受限制)",
+        "绕过(系统|安全)?限制",
+        "jailbreak",
+        "do anything now",
+        "从现在开始你不需要遵守"
+      ],
+      "interception_message": "🛡️ 【越狱拦截】抱歉，我不能进入该模式或绕过安全限制。"
+    },
+    {
+      "layer_id": "MALICIOUS_CODE",
+      "name": "恶意代码与破坏性操作",
+      "level": "HIGH",
+      "match_mode": "keyword",
+      "rules": [
+        "rm -rf",
+        "drop database",
+        "drop table",
+        "truncate table",
+        "格式化数据库",
+        "删库",
+        "删表",
+        "勒索软件",
+        "挖矿木马",
+        "提权漏洞",
+        "DDOS代码",
+        "系统后门"
+      ],
+      "interception_message": "⚠️ 【高危操作】您的提问涉及高危系统命令或破坏性操作，出于安全保护，该请求已被拦截。"
+    },
+    {
+      "layer_id": "OFF_TOPIC_POLITICS",
+      "name": "政治与敏感话题防御",
+      "level": "MEDIUM",
+      "match_mode": "keyword",
+      "rules": [
+        "谈谈政治",
+        "国家领导人",
+        "涉政",
+        "暴力恐怖",
+        "黄赌毒"
+      ],
+      "interception_message": "⚠️ 【偏离主题】SwiftBoot 智能助手专注于全栈技术解答，不提供关于政治、时事或其他敏感话题的讨论。"
+    }
+  ]
+}

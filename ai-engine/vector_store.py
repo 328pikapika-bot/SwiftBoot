@@ -440,12 +440,119 @@ class ChatMemoryStore:
             
         print(f"[{self._now()}][记忆检索] 用户: {user_id} | 问题: {query_text[:30]}...")
         
+        # 为了进行重排，先召回更多候选项 (比如 20 条)
+        recall_limit = max(n_results * 3, 20)
         results = self.collection.query(
             query_texts=[query_text],
-            n_results=n_results,
+            n_results=recall_limit,
             where=where
         )
+        
+        # 内存重排 (Re-ranking): 结合向量距离、引用次数和时间衰减
+        if results and results.get('documents') and len(results['documents'][0]) > 0:
+            current_time = time.time()
+            reranked_items = []
+            
+            docs = results['documents'][0]
+            metas = results['metadatas'][0]
+            dists = results['distances'][0] if 'distances' in results else [0] * len(docs)
+            ids = results['ids'][0]
+            
+            for i in range(len(docs)):
+                meta = metas[i]
+                dist = dists[i]
+                
+                # 1. 基础分: 距离越小分越高。假设距离在 0~2 之间，转换为 0~1 的相似度得分
+                base_score = max(0, 1.0 - (dist / 2.0))
+                
+                # 2. 引用权重加成
+                citation_count = meta.get('citation_count', 0)
+                # 引用次数带来的加成，设置上限避免马太效应过强
+                citation_bonus = min(citation_count * 0.05, 0.3)
+                
+                # 3. 时间衰减惩罚
+                timestamp = meta.get('timestamp', 0)
+                if timestamp > 1000000000000: # 如果是毫秒
+                    timestamp = timestamp / 1000.0
+                
+                # 计算距离当前的天数
+                days_ago = max(0, (current_time - timestamp) / (24 * 3600))
+                # 时间衰减：每天衰减 0.01，最多衰减 0.2
+                time_penalty = min(days_ago * 0.01, 0.2)
+                
+                # 4. 最终得分
+                final_score = base_score + citation_bonus - time_penalty
+                
+                reranked_items.append({
+                    'id': ids[i],
+                    'document': docs[i],
+                    'metadata': meta,
+                    'distance': dist,
+                    'final_score': final_score,
+                    'base_score': base_score,
+                    'citation_bonus': citation_bonus,
+                    'time_penalty': time_penalty
+                })
+            
+            # 按最终得分降序排序
+            reranked_items.sort(key=lambda x: x['final_score'], reverse=True)
+            
+            # 截取 Top N
+            top_items = reranked_items[:n_results]
+            
+            # 打印重排日志，方便调试
+            print(f"[{self._now()}][记忆重排] Top 3 详情:")
+            for i, item in enumerate(top_items[:3]):
+                print(f"  {i+1}. 得分:{item['final_score']:.2f} (基础:{item['base_score']:.2f}, 引用:+{item['citation_bonus']:.2f}, 衰减:-{item['time_penalty']:.2f}) | 内容: {item['document'][:20]}...")
+            
+            # 重新组装为 ChromaDB 的返回格式
+            return {
+                'ids': [[item['id'] for item in top_items]],
+                'documents': [[item['document'] for item in top_items]],
+                'metadatas': [[item['metadata'] for item in top_items]],
+                'distances': [[item['distance'] for item in top_items]]
+            }
+            
         return results
+
+    def update_citation(self, user_id: str, memory_id: str = None, text_content: str = None):
+        """
+        更新记忆的引用次数
+        """
+        try:
+            where = {"user_id": str(user_id)}
+            
+            # 查找目标记忆
+            existing = None
+            if memory_id:
+                existing = self.collection.get(ids=[memory_id])
+            elif text_content:
+                # 如果没有 ID，尝试通过内容模糊查找
+                res = self.collection.query(query_texts=[text_content], n_results=1, where=where)
+                if res and res['ids'] and len(res['ids'][0]) > 0:
+                    target_id = res['ids'][0][0]
+                    existing = self.collection.get(ids=[target_id])
+                    
+            if existing and existing['ids']:
+                target_id = existing['ids'][0]
+                meta = existing['metadatas'][0]
+                doc = existing['documents'][0]
+                
+                # 更新 citation_count
+                current_count = meta.get('citation_count', 0)
+                meta['citation_count'] = current_count + 1
+                
+                # 执行更新
+                self.collection.update(
+                    ids=[target_id],
+                    metadatas=[meta],
+                    documents=[doc]
+                )
+                print(f"[{self._now()}][记忆更新] 引用次数 +1 (当前:{meta['citation_count']}): {doc[:20]}...")
+                return True
+        except Exception as e:
+            print(f"[{self._now()}][记忆更新] 失败: {e}")
+        return False
 
     def count(self):
         """
