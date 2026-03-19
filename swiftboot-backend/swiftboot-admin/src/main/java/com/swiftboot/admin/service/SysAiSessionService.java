@@ -56,4 +56,10 @@ public interface SysAiSessionService extends IService<SysAiSession> {
      * 获取知识库与记忆详情统计数据 (左脑硬知识 + 右脑软记忆)
      */
     Map<String, Object> getKnowledgeStats();
+
+    /**
+     * 查询历史提问列表
+     * 普通用户仅能查看自己的问题，管理员可按需查看所有人的问题
+     */
+    List<Map<String, Object>> getQuestionHistory(Long currentUserId, boolean allUsers);
 }

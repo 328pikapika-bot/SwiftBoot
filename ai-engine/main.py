@@ -77,6 +77,8 @@ memory_db = ChatMemoryStore()
 class QueryRequest(BaseModel):
     question: str
     n_results: int = 3
+    intent: str | None = None
+    tool_name: str | None = None
 
 class MemoryMessage(BaseModel):
     content: str
@@ -96,6 +98,11 @@ class MemoryQueryRequest(BaseModel):
     n_results: int = 6
     max_distance: float | None = None
 
+class MemoryCitationUpdateRequest(BaseModel):
+    user_id: str
+    memory_ids: list[str] | None = None
+    text_content: str | None = None
+
 @app.post("/retrieve")
 async def retrieve_knowledge(request: QueryRequest):
     """
@@ -108,7 +115,12 @@ async def retrieve_knowledge(request: QueryRequest):
     3. 返回最相似的 Top-N 代码块
     """
     try:
-        results = db.query(request.question, n_results=request.n_results)
+        results = db.query(
+            request.question,
+            n_results=request.n_results,
+            intent=request.intent,
+            tool_name=request.tool_name
+        )
         
         # 格式化返回结果
         response = []
@@ -174,6 +186,26 @@ async def query_memory(request: MemoryQueryRequest):
         # 按时间戳排序，保证返回给 AI 的上下文是按时间顺序的
         response.sort(key=lambda x: int(x["metadata"].get("timestamp", 0)))
         return {"results": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/memory/update_citation")
+async def update_memory_citation(request: MemoryCitationUpdateRequest):
+    """
+    更新历史记忆的引用次数
+    支持按 memory_ids 批量更新，或按 text_content 回退更新单条
+    """
+    try:
+        updated_count = 0
+        if request.memory_ids:
+            for memory_id in request.memory_ids:
+                if memory_db.update_citation(request.user_id, memory_id=memory_id):
+                    updated_count += 1
+        elif request.text_content:
+            if memory_db.update_citation(request.user_id, text_content=request.text_content):
+                updated_count = 1
+
+        return {"status": "ok", "updated_count": updated_count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

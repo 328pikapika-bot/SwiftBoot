@@ -256,10 +256,10 @@ class VectorStore:
         print(f"[{self._now()}][{label}] 写入完成。")
         self._log_to_backend(f"[{label}] 知识库更新完成", f"新增/更新 {total} 个切片")
 
-    def query(self, question: str, n_results: int = 5):
+    def query(self, question: str, n_results: int = 5, intent: str = None, tool_name: str = None):
         """
         检索最相似的代码或文档
-        策略：同时检索代码库和文档库，然后合并结果
+        策略：根据意图与工具偏好做分集合召回，再统一加权重排
         """
         print(f"[{self._now()}]正在检索: {question}")
         
@@ -271,18 +271,23 @@ class VectorStore:
         }
         
         try:
+            intent = (intent or "").upper()
+            prefer_code = tool_name == "fetch_source_impl" or intent in ["CODE", "DEBUG"]
+            prefer_doc = tool_name == "fetch_business_doc" or intent == "DOC"
+
+            code_recall = max(n_results * 3, 12 if prefer_code else 8)
+            doc_recall = max(n_results * 3, 12 if prefer_doc else 8)
+
             # 1. 检索代码库
-            # 稍微多取一点，以便混合
             code_results = self.collection.query(
                 query_texts=[question],
-                n_results=n_results
+                n_results=code_recall
             )
             
             # 2. 检索文档库
-            # 文档通常较少，取 n_results 即可
             doc_results = self.doc_collection.query(
                 query_texts=[question],
-                n_results=n_results
+                n_results=doc_recall
             )
             
             # 3. 合并结果
@@ -297,8 +302,6 @@ class VectorStore:
             d_metas = doc_results['metadatas'][0] if doc_results['metadatas'] else []
             d_docs = doc_results['documents'][0] if doc_results['documents'] else []
             
-            # 简单的合并策略：按距离排序
-            # 构建 (distance, id, meta, doc, type) 元组列表
             combined = []
             for i in range(len(c_ids)):
                 combined.append({
@@ -316,12 +319,45 @@ class VectorStore:
                     'document': d_docs[i],
                     'origin': 'doc'
                 })
-                
-            # 按距离升序排序 (越小越相似)
-            combined.sort(key=lambda x: x['distance'])
-            
-            # 取 Top N
-            final_top = combined[:n_results]
+
+            reranked = []
+            for item in combined:
+                distance = item['distance'] if item['distance'] is not None else 2.0
+                base_score = max(0, 1.0 - (distance / 2.0))
+
+                origin_bonus = 0.0
+                if prefer_code and item['origin'] == 'code':
+                    origin_bonus += 0.18
+                elif prefer_code and item['origin'] == 'doc':
+                    origin_bonus -= 0.03
+
+                if prefer_doc and item['origin'] == 'doc':
+                    origin_bonus += 0.18
+                elif prefer_doc and item['origin'] == 'code':
+                    origin_bonus -= 0.01
+
+                type_bonus = 0.0
+                meta_type = (item['metadata'] or {}).get('type', '')
+                if intent in ["CODE", "DEBUG"]:
+                    if meta_type in ['mapper_sql', 'method_definition', 'class_definition', 'python_function', 'ts_function', 'frontend_logic']:
+                        type_bonus += 0.12
+                    if meta_type == 'markdown_section':
+                        type_bonus -= 0.04
+
+                if intent == "DOC":
+                    if meta_type in ['markdown_section', 'database_schema', 'result_map']:
+                        type_bonus += 0.12
+                    if meta_type in ['method_definition', 'python_function', 'ts_function']:
+                        type_bonus -= 0.02
+
+                final_score = base_score + origin_bonus + type_bonus
+                item['final_score'] = final_score
+                reranked.append(item)
+
+            reranked.sort(key=lambda x: x['final_score'], reverse=True)
+            final_top = reranked[:n_results]
+
+            print(f"[{self._now()}][检索重排] intent={intent or 'AUTO'} tool={tool_name or 'AUTO'} top={len(final_top)}")
             
             # 重构回 ChromaDB 结果格式
             all_results['ids'][0] = [x['id'] for x in final_top]

@@ -26,6 +26,7 @@ public class AiTraceContext {
         data.setStartTime(System.currentTimeMillis());
         data.setThoughtPath(new ArrayList<>());
         data.setToolCalls(new ArrayList<>());
+        data.setMemoryHitIds(new ArrayList<>());
         THREAD_LOCAL.set(data);
     }
 
@@ -81,6 +82,16 @@ public class AiTraceContext {
     }
 
     /**
+     * 设置命中的历史记忆 ID
+     */
+    public static void setMemoryHitIds(List<String> memoryHitIds) {
+        AiTraceData data = get();
+        if (data != null) {
+            data.setMemoryHitIds(memoryHitIds);
+        }
+    }
+
+    /**
      * 清理上下文
      */
     public static void clear() {
@@ -97,5 +108,6 @@ public class AiTraceContext {
         private List<String> thoughtPath;
         private List<JSONObject> toolCalls;
         private String contextInfo;
+        private List<String> memoryHitIds;
     }
 }

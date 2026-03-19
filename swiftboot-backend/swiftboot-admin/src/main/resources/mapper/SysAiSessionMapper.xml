@@ -40,4 +40,23 @@
         </where>
         ORDER BY s.create_time DESC
     </select>
+
+    <select id="selectQuestionHistory" resultType="java.util.HashMap">
+        SELECT
+            s.id,
+            s.user_id,
+            s.question,
+            s.create_time,
+            u.username,
+            u.nickname
+        FROM sys_ai_session s
+        LEFT JOIN sys_user u ON s.user_id = u.id
+        <where>
+            s.deleted = 0
+            <if test="userId != null">
+                AND s.user_id = #{userId}
+            </if>
+        </where>
+        ORDER BY s.create_time DESC, s.id DESC
+    </select>
 </mapper>

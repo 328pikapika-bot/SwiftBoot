@@ -227,4 +227,9 @@ public interface SysAiSessionMapper extends BaseMapper<SysAiSession> {
             "SELECT 'Markdown' as type, 800 as count UNION ALL " +
             "SELECT 'Python' as type, 1850 as count")
     List<Map<String, Object>> selectKnowledgeStats();
+
+    /**
+     * 查询历史提问列表
+     */
+    List<Map<String, Object>> selectQuestionHistory(@Param("userId") Long userId);
 }

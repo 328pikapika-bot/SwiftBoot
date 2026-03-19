@@ -800,4 +800,10 @@ public class SysAiSessionServiceImpl extends ServiceImpl<SysAiSessionMapper, Sys
         // Fallback: 如果调用失败，返回空结构防止前端报错
         return result;
     }
+
+    @Override
+    public List<Map<String, Object>> getQuestionHistory(Long currentUserId, boolean allUsers) {
+        Long queryUserId = allUsers ? null : currentUserId;
+        return baseMapper.selectQuestionHistory(queryUserId);
+    }
 }

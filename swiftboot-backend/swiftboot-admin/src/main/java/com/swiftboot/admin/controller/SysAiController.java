@@ -39,6 +39,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -168,6 +169,7 @@ public class SysAiController {
     private static final String MEMORY_QUERY_URL = "http://localhost:8001/memory/query";
     private static final String MEMORY_ADD_URL = "http://localhost:8001/memory/add";
     private static final String MEMORY_DELETE_URL = "http://localhost:8001/memory/delete";
+    private static final String MEMORY_UPDATE_CITATION_URL = "http://localhost:8001/memory/update_citation";
     private static final String NLP_TOPIC_URL = "http://localhost:8001/nlp/topic";
     private static final String NLP_SIMILARITY_URL = "http://localhost:8001/nlp/similarity";
     private static final String STATS_URL = "http://localhost:8001/stats";
@@ -548,6 +550,176 @@ public class SysAiController {
         return R.ok();
     }
 
+    private boolean isQuestionHistoryRequest(String content) {
+        if (StrUtil.isBlank(content)) {
+            return false;
+        }
+        String text = content.toLowerCase();
+        boolean mentionsPast = StrUtil.containsAny(text, "之前", "历史", "以前", "问过", "提过");
+        boolean asksQuestionList = StrUtil.containsAny(text, "问题", "提问");
+        boolean asksList = StrUtil.containsAny(text, "列举", "列出", "所有", "全部", "汇总", "清单");
+        return asksQuestionList && (mentionsPast || asksList);
+    }
+
+    private boolean isAllUsersQuestionHistoryRequest(String content) {
+        if (StrUtil.isBlank(content)) {
+            return false;
+        }
+        String text = content.toLowerCase();
+        return StrUtil.containsAny(text, "所有人", "所有用户", "全部用户", "大家问过", "所有人的问题");
+    }
+
+    private String buildQuestionHistoryAnswer(Long currentUserId, boolean allUsers) {
+        boolean canViewAll = allUsers && SecurityUtils.isAdmin();
+        if (allUsers && !canViewAll) {
+            return "当前仅支持查看你自己的历史问题。只有管理员可以查看所有用户的提问记录。";
+        }
+
+        List<Map<String, Object>> rows = aiSessionService.getQuestionHistory(currentUserId, canViewAll);
+        if (rows == null || rows.isEmpty()) {
+            return canViewAll ? "当前系统里还没有可用的历史提问记录。" : "你当前还没有可用的历史提问记录。";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        if (canViewAll) {
+            sb.append("已查询到系统中的历史提问记录，共 ").append(rows.size()).append(" 条：\n\n");
+        } else {
+            sb.append("已查询到你之前的历史提问，共 ").append(rows.size()).append(" 条：\n\n");
+        }
+
+        if (canViewAll) {
+            Map<String, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
+            for (Map<String, Object> row : rows) {
+                String username = row.get("username") == null ? "" : String.valueOf(row.get("username"));
+                String nickname = row.get("nickname") == null ? "" : String.valueOf(row.get("nickname"));
+                String displayName = StrUtil.isNotBlank(nickname) ? nickname : username;
+                grouped.computeIfAbsent(StrUtil.isNotBlank(displayName) ? displayName : "未知用户", k -> new ArrayList<>()).add(row);
+            }
+
+            int globalIndex = 1;
+            for (Map.Entry<String, List<Map<String, Object>>> entry : grouped.entrySet()) {
+                sb.append("### 用户：").append(entry.getKey()).append("\n");
+                for (Map<String, Object> row : entry.getValue()) {
+                    String question = row.get("question") == null ? "" : String.valueOf(row.get("question"));
+                    String createTime = row.get("create_time") == null ? "未知时间" : String.valueOf(row.get("create_time"));
+                    sb.append(globalIndex).append(". [").append(createTime).append("] ").append(question).append("\n");
+                    globalIndex++;
+                }
+            }
+        } else {
+            int index = 1;
+            for (Map<String, Object> row : rows) {
+                String question = row.get("question") == null ? "" : String.valueOf(row.get("question"));
+                String createTime = row.get("create_time") == null ? "未知时间" : String.valueOf(row.get("create_time"));
+                sb.append(index).append(". [").append(createTime).append("] ").append(question).append("\n");
+                index++;
+            }
+        }
+
+        return sb.toString().trim();
+    }
+
+    private boolean shouldDisableToolsForChat(String detectedIntent, double intentConfidence) {
+        return "CHAT".equalsIgnoreCase(detectedIntent) && intentConfidence >= 0.75;
+    }
+
+    private int updateMemoryCitations(Long userId, List<String> memoryHitIds) {
+        if (memoryHitIds == null || memoryHitIds.isEmpty()) {
+            return 0;
+        }
+        try {
+            JSONObject req = new JSONObject();
+            req.set("user_id", String.valueOf(userId));
+            req.set("memory_ids", memoryHitIds);
+            String resp = HttpRequest.post(MEMORY_UPDATE_CITATION_URL)
+                    .timeout(3000)
+                    .body(req.toString())
+                    .execute()
+                    .body();
+            if (StrUtil.isNotEmpty(resp)) {
+                return JSONUtil.parseObj(resp).getInt("updated_count", 0);
+            }
+        } catch (Exception e) {
+            System.err.println("Update memory citation failed: " + e.getMessage());
+        }
+        return 0;
+    }
+
+    private String generateFollowUpSuggestions(boolean isAnthropic, String apiUrl, String apiKey, String model, String finalAnswer) {
+        try {
+            JSONObject requestBody = new JSONObject();
+            requestBody.set("model", model);
+            requestBody.set("stream", false);
+
+            String prompt = "你是一个智能助手。基于以下刚刚向用户提供的回答，请生成2个继续追问的建议问题，引导用户进一步探索。只返回问题文本，每行一个，不要序号标题。\n\n回答内容：\n" + finalAnswer;
+
+            JSONArray messages = new JSONArray();
+            if (isAnthropic) {
+                requestBody.set("max_tokens", 300);
+                requestBody.set("system", prompt);
+                messages.add(new JSONObject().set("role", "user").set("content", "生成继续追问的问题"));
+                requestBody.set("messages", messages);
+            } else {
+                messages.add(new JSONObject().set("role", "system").set("content", prompt));
+                messages.add(new JSONObject().set("role", "user").set("content", "生成继续追问的问题"));
+                requestBody.set("messages", messages);
+            }
+
+            HttpResponse response = HttpRequest.post(apiUrl)
+                    .timeout(10000)
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .body(requestBody.toString())
+                    .execute();
+
+            if (!response.isOk()) {
+                return null;
+            }
+
+            JSONObject json = JSONUtil.parseObj(response.body());
+            if (isAnthropic) {
+                JSONArray contentBlocks = json.getJSONArray("content");
+                if (contentBlocks != null && !contentBlocks.isEmpty()) {
+                    return contentBlocks.getJSONObject(0).getStr("text");
+                }
+            } else {
+                JSONArray choices = json.getJSONArray("choices");
+                if (choices != null && !choices.isEmpty()) {
+                    return choices.getJSONObject(0).getJSONObject("message").getStr("content");
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Generate follow-up suggestions failed: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private String formatFollowUpSuggestions(String suggestionsText) {
+        if (StrUtil.isBlank(suggestionsText)) {
+            return null;
+        }
+        List<String> lines = StrUtil.splitTrim(suggestionsText, '\n');
+        List<String> normalized = new ArrayList<>();
+        for (String line : lines) {
+            String cleaned = line.replaceFirst("^[\\-\\d\\.、\\s]+", "").trim();
+            if (StrUtil.isNotBlank(cleaned)) {
+                normalized.add(cleaned);
+            }
+            if (normalized.size() >= 2) {
+                break;
+            }
+        }
+        if (normalized.isEmpty()) {
+            return null;
+        }
+
+        StringBuilder sb = new StringBuilder("### 你还可以继续问：\n");
+        for (String line : normalized) {
+            sb.append("- ").append(line).append("\n");
+        }
+        return sb.toString().trim();
+    }
+
     /**
      * 前置安全拦截 (轻量级 V2)
      * 支持多层防御、正则匹配与关键词匹配，返回拦截信息。
@@ -627,6 +799,7 @@ public class SysAiController {
         String content = (String) params.get("content");
         Long userId = SecurityUtils.getUserId();
         String userIp = SecurityUtils.getLoginUser().getLoginIp();
+        long startTime = System.currentTimeMillis();
         
         if (content == null || content.trim().isEmpty()) {
             try {
@@ -647,8 +820,31 @@ public class SysAiController {
             return emitter;
         }
 
+        // 特殊优先级：历史问题查询走真实会话表，不交给大模型猜测
+        if (isQuestionHistoryRequest(content)) {
+            try {
+                boolean queryAllUsers = isAllUsersQuestionHistoryRequest(content);
+                String directAnswer = buildQuestionHistoryAnswer(userId, queryAllUsers);
+
+                String configJson = stringRedisTemplate.opsForValue().get(AI_CONFIG_KEY);
+                String currentModel = defaultDeepseekModel;
+                if (StrUtil.isNotEmpty(configJson)) {
+                    JSONObject config = JSONUtil.parseObj(configJson);
+                    currentModel = config.getStr("model", defaultDeepseekModel);
+                }
+
+                saveConversationHistory(userId, content, directAnswer, startTime, userIp, currentModel);
+                emitter.send(new JSONObject().set("content", directAnswer).toString());
+            } catch (Exception e) {
+                try {
+                    emitter.send(new JSONObject().set("content", "历史问题查询失败：" + e.getMessage()).toString());
+                } catch (Exception ignored) {}
+            }
+            emitter.complete();
+            return emitter;
+        }
+
         java.lang.Thread thread = new java.lang.Thread(() -> {
-            long startTime = System.currentTimeMillis();
             com.swiftboot.admin.context.AiTraceContext.init();
             StringBuilder fullReply = new StringBuilder();
             
@@ -825,7 +1021,7 @@ public class SysAiController {
                             // 将命中的记忆 ID 存入 ThreadLocal 上下文，供后续更新权重和发散提问使用
                             com.swiftboot.admin.context.AiTraceContext.AiTraceData traceData = com.swiftboot.admin.context.AiTraceContext.get();
                             if (traceData != null && !hitMemoryIds.isEmpty()) {
-                                traceData.setContextInfo(hitMemoryIds.toString()); // 借用 contextInfo 字段传递记忆 ID
+                                com.swiftboot.admin.context.AiTraceContext.setMemoryHitIds(hitMemoryIds.toList(String.class));
                             }
                         }
                     }
@@ -846,7 +1042,8 @@ public class SysAiController {
                 } catch (Exception ignored) {}
                 
                 // 7. Agent 循环：允许 2 轮工具调用，以应对复杂问题
-                int maxToolCalls = 2;
+                boolean allowToolUsage = !shouldDisableToolsForChat(detectedIntent, intentConfidence);
+                int maxToolCalls = allowToolUsage ? 2 : 1;
                 int toolCallCount = 0;
                 boolean toolCallLimitReached = false;
                 boolean hasMemoryHit = false; // 记录本次对话是否命中了历史记忆
@@ -857,7 +1054,7 @@ public class SysAiController {
                     requestBody.set("stream", false);
                     
                     // 仅在第一轮应用动态工具选择
-                    if (toolCallCount == 0 && !"auto".equals(dynamicToolChoice.getStr("type"))) {
+                    if (allowToolUsage && toolCallCount == 0 && !"auto".equals(dynamicToolChoice.getStr("type"))) {
                          requestBody.set("tool_choice", dynamicToolChoice);
                     }
                     
@@ -944,7 +1141,7 @@ public class SysAiController {
                         requestBody.set("messages", anthropicMessages);
                         
                         // Anthropic 工具格式 (M2.7 Native)
-                        if (this.agentTools != null) {
+                        if (allowToolUsage && this.agentTools != null) {
                             JSONArray anthropicTools = new JSONArray();
                             for (int i = 0; i < this.agentTools.size(); i++) {
                                 JSONObject t = this.agentTools.getJSONObject(i);
@@ -962,9 +1159,11 @@ public class SysAiController {
                     } else {
                         requestBody.set("messages", messages);
                         // 如果是大模型为 minimax 且不是 anthropic 模式，暂时不开启 tools
-                        if (!"minimax".equalsIgnoreCase(currentModel) && !currentModel.contains("abab")) {
+                        if (allowToolUsage && !"minimax".equalsIgnoreCase(currentModel) && !currentModel.contains("abab")) {
                             requestBody.set("tools", this.agentTools);
                             requestBody.set("tool_choice", "auto");
+                        } else if (!allowToolUsage) {
+                            requestBody.set("tool_choice", "none");
                         }
                     }
                     
@@ -1060,7 +1259,7 @@ public class SysAiController {
                                 
                                 System.out.println("[Agent] 执行工具: " + functionName + ", 参数: " + argumentsStr);
                                 
-                                String toolResult = executeAgentTool(functionName, argumentsStr, emitter);
+                                String toolResult = executeAgentTool(functionName, argumentsStr, detectedIntent, emitter);
                                 
                                 JSONObject toolMessage = new JSONObject();
                                 toolMessage.set("role", "tool");
@@ -1377,8 +1576,21 @@ public class SysAiController {
                         
                         // 【异步机制】：处理记忆权重更新与发散提问
                         com.swiftboot.admin.context.AiTraceContext.AiTraceData traceData = com.swiftboot.admin.context.AiTraceContext.get();
-                        if (traceData != null && StrUtil.isNotEmpty(traceData.getContextInfo()) && traceData.getContextInfo().startsWith("[")) {
-                            final String hitMemoryIdsStr = traceData.getContextInfo();
+                        if (traceData != null && traceData.getMemoryHitIds() != null && !traceData.getMemoryHitIds().isEmpty()) {
+                            updateMemoryCitations(userId, traceData.getMemoryHitIds());
+                            String suggestionBlock = formatFollowUpSuggestions(
+                                    generateFollowUpSuggestions(isAnthropic, currentApiUrl, currentApiKey, currentModel, finalAnswer)
+                            );
+                            if (StrUtil.isNotBlank(suggestionBlock)) {
+                                try {
+                                    emitter.send(new JSONObject().set("content", "\n\n" + suggestionBlock).toString());
+                                } catch (Exception ignored) {
+                                }
+                            }
+                            traceData.setMemoryHitIds(new ArrayList<>());
+                        }
+                        if (traceData != null && traceData.getMemoryHitIds() != null && !traceData.getMemoryHitIds().isEmpty()) {
+                            final List<String> hitMemoryIds = traceData.getMemoryHitIds();
                             final String asyncModel = currentModel;
                             final String asyncApiUrl = currentApiUrl;
                             final String asyncApiKey = currentApiKey;
@@ -1387,8 +1599,9 @@ public class SysAiController {
                             
                             java.lang.Thread asyncThread = new java.lang.Thread(() -> {
                                 try {
-                                    JSONArray hitMemoryIds = JSONUtil.parseArray(hitMemoryIdsStr);
                                     if (!hitMemoryIds.isEmpty()) {
+                                        int updatedCount = updateMemoryCitations(userId, hitMemoryIds);
+                                        System.out.println("[Agent Async] Updated citation count: " + updatedCount);
                                         System.out.println("[Agent Async] 开始更新记忆权重，命中的记忆数: " + hitMemoryIds.size());
                                         // 1. 更新记忆权重 (调用 Python 引擎)
                                         // 这里为了简化，假设 Python 引擎提供了一个 /memory/update_citation 接口
@@ -1639,7 +1852,7 @@ public class SysAiController {
     /**
      * 执行 Agent 工具
      */
-    private String executeAgentTool(String functionName, String argumentsJson, SseEmitter emitter) {
+    private String executeAgentTool(String functionName, String argumentsJson, String detectedIntent, SseEmitter emitter) {
         try {
             if ("fetch_source_impl".equals(functionName) || "fetch_business_doc".equals(functionName)) {
                 JSONObject args = JSONUtil.parseObj(argumentsJson);
@@ -1652,6 +1865,8 @@ public class SysAiController {
                 JSONObject ragRequest = new JSONObject();
                 ragRequest.set("question", query);
                 ragRequest.set("n_results", 10);
+                ragRequest.set("intent", detectedIntent);
+                ragRequest.set("tool_name", functionName);
                 
                 long ragStartTime = System.currentTimeMillis();
                 System.out.println("[Agent Tool] 调用 RAG 引擎: " + RAG_API_URL + ", tool=" + functionName + ", query=" + query);
