@@ -1106,7 +1106,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, reactive, nextTick, computed } from 'vue'
+import { ref, onMounted, onUnmounted, reactive, nextTick, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import * as echarts from 'echarts'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
@@ -2081,6 +2082,7 @@ const useRealActivityData = ref(true)
 
 const knowledgeDetailVisible = ref(false)
 const knowledgeStats = ref<any>({})
+const route = useRoute()
 const useRealKnowledgeData = ref(true)
 const knowledgeChartRef = ref(null)
 const isSunburstHovered = ref(false)
@@ -2160,6 +2162,16 @@ const fetchKnowledgeStats = async () => {
   
   initKnowledgeChart()
 }
+
+watch(
+  () => route.query.focus,
+  (focus) => {
+    if (focus === 'knowledge' && !knowledgeDetailVisible.value) {
+      openKnowledgeDetail()
+    }
+  },
+  { immediate: true }
+)
 
 const initKnowledgeChart = () => {
   nextTick(() => {

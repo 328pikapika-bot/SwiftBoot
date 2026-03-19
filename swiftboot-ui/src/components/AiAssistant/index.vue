@@ -6,11 +6,11 @@
     ref="containerRef"
   >
     <!-- 最小化状态 (悬浮球) -->
-    <div v-if="isMinimized" class="ai-minimized-new group" @dblclick="toggleMinimize" @mousedown="startDrag">
+    <div v-if="isMinimized" class="ai-minimized-new group" @mousedown="startDrag">
       <div class="absolute inset-0 rounded-full bg-primary/20 ai-pulse pointer-events-none -z-10 scale-150"></div>
       <div class="absolute inset-0 rounded-full bg-primary/10 ai-pulse pointer-events-none -z-10 scale-125" style="animation-delay: 1.5s;"></div>
       
-      <div class="relative w-16 h-16 bg-gradient-to-br from-primary to-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-all duration-300 backdrop-blur-sm cursor-pointer">
+      <div class="relative w-16 h-16 bg-gradient-to-br from-primary to-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-all duration-300 backdrop-blur-sm cursor-pointer" @click.stop="openAssistant">
         <span class="material-symbols-outlined text-4xl group-hover:drop-shadow-glow transition-all">neurology</span>
         <div class="absolute top-0 right-0 w-4 h-4 bg-emerald-400 rounded-full border-2 border-white shadow-sm"></div>
       </div>
@@ -217,7 +217,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, nextTick, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { Minus, Position, CopyDocument, Close, Delete } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
@@ -326,6 +326,12 @@ const randomDotPos = () => {
     top: `${Math.random() * 80 + 10}%`,
     left: `${Math.random() * 80 + 10}%`
   }
+}
+
+const openAssistant = () => {
+  isMinimized.value = false
+  ensureVisible()
+  scrollToBottom(true)
 }
 
 // 【工具函数】清除幻觉标签
@@ -672,6 +678,18 @@ const handleRefreshIndex = async () => {
     msg.close()
   }
 }
+
+const handleExternalOpen = () => {
+  openAssistant()
+}
+
+onMounted(() => {
+  window.addEventListener('swiftboot-open-ai-assistant', handleExternalOpen)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('swiftboot-open-ai-assistant', handleExternalOpen)
+})
 </script>
 
 <style scoped lang="scss">

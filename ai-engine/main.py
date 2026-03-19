@@ -214,15 +214,23 @@ def get_knowledge_stats():
     """
     try:
         # 1. 获取知识库统计 (Left Brain)
-        collection = db.collection
-        count = collection.count()
+        code_collection = db.collection
+        doc_collection = db.doc_collection
+        code_count = code_collection.count()
+        doc_count = doc_collection.count()
+        count = code_count + doc_count
         
         # 获取所有文档的 metadata 来统计分布 (注意：如果数据量巨大，这里会有性能问题，应考虑缓存或抽样)
         # ChromaDB 的 get 方法支持 include=['metadatas']
         # limit=None 在 ChromaDB 旧版本可能不支持，通常需要分页。
         # 为避免卡死，这里暂时限制最大获取 10000 条用于统计分布
-        result = collection.get(limit=10000, include=['metadatas'])
-        metadatas = result['metadatas']
+        code_result = code_collection.get(limit=10000, include=['metadatas'])
+        doc_result = doc_collection.get(limit=10000, include=['metadatas'])
+        metadatas = []
+        if code_result and code_result.get('metadatas'):
+            metadatas.extend(code_result['metadatas'])
+        if doc_result and doc_result.get('metadatas'):
+            metadatas.extend(doc_result['metadatas'])
         
         file_types = {}
         languages = {}
@@ -241,7 +249,7 @@ def get_knowledge_stats():
             elif ext in ['py']: lang = 'Python'
             elif ext in ['vue', 'ts', 'js', 'html', 'css']: lang = 'Frontend'
             elif ext in ['sql']: lang = 'SQL'
-            elif ext in ['md', 'txt']: lang = 'Docs'
+            elif ext in ['md', 'txt', 'doc']: lang = 'Docs'
             languages[lang] = languages.get(lang, 0) + 1
             
         # 2. 获取记忆统计 (Right Brain)
