@@ -93,12 +93,18 @@
                 向量索引更新
              </h3>
              <div class="space-y-6 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
-                 <div v-for="log in vectorLogs" :key="log.id" class="flex gap-3">
-                    <div class="mt-1 w-2 h-2 rounded-full shrink-0" :class="getBusinessTypeColor(log)"></div>
+                  <div
+                    v-for="log in vectorLogs"
+                    :key="log.id"
+                    class="flex gap-3 cursor-pointer rounded-lg px-2 py-1.5 -mx-2 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/70"
+                    :title="buildLogHeadline(log)"
+                    @click="openOperLogDetail(log.id)"
+                  >
+                    <div class="mt-1 w-2 h-2 rounded-full shrink-0 bg-purple-500"></div>
                     <div>
                       <div class="text-sm font-medium text-slate-900 dark:text-white truncate max-w-[280px]">
-                        <span class="font-bold text-slate-700 dark:text-slate-200">{{ getDisplayOperName(log) }}</span> 
-                        {{ getLogAction(log) }} 
+                        <span class="font-bold text-slate-700 dark:text-slate-200">{{ getDisplayOperName(log) }}</span>
+                        {{ getLogAction(log) }}
                         <span v-html="formatLogTitle(log.title)"></span>
                       </div>
                       <div class="text-xs text-slate-500 mt-1">{{ formatTimeAgo(log.operTime) }}</div>
@@ -115,11 +121,17 @@
                 <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                 用户操作动态
              </h3>
-             <div class="space-y-6 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
-                 <div v-for="log in operLogs" :key="log.id" class="flex gap-3">
-                    <div class="mt-1 w-2 h-2 rounded-full shrink-0" :class="getBusinessTypeColor(log)"></div>
-                    <div>
-                      <div class="text-sm font-medium text-slate-900 dark:text-white truncate max-w-[280px]">
+              <div class="space-y-6 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
+                  <div
+                    v-for="log in operLogs"
+                    :key="log.id"
+                    class="flex gap-3 cursor-pointer rounded-lg px-2 py-1.5 -mx-2 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/70"
+                    :title="buildLogHeadline(log)"
+                    @click="openOperLogDetail(log.id)"
+                  >
+                     <div class="mt-1 w-2 h-2 rounded-full shrink-0" :class="getBusinessTypeColor(log)"></div>
+                     <div>
+                       <div class="text-sm font-medium text-slate-900 dark:text-white truncate max-w-[280px]">
                         <span class="font-bold text-slate-700 dark:text-slate-200">{{ getDisplayOperName(log) }}</span> 
                         {{ getLogAction(log) }} 
                         <span v-html="formatLogTitle(log.title)"></span>
@@ -767,7 +779,8 @@ const loadOperLogs = async () => {
     }
     
     if (vectorRes.code === 200) {
-      vectorLogs.value = vectorRes.data?.list || (vectorRes as any).rows || []
+      const rawVectorLogs = vectorRes.data?.list || (vectorRes as any).rows || []
+      vectorLogs.value = rawVectorLogs.filter((item: any) => isVectorIndexLog(item))
     }
   } catch (e) {
     console.error('Failed to load oper logs', e)
@@ -781,6 +794,26 @@ const loadOperLogs = async () => {
 
 const handleRefreshLogs = () => {
   loadOperLogs()
+}
+
+const isVectorIndexLog = (log: any) => {
+  const title = String(log?.title || '')
+  return title.startsWith('RAG 向量索引更新完成:')
+}
+
+const buildLogHeadline = (log: any) => {
+  const operName = getDisplayOperName(log) || '系统'
+  const action = getLogAction(log) || ''
+  const title = String(log?.title || '').trim()
+  return `${operName} ${action} ${title}`.replace(/\s+/g, ' ').trim()
+}
+
+const openOperLogDetail = (logId?: number) => {
+  if (!logId) return
+  router.push({
+    path: '/monitor/operlog',
+    query: { logId: String(logId) }
+  })
 }
 
 const formatTimeAgo = (time: string) => {

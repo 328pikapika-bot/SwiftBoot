@@ -6,11 +6,11 @@
     ref="containerRef"
   >
     <!-- 最小化状态 (悬浮球) -->
-    <div v-if="isMinimized" class="ai-minimized-new group" @mousedown="startDrag">
+    <div v-if="isMinimized" class="ai-minimized-new group" @mousedown="startDrag" @dblclick.stop="openAssistant">
       <div class="absolute inset-0 rounded-full bg-primary/20 ai-pulse pointer-events-none -z-10 scale-150"></div>
       <div class="absolute inset-0 rounded-full bg-primary/10 ai-pulse pointer-events-none -z-10 scale-125" style="animation-delay: 1.5s;"></div>
       
-      <div class="relative w-16 h-16 bg-gradient-to-br from-primary to-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-all duration-300 backdrop-blur-sm cursor-pointer" @click.stop="openAssistant">
+      <div class="relative w-16 h-16 bg-gradient-to-br from-primary to-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-all duration-300 backdrop-blur-sm cursor-grab active:cursor-grabbing select-none">
         <span class="material-symbols-outlined text-4xl group-hover:drop-shadow-glow transition-all">neurology</span>
         <div class="absolute top-0 right-0 w-4 h-4 bg-emerald-400 rounded-full border-2 border-white shadow-sm"></div>
       </div>
@@ -193,15 +193,15 @@
               </div>
             </div>
             <div class="space-meta">
-              <span>维度: 1536 (OpenAI)</span>
-              <span>阈值: 0.82</span>
+              <span>索引总量: {{ indexStatsSummary.total }}</span>
+              <span :title="indexStatsSummary.detail">{{ indexStatsSummary.detail }}</span>
             </div>
           </div>
 
           <div class="sidebar-footer">
             <button class="refresh-btn" @click="handleRefreshIndex">
               <span class="material-symbols-outlined">refresh</span>
-              更新索引
+              查看索引统计
             </button>
           </div>
         </aside>
@@ -263,6 +263,7 @@ const suggestions = [
 ]
 
 const currentModelName = ref('加载中...')
+const knowledgeStats = ref<{ total_chunks?: number; file_types?: Record<string, number> }>({})
 
 // 加载历史记录和配置
 const initChat = async () => {
@@ -325,6 +326,53 @@ const randomDotPos = () => {
   return {
     top: `${Math.random() * 80 + 10}%`,
     left: `${Math.random() * 80 + 10}%`
+  }
+}
+
+const formatCount = (value: number) => Number(value || 0).toLocaleString()
+
+const getAggregateLabel = (key: string) => {
+  const map: Record<string, string> = {
+    java: 'Java',
+    py: 'Python',
+    vue: 'Vue',
+    ts: 'TypeScript',
+    js: 'JavaScript',
+    md: 'Markdown',
+    doc: 'Doc',
+    txt: 'Text',
+    sql: 'SQL',
+    xml: 'XML'
+  }
+  return map[key] || key.toUpperCase()
+}
+
+const buildKnowledgeStatsSummary = () => {
+  const fileTypes = knowledgeStats.value.file_types || {}
+  const entries = Object.entries(fileTypes)
+    .map(([key, value]) => `${getAggregateLabel(key)} ${formatCount(Number(value || 0))}`)
+    .sort((a, b) => a.localeCompare(b, 'zh-CN'))
+
+  const total = formatCount(Number(knowledgeStats.value.total_chunks || 0))
+  return {
+    total,
+    detail: entries.length ? entries.join(' / ') : '等待索引统计同步'
+  }
+}
+
+const indexStatsSummary = computed(() => buildKnowledgeStatsSummary())
+
+const fetchKnowledgeStats = async () => {
+  try {
+    const res: any = await request.get('/system/ai/stats')
+    if (res.code === 200 && res.data) {
+      knowledgeStats.value = {
+        total_chunks: Number(res.data.total_chunks || res.data.knowledge_count || 0),
+        file_types: res.data.file_types || {}
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch knowledge stats:', error)
   }
 }
 
@@ -656,27 +704,15 @@ const sendSuggestion = (content: string) => {
   sendMessage()
 }
 
-const handleRefreshIndex = async () => {
-  const msg = ElMessage({
-    message: '正在触发索引重建...',
-    type: 'info',
-    duration: 0,
-    showClose: false
-  })
-
-  try {
-    const res: any = await request.post('/system/ai/index/rebuild', { force: true })
-    const status = res?.data?.status
-    if (status === 'running') {
-      ElMessage.warning('索引正在重建中，请稍后再试')
-      return
-    }
-    ElMessage.success('已触发索引重建，稍后会自动生效')
-  } catch (e) {
-    ElMessage.error('索引重建失败，请确认 AI 引擎已启动')
-  } finally {
-    msg.close()
+const handleRefreshIndex = () => {
+  const summary = indexStatsSummary.value
+  if (!knowledgeStats.value.total_chunks && !Object.keys(knowledgeStats.value.file_types || {}).length) {
+    ElMessage.warning('当前索引统计还在同步中，请稍后再查看')
+    return
   }
+  ElMessage.success(
+    `当前知识索引共 ${summary.total} 个切片，分类情况为：${summary.detail}`
+  )
 }
 
 const handleExternalOpen = () => {
@@ -685,6 +721,7 @@ const handleExternalOpen = () => {
 
 onMounted(() => {
   window.addEventListener('swiftboot-open-ai-assistant', handleExternalOpen)
+  fetchKnowledgeStats()
 })
 
 onUnmounted(() => {

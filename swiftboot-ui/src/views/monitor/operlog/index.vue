@@ -261,7 +261,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   InfoFilled, Link, Setting, DocumentAdd, DocumentChecked, DocumentRemove,
@@ -287,6 +288,8 @@ const detailVisible = ref(false)
 const detailData = ref<any>({})
 const activeTab = ref('request')
 const moduleOptions = ref<string[]>([])
+const route = useRoute()
+const router = useRouter()
 
 const queryParams = reactive({
   pageNum: 1,
@@ -331,6 +334,18 @@ const handleSelectionChange = (selection: any[]) => {
 const handleDetail = (row: any) => {
   detailData.value = row
   detailVisible.value = true
+}
+
+const openDetailById = async (logId: string | number | null | undefined) => {
+  if (!logId) return
+  try {
+    const res = await request({ url: `/monitor/operlog/${logId}`, method: 'get' })
+    if (res.code === 200 && res.data) {
+      handleDetail(res.data)
+    }
+  } catch (error) {
+    console.error('Failed to load oper log detail', error)
+  }
 }
 
 const handleBatchDelete = () => {
@@ -380,6 +395,20 @@ const formatJson = (jsonStr: string) => {
 onMounted(() => {
   getList()
   getModuleList()
+  openDetailById(route.query.logId as string | undefined)
+})
+
+watch(
+  () => route.query.logId,
+  (logId) => {
+    openDetailById(logId as string | undefined)
+  }
+)
+
+watch(detailVisible, (visible) => {
+  if (!visible && route.query.logId) {
+    router.replace({ path: route.path, query: { ...route.query, logId: undefined } })
+  }
 })
 </script>
 

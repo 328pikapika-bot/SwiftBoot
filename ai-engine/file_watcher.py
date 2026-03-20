@@ -1,7 +1,6 @@
 import time
 import os
 import json
-import threading
 import hashlib
 import signal
 import sys
@@ -70,6 +69,24 @@ def save_state(state):
     except Exception as e:
         print(f"保存状态失败: {e}")
 
+def build_rag_sync_log_title(action, count, aggregate_type=None, initial=False):
+    if initial:
+        if aggregate_type:
+            return f"RAG 向量索引更新完成: {action} {count} 个【{aggregate_type}】知识切片"
+        return f"RAG 向量索引更新完成: {action} {count} 个知识切片"
+    if aggregate_type:
+        return f"RAG 向量索引更新完成: {action} {count} 个【{aggregate_type}】切片"
+    return f"RAG 向量索引更新完成: {action} {count} 个切片"
+
+def emit_rag_sync_logs(db, summary, action, initial=False):
+    for aggregate_type, count in summary.items():
+        if count <= 0:
+            continue
+        db._log_to_backend(
+            build_rag_sync_log_title(action, count, aggregate_type, initial),
+            "AI Engine"
+        )
+
 class CodeChangeHandler(FileSystemEventHandler):
     """
     文件系统事件处理器
@@ -86,35 +103,6 @@ class CodeChangeHandler(FileSystemEventHandler):
         self.last_processed = {}  # 简单的防抖动机制 {path: timestamp}
         self.file_hashes = {}     # 内存中缓存文件内容哈希 {path: md5}
         self.file_state = file_state
-        
-        # 批量日志处理相关
-        self.update_count = 0
-        self.update_lock = threading.Lock()
-        self.log_timer = None
-
-    def _schedule_log_sync(self):
-        """
-        调度日志同步任务 (防抖)
-        """
-        with self.update_lock:
-            if self.log_timer:
-                self.log_timer.cancel()
-            self.log_timer = threading.Timer(2.0, self._sync_log)
-            self.log_timer.start()
-
-    def _sync_log(self):
-        """
-        执行日志同步
-        """
-        with self.update_lock:
-            count = self.update_count
-            if count > 0:
-                try:
-                    self.db._log_to_backend(f"{count}条RAG 向量索引更新完成", "AI Engine")
-                    print(f"[{self._now()}]已触发操作日志同步 (批量更新: {count}条)。")
-                    self.update_count = 0
-                except Exception as e:
-                    print(f"[{self._now()}]操作日志同步失败: {e}")
 
     def on_modified(self, event):
         self._process_event(event)
@@ -247,6 +235,8 @@ class CodeChangeHandler(FileSystemEventHandler):
         try:
             # 1. 提取文件名作为 Source ID
             source_id = filename.replace("\\", "/")
+            norm_path = os.path.normpath(filename).lower()
+            action = "更新" if norm_path in self.file_state else "新增"
 
             # 2. 清理旧数据 (先删后加，确保数据一致性)
             self.db.delete_by_source(source_id)
@@ -271,27 +261,18 @@ class CodeChangeHandler(FileSystemEventHandler):
                     chunk['source'] = source_id
                 
                 # 4. 写入向量数据库
-                self.db.add_documents(chunks)
-                print(f"[{self._now()}]更新完成: {source_id} (新增 {len(chunks)} 个切片)")
+                summary = self.db.add_documents(chunks)
+                print(f"[{self._now()}]更新完成: {source_id} ({action} {len(chunks)} 个切片)")
                 
-                # 5. 记录到后端操作日志 (通过 HTTP 调用)
+                # 5. 仅记录聚合后的索引更新结果，不再写入中间过程日志
                 try:
-                    msg = f"检测到{change_type}变更: {os.path.basename(filename)}"
-                    self.db._log_to_backend(msg, "AI Engine")
-                    
-                    # 累加更新计数
-                    with self.update_lock:
-                        self.update_count += len(chunks)
-                    # 调度批量同步
-                    self._schedule_log_sync()
-                    
+                    emit_rag_sync_logs(self.db, summary, action, initial=False)
                 except Exception as log_err:
                     print(f"[{self._now()}]日志记录失败: {log_err}")
             else:
                 print(f"[{self._now()}]警告: 未提取到有效代码切片")
 
             # 6. 更新状态文件
-            norm_path = os.path.normpath(filename).lower()
             self.file_state[norm_path] = now
             save_state(self.file_state)
             
@@ -342,7 +323,7 @@ if __name__ == "__main__":
         
         count = 0
         skip_count = 0
-        batch_update_count = 0
+        init_log_summary = {}
         
         # 使用 os.walk 遍历，但进行剪枝优化
         for root, dirs, files in os.walk(WATCH_DIR):
@@ -372,6 +353,7 @@ if __name__ == "__main__":
                 # 如果是首次运行，或者文件时间比记录的时间新，则解析
                 if is_first_run or norm_path not in file_state or current_mtime > file_state[norm_path]:
                     try:
+                        action = "更新" if (not is_first_run and norm_path in file_state) else "新增"
                         chunks = []
                         if file.endswith(".java"):
                             chunks = java_parser.parse_file(file_path)
@@ -393,20 +375,27 @@ if __name__ == "__main__":
                             # 先删除旧的
                             db.delete_by_source(source_id)
                             # 写入新的
-                            db.add_documents(chunks)
+                            summary = db.add_documents(chunks)
                             count += len(chunks)
                             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]已索引: {file} ({len(chunks)} 切片)")
-                            batch_update_count += len(chunks)
+                            for aggregate_type, chunk_count in summary.items():
+                                if chunk_count <= 0:
+                                    continue
+                                key = (action, aggregate_type)
+                                init_log_summary[key] = init_log_summary.get(key, 0) + chunk_count
                     except Exception as e:
                         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}]解析失败 {file}: {e}")
                 else:
                     skip_count += 1
         
-        # 记录全量扫描日志
-        if batch_update_count > 0:
+        # 记录初始化聚合日志
+        if init_log_summary:
             try:
-                msg = f"RAG 向量索引更新完成: 新增/更新 {batch_update_count} 个代码切片"
-                db._log_to_backend(msg, "AI Engine")
+                for (action, aggregate_type), total in init_log_summary.items():
+                    db._log_to_backend(
+                        build_rag_sync_log_title(action, total, aggregate_type, initial=True),
+                        "AI Engine"
+                    )
             except:
                 pass
                 

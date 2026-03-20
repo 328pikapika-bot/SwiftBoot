@@ -40,6 +40,13 @@ public class SysOperLogController {
         return R.ok(PageResult.of(page.getRecords(), page.getTotal(), page.getCurrent(), page.getSize()));
     }
 
+    @Operation(summary = "获取操作日志详情")
+    @SaCheckPermission("monitor:operlog:list")
+    @GetMapping("/{operLogId}")
+    public R<SysOperLog> getInfo(@PathVariable Long operLogId) {
+        return R.ok(operLogService.getById(operLogId));
+    }
+
     @Operation(summary = "删除操作日志")
     @SaCheckPermission("monitor:operlog:remove")
     @Log(title = "操作日志", businessType = BusinessType.DELETE)

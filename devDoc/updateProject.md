@@ -17,6 +17,32 @@
 
 ---
 
+## [2026-03-20 15:05] 更新摘要
+
+### 📝 变更综述
+本次更新重点收敛了 RAG 向量索引日志链路与首页系统动态展示。AI Engine 不再把初始化和监听过程中的中间切片处理反复写入操作日志，而是统一改为聚合后的索引完成日志；首页向量索引动态同步改成紫色标识、悬停可看全文、点击直达日志详情。同时修正智能会话悬浮球误触发问题，拖动只移动，双击才打开。
+
+### 🚀 核心变更
+- **AI Engine 日志聚合**: 重构 `file_watcher.py` 与 `vector_store.py`，初始化阶段只按聚合类型写入索引完成日志，监听阶段仅写一条 `RAG 向量索引更新完成` 聚合结果日志。
+- **首页系统动态**: 向量索引动态只展示新规范日志，统一使用紫色圆点，并支持悬停查看完整内容与点击跳转日志详情。
+- **操作日志详情直达**: 后端新增 `/monitor/operlog/{operLogId}` 接口，前端操作日志页支持根据 `logId` 自动打开对应详情。
+- **智能会话交互**: 最小化悬浮球改为双击打开，拖动悬浮球时不再在松手后误打开窗口。
+
+### 🐛 问题修复
+- 修复了初始化索引和监听索引过程中混入 `[Doc] 知识库更新完成`、`检测到前后端变更` 等中间日志，导致首页系统动态文案脏乱的问题。
+- 修复了首页向量索引动态内容被截断后无法查看完整信息的问题。
+- 修复了点击向量索引动态后无法直达对应日志详情的问题。
+- 修复了智能会话悬浮球拖动结束后自动展开窗口的误触发问题。
+- 清理了数据库中 6865 条旧格式 `VectorStore.*` 向量索引日志，避免首页继续读取历史脏数据。
+
+### 🔧 技术细节
+- 修改: `ai-engine/file_watcher.py`, `ai-engine/vector_store.py`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/controller/SysOperLogController.java`
+- 修改: `swiftboot-ui/src/views/dashboard/index.vue`, `swiftboot-ui/src/views/monitor/operlog/index.vue`, `swiftboot-ui/src/components/AiAssistant/index.vue`
+- 技术栈: Python Watchdog, ChromaDB, Java Spring Boot, Vue 3, Element Plus, MySQL
+
+---
+
 ## [2026-03-19 22:11] 更新摘要
 
 ### 📝 变更综述
@@ -421,5 +447,102 @@
 - 新增: `SysAiTrace`, `AiTraceContext` (AI Trace 增强)
 - 修改: `ai-engine/main.py`, `vector_store.py` (切片索引重构)
 - 技术栈: Vue 3, Java Spring Boot, Python FastAPI, ChromaDB
+
+---
+
+## [2026-03-20 00:19] 更新摘要
+
+### 📝 变更综述
+本次更新聚焦智能问答路由精度与交互稳定性：补齐了历史问题查询的真实数据链路，强化了高置信度闲聊场景的工具调用约束，并将 RAG 检索升级为意图感知重排；同时打通记忆引用回写与追问建议链路，降低无效检索并增强连续对话质量。
+
+### 🚀 核心变更
+- **历史提问查询**: 新增历史问题识别与直连会话表查询能力，普通用户查询本人历史，管理员可按请求查看全用户历史。
+- **意图驱动路由**: 新增 CHAT && confidence>=0.75 的高置信度判定分支，命中后禁用工具调用并限制工具循环路径。
+- **RAG 重排**: Python 检索接口支持 intent/tool_name 入参，按意图与类型做召回加权重排，提升代码/文档检索命中质量。
+- **记忆闭环**: 新增 /memory/update_citation，在命中长期记忆后回写引用次数，并生成可继续追问建议。
+
+### 🐛 问题修复
+- 修复了闲聊高置信度场景仍可能触发工具调用、造成无关检索与额外耗时的问题。
+- 修复了“历史问题查询”依赖模型猜测而非真实会话数据的问题。
+- 修复了记忆命中 ID 与检索上下文共用字段导致覆盖冲突的问题（拆分独立字段传递）。
+
+### 🔧 技术细节
+- 修改: `ai-engine/main.py`, `ai-engine/vector_store.py`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/controller/SysAiController.java`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/context/AiTraceContext.java`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/service/SysAiSessionService.java`, `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/service/impl/SysAiSessionServiceImpl.java`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/mapper/SysAiSessionMapper.java`, `swiftboot-backend/swiftboot-admin/src/main/resources/mapper/SysAiSessionMapper.xml`
+- 技术栈: Java Spring Boot, Python FastAPI, ChromaDB, SSE, Redis, MyBatis
+
+---
+
+## [2026-03-20 15:26] 更新摘要
+
+### 📝 变更综述
+本次更新继续细化首页“系统动态”中向量索引更新列表的展示方式，将其完全对齐到“用户操作动态”的同款列表结构，只保留紫色圆点、悬停显示全文和点击跳转详情这三个差异点，避免列表视觉风格割裂。
+
+### 🚀 核心变更
+- **首页系统动态**: 向量索引更新列表改为复用操作动态同款行结构与排版逻辑，统一了文字层级、时间位置和截断展示方式。
+
+### 🐛 问题修复
+- 修复了向量索引更新列表 UI 与操作动态不一致、看起来像独立按钮条目的问题。
+
+### 🔧 技术细节
+- 修改: `swiftboot-ui/src/views/dashboard/index.vue`
+- 技术栈: Vue 3, Element Plus, Tailwind CSS
+
+---
+
+## [2026-03-20 15:47] 更新摘要
+
+### 📝 变更综述
+本次更新继续修正首页系统动态与智能会话窗口的交互细节。首页两列动态列表都改为稳定的原生悬停全文与点击跳详情逻辑，避免提示内容在滚轮滚动时跟随漂移；智能会话窗口的“更新索引”则改为触发即提示，直接基于当前聚合统计反馈索引总量与分类数量，提升交互流畅度。
+
+### 🚀 核心变更
+- **首页系统动态**: 向量索引更新与用户操作动态统一支持悬停展示完整内容、点击跳转日志详情。
+- **智能会话窗口**: “更新索引”触发后立即提示当前总切片数与各聚合类型数量，不再等待后端轮询完成，侧边栏继续展示当前索引摘要。
+
+### 🐛 问题修复
+- 修复了向量索引更新悬停提示在滚轮滚动时跟随列表上移或下移的问题。
+- 修复了用户操作动态只能截断显示、无法查看全文和跳转详情的问题。
+- 修复了智能会话窗口索引按钮反馈过慢、为提示语额外轮询后端导致交互迟滞的问题。
+
+### 🔧 技术细节
+- 修改: `swiftboot-ui/src/views/dashboard/index.vue`, `swiftboot-ui/src/components/AiAssistant/index.vue`
+- 技术栈: Vue 3, Element Plus, Tailwind CSS
+
+---
+
+## [2026-03-20 15:52] 更新摘要
+
+### 📝 变更综述
+本次更新继续收敛智能会话窗口中“更新索引”按钮的交互语义。按钮不再触发后端索引重建请求，而是改为纯前端统计提示入口，直接展示当前已加载的总切片数与各聚合类型数量，减少额外请求并增强即时反馈。
+
+### 🚀 核心变更
+- **智能会话窗口**: “更新索引”按钮改为直接展示当前索引统计，不再请求 `/system/ai/index/rebuild`。
+
+### 🐛 问题修复
+- 修复了点击“更新索引”仍会触发后端重建请求、与期望的轻交互提示不一致的问题。
+
+### 🔧 技术细节
+- 修改: `swiftboot-ui/src/components/AiAssistant/index.vue`
+- 技术栈: Vue 3, Element Plus
+
+---
+
+## [2026-03-20 15:56] 更新摘要
+
+### 📝 变更综述
+本次更新继续优化智能会话窗口索引统计入口的用户表达，将按钮与提示语都改为更清晰的终端用户文案，避免“查看统计”被误解为“触发更新”。
+
+### 🚀 核心变更
+- **智能会话窗口**: 将按钮文案调整为“查看索引统计”，并把提示语改为更直观的当前索引总量与分类说明。
+
+### 🐛 问题修复
+- 修复了按钮文案仍然带有“更新”语义、容易让用户误以为会触发索引重建的问题。
+
+### 🔧 技术细节
+- 修改: `swiftboot-ui/src/components/AiAssistant/index.vue`
+- 技术栈: Vue 3, Element Plus
 
 ---

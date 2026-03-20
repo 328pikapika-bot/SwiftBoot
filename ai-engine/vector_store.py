@@ -185,29 +185,36 @@ class VectorStore:
         """
         if not chunks:
             print(f"[{self._now()}]没有数据需要存储。")
-            return
+            return {}
             
         print(f"[{self._now()}]正在准备存储 {len(chunks)} 个代码块...")
         
-        # 分离代码和文档
+        code_chunks, doc_chunks = self._split_chunks(chunks)
+        
+        self._add_to_collection(self.collection, code_chunks, "Code")
+        self._add_to_collection(self.doc_collection, doc_chunks, "Doc")
+        return {
+            "Code": len(code_chunks),
+            "Doc": len(doc_chunks)
+        }
+
+    def _split_chunks(self, chunks: List[Dict]):
         code_chunks = []
         doc_chunks = []
-        
+
         for chunk in chunks:
             is_doc = False
-            # 判断逻辑：markdown_section 类型，或者文件名以 .md, .txt 结尾
             if chunk.get('type') == 'markdown_section':
                 is_doc = True
             elif chunk.get('file_path', '').lower().endswith(('.md', '.txt')):
                 is_doc = True
-                
+
             if is_doc:
                 doc_chunks.append(chunk)
             else:
                 code_chunks.append(chunk)
-        
-        self._add_to_collection(self.collection, code_chunks, "Code")
-        self._add_to_collection(self.doc_collection, doc_chunks, "Doc")
+
+        return code_chunks, doc_chunks
 
     def _add_to_collection(self, collection, chunks, label):
         if not chunks:
@@ -251,10 +258,9 @@ class VectorStore:
                 print(f"[{self._now()}][{label}] 已处理 {end}/{total}")
             except Exception as e:
                 print(f"[{self._now()}][{label}] 写入失败 (Batch {i}-{end}): {e}")
-                self._log_to_backend(f"[{label}] 向量写入失败", str(e), 1)
+                self._log_to_backend(f"RAG 向量写入失败: {label}", "AI Engine", 1)
                 
         print(f"[{self._now()}][{label}] 写入完成。")
-        self._log_to_backend(f"[{label}] 知识库更新完成", f"新增/更新 {total} 个切片")
 
     def query(self, question: str, n_results: int = 5, intent: str = None, tool_name: str = None):
         """
