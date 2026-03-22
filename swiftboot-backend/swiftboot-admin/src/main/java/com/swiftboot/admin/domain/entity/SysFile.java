@@ -7,32 +7,47 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 文件信息
+ * File metadata.
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("sys_file")
-@Schema(description = "文件信息")
+@Schema(description = "File metadata")
 public class SysFile extends BaseEntity {
 
-    @Schema(description = "文件名称")
+    @Schema(description = "Stored file name")
     private String fileName;
 
-    @Schema(description = "原始名称")
+    @Schema(description = "Original file name")
     private String originalName;
 
-    @Schema(description = "文件后缀")
+    @Schema(description = "File suffix")
     private String fileSuffix;
 
-    @Schema(description = "文件路径")
+    @Schema(description = "Object key or relative path")
     private String filePath;
 
-    @Schema(description = "文件大小")
+    @Schema(description = "File size")
     private Long fileSize;
 
-    @Schema(description = "存储类型")
+    @Schema(description = "Storage type")
     private String storageType;
 
-    @Schema(description = "访问地址")
+    @Schema(description = "Storage bucket")
+    private String storageBucket;
+
+    @Schema(description = "MIME type")
+    private String mimeType;
+
+    @Schema(description = "Visibility")
+    private String visibility;
+
+    @Schema(description = "Business type")
+    private String bizType;
+
+    @Schema(description = "Business ID")
+    private Long bizId;
+
+    @Schema(description = "Public URL when available")
     private String url;
 }

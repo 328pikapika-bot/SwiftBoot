@@ -58,7 +58,7 @@ SwiftBoot “认识”你的每一行代码。
 > ![alt text](img/基础监控.gif)
 ---
 
-## ⚡ 快速启动 (v0.1.5+ 新版)
+## ⚡ Quick Start (v0.1.5+)
 > 如果 5 分钟内跑不起来，那就是我们的失败。
 
 ### 1️⃣ 环境准备
@@ -77,8 +77,8 @@ cd SwiftBoot
 我们提供了整合启动脚本，自动拉起后端、前端和 AI 引擎。
 
 1.  修改 `swiftboot-backend/src/main/resources/application.yml` 配置数据库/Redis。
-2.  修改 `快速启动/start_config.ini` 配置你的 Python 环境路径。
-3.  双击运行 **`快速启动/start_all.bat`**。
+2.  修改 `quick-start/start_config.ini` 配置你的 Python 环境路径和密码项。
+3.  双击运行 **`quick-start/start_all.bat`**。
 
 ### 4️⃣ 分步启动 (可选)
 

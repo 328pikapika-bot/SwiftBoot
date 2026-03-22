@@ -95,7 +95,7 @@ const systemRoutes: RouteRecordRaw[] = [
       {
         path: 'file',
         name: 'File',
-        component: () => import('@/views/system/file/index.vue'),
+        component: () => import('@/views/system-file-manage.vue'),
         meta: {
           title: '文件管理',
           icon: 'Folder'

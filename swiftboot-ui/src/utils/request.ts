@@ -2,8 +2,35 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 
+export interface ApiResponse<T = any> {
+  code: number
+  msg: string
+  data: T
+  timestamp: number
+}
+
+export interface PageResult<T = any> {
+  list: T[]
+  total: number
+  pageNum: number
+  pageSize: number
+  pages: number
+}
+
+type RequestInstance = AxiosInstance & {
+  <T = any>(config: AxiosRequestConfig): Promise<ApiResponse<T>>
+  request<T = any>(config: AxiosRequestConfig): Promise<ApiResponse<T>>
+  get<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
+  delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
+  head<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
+  options<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
+  post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
+  put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
+  patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
+}
+
 // 创建 axios 实例
-const service: AxiosInstance = axios.create({
+const service = axios.create({
   baseURL: '/api',
   timeout: 60000,
   headers: {
@@ -28,8 +55,8 @@ service.interceptors.request.use(
 
 // 响应拦截器
 service.interceptors.response.use(
-  (response: AxiosResponse) => {
-    const res = response.data
+  (response: AxiosResponse): any => {
+    const res = response.data as ApiResponse
     
     // 成功
     if (res.code === 200) {
@@ -70,19 +97,4 @@ service.interceptors.response.use(
   }
 )
 
-export interface ApiResponse<T = any> {
-  code: number
-  msg: string
-  data: T
-  timestamp: number
-}
-
-export interface PageResult<T = any> {
-  list: T[]
-  total: number
-  pageNum: number
-  pageSize: number
-  pages: number
-}
-
-export default service
+export default service as RequestInstance

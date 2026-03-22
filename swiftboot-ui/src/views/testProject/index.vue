@@ -100,6 +100,9 @@
           <el-input v-model="formData.remark" type="textarea" placeholder="请输入备注" />
         </el-form-item>
       </el-form>
+      <div class="attachment-section">
+        <AttachmentManager biz-type="test:testProject" :biz-id="formData.id || null" title="项目附件" />
+      </div>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleSubmit">确定</el-button>
@@ -113,6 +116,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Plus, Delete } from '@element-plus/icons-vue'
 import { listTestProject, getTestProject, addTestProject, updateTestProject, deleteTestProject } from '@/api/testProject'
+import AttachmentManager from '@/components/AttachmentManager/index.vue'
 
 const loading = ref(false)
 const tableData = ref([])
@@ -244,3 +248,9 @@ onMounted(() => {
   getList()
 })
 </script>
+
+<style scoped>
+.attachment-section {
+  margin-top: 12px;
+}
+</style>

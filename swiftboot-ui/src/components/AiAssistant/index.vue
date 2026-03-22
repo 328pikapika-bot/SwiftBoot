@@ -228,7 +228,7 @@ import 'github-markdown-css/github-markdown.css'
 import request from '@/utils/request'
 
 const md = new MarkdownIt({
-  html: true,
+  html: false,
   linkify: true,
   typographer: true,
   breaks: true,
@@ -243,6 +243,72 @@ const md = new MarkdownIt({
     return '<pre class="hljs custom-code-block"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
   }
 })
+
+const allowedHtmlTags = new Set([
+  'a', 'blockquote', 'br', 'code', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'hr', 'li', 'ol', 'p', 'pre', 'span', 'strong', 'table', 'tbody', 'td',
+  'th', 'thead', 'tr', 'ul'
+])
+
+const allowedHtmlAttrs: Record<string, string[]> = {
+  a: ['href', 'title', 'target', 'rel'],
+  code: ['class'],
+  pre: ['class'],
+  span: ['class'],
+  td: ['colspan', 'rowspan'],
+  th: ['colspan', 'rowspan']
+}
+
+const sanitizeRenderedHtml = (html: string) => {
+  if (!html) return ''
+  if (typeof window === 'undefined') return html
+
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(html, 'text/html')
+
+  const sanitizeNode = (node: Node) => {
+    if (node.nodeType !== Node.ELEMENT_NODE) return
+
+    const element = node as HTMLElement
+    const tagName = element.tagName.toLowerCase()
+
+    if (!allowedHtmlTags.has(tagName)) {
+      element.replaceWith(doc.createTextNode(element.textContent || ''))
+      return
+    }
+
+    for (const attr of Array.from(element.attributes)) {
+      const attrName = attr.name.toLowerCase()
+      const allowedAttrs = allowedHtmlAttrs[tagName] || []
+      if (attrName.startsWith('on') || !allowedAttrs.includes(attrName)) {
+        element.removeAttribute(attr.name)
+      }
+    }
+
+    if (tagName === 'a') {
+      const href = element.getAttribute('href')
+      if (href) {
+        try {
+          const url = new URL(href, window.location.origin)
+          if (!['http:', 'https:', 'mailto:'].includes(url.protocol)) {
+            element.removeAttribute('href')
+          }
+        } catch (_) {
+          element.removeAttribute('href')
+        }
+      }
+      if (element.getAttribute('href')) {
+        element.setAttribute('target', '_blank')
+        element.setAttribute('rel', 'noopener noreferrer nofollow')
+      }
+    }
+
+    Array.from(element.childNodes).forEach(sanitizeNode)
+  }
+
+  Array.from(doc.body.childNodes).forEach(sanitizeNode)
+  return doc.body.innerHTML
+}
 
 // 状态
 const isMinimized = ref(true)
@@ -273,7 +339,7 @@ const initChat = async () => {
   }
   try {
     // 并行请求历史记录和配置
-    const [historyRes, configRes] = await Promise.all([
+    const [historyRes, configRes]: any = await Promise.all([
       request.get('/system/ai/history'),
       request.get('/system/ai/config')
     ])
@@ -464,8 +530,8 @@ const parseMessage = (content: string) => {
   cleanContent = cleanHallucinationTags(cleanContent)
   
   return {
-    thought: thoughtContent ? md.render(thoughtContent) : '',
-    answer: cleanContent ? md.render(cleanContent) : '',
+    thought: thoughtContent ? sanitizeRenderedHtml(md.render(thoughtContent)) : '',
+    answer: cleanContent ? sanitizeRenderedHtml(md.render(cleanContent)) : '',
     isThinking,
     rawThought: thoughtContent,
     rawAnswer: cleanContent

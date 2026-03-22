@@ -339,7 +339,7 @@ const handleDetail = (row: any) => {
 const openDetailById = async (logId: string | number | null | undefined) => {
   if (!logId) return
   try {
-    const res = await request({ url: `/monitor/operlog/${logId}`, method: 'get' })
+    const res: any = await request({ url: `/monitor/operlog/${logId}`, method: 'get' })
     if (res.code === 200 && res.data) {
       handleDetail(res.data)
     }

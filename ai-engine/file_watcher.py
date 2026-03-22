@@ -23,6 +23,7 @@ ALLOWED_ROOT_DIRS = [
     "devDoc",
     "project-skills",
     "ai-engine",
+    "quick-start",
     "快速启动",
     "release_notes"
 ]

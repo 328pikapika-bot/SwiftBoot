@@ -8,6 +8,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AiAssistant: typeof import('./components/AiAssistant/index.vue')['default']
+    AttachmentManager: typeof import('./components/AttachmentManager/index.vue')['default']
     DictTag: typeof import('./components/DictTag/index.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElButton: typeof import('element-plus/es')['ElButton']

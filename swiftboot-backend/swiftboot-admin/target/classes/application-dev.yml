@@ -1,16 +1,15 @@
-# 开发环境配置
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/swiftboot?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    username: root
-    password: chenshuang0328!
+    url: ${SWIFTBOOT_DB_URL:jdbc:mysql://localhost:3306/swiftboot?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${SWIFTBOOT_DB_USERNAME:root}
+    password: ${SWIFTBOOT_DB_PASSWORD:}
   data:
     redis:
-      host: localhost
-      port: 6379
-      password:
-      database: 0
+      host: ${SWIFTBOOT_REDIS_HOST:localhost}
+      port: ${SWIFTBOOT_REDIS_PORT:6379}
+      password: ${SWIFTBOOT_REDIS_PASSWORD:}
+      database: ${SWIFTBOOT_REDIS_DB:0}
       lettuce:
         pool:
           max-active: 8
@@ -18,26 +17,39 @@ spring:
           max-idle: 8
           min-idle: 0
 
-# AI 配置 (DeepSeek)
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+springdoc:
+  swagger-ui:
+    enabled: ${SWIFTBOOT_SWAGGER_UI_ENABLED:true}
+  api-docs:
+    enabled: ${SWIFTBOOT_API_DOCS_ENABLED:true}
+
+knife4j:
+  enable: ${SWIFTBOOT_KNIFE4J_ENABLE:true}
+
+logging:
+  level:
+    com.swiftboot: ${SWIFTBOOT_LOG_LEVEL:debug}
+
 ai:
   deepseek:
-    api-url: https://api.deepseek.com/chat/completions
-    # 请替换为您自己的 DeepSeek API Key (申请地址: https://platform.deepseek.com/)
-    api-key: sk-007917fab0564b83a47cabd191bdcda1
-    model: deepseek-chat
-  # Python 引擎相关配置
+    api-url: ${SWIFTBOOT_DEEPSEEK_API_URL:https://api.deepseek.com/chat/completions}
+    api-key: ${SWIFTBOOT_DEEPSEEK_API_KEY:}
+    model: ${SWIFTBOOT_DEEPSEEK_MODEL:deepseek-chat}
   engine:
-    # 向量数据库持久化路径 (支持相对路径，./ 表示 ai-engine 脚本所在目录)
     vector-db-path: ./chroma_db
-    # 向量集合名称 (Codebase)
     collection-name: swiftboot_codebase
-    # 记忆集合名称 (Chat Memory)
     memory-collection-name: swiftboot_chat_memory
-    # 后端日志 API 地址 (Python 脚本完成索引更新后回调此接口)
-    # 部署时请注意修改 host (如 http://swiftboot-backend:8080/...)
-    backend-log-api: http://localhost:8080/monitor/operlog/inner/add
+    backend-log-api: ${SWIFTBOOT_AI_BACKEND_LOG_API:http://localhost:8080/monitor/operlog/inner/add}
 
-# 文件上传配置
+storage:
+  local:
+    base-path: ${SWIFTBOOT_UPLOAD_PATH:D:/upload}
+
 swiftboot:
-  file:
-    uploadPath: D:/upload
+  security:
+    swagger:
+      public-access-enabled: ${SWIFTBOOT_SWAGGER_PUBLIC_ACCESS_ENABLED:true}

@@ -6,13 +6,12 @@ import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * Knife4j 配置
- */
 @Configuration
+@ConditionalOnProperty(name = "springdoc.api-docs.enabled", havingValue = "true")
 public class Knife4jConfig {
 
     @Bean
@@ -20,7 +19,7 @@ public class Knife4jConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("SwiftBoot API")
-                        .description("SwiftBoot 轻量级后台管理系统接口文档")
+                        .description("SwiftBoot API documentation")
                         .version("1.0.0")
                         .contact(new Contact().name("SwiftBoot"))
                         .license(new License().name("MIT").url("https://opensource.org/licenses/MIT")))

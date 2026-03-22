@@ -203,8 +203,8 @@ const showPassword = ref(false)
 const isDark = ref(false)
 
 const loginForm = reactive({
-  username: 'admin',
-  password: '123456'
+  username: '',
+  password: ''
 })
 
 const handleLanguageChange = (lang: string) => {
@@ -233,6 +233,12 @@ const handleLogin = async () => {
   loading.value = true
   try {
     await userStore.login(loginForm)
+    if (rememberMe.value) {
+      localStorage.setItem('rememberedUsername', loginForm.username)
+    } else {
+      localStorage.removeItem('rememberedUsername')
+    }
+    localStorage.removeItem('rememberedPassword')
     ElMessage.success(t('login.success') || '登录成功')
     const redirect = route.query.redirect as string
     router.push(redirect || '/')
@@ -245,10 +251,9 @@ const handleLogin = async () => {
 
 onMounted(() => {
   const savedUsername = localStorage.getItem('rememberedUsername')
-  const savedPassword = localStorage.getItem('rememberedPassword')
-  if (savedUsername && savedPassword) {
+  localStorage.removeItem('rememberedPassword')
+  if (savedUsername) {
     loginForm.username = savedUsername
-    loginForm.password = savedPassword
     rememberMe.value = true
   }
   

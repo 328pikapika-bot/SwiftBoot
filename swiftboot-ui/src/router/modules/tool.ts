@@ -41,7 +41,7 @@ const toolRoutes: RouteRecordRaw[] = [
       {
         path: 'config',
         name: 'Config',
-        component: () => import('@/views/tool/config/index.vue'),
+        component: () => import('@/views/tool-config-page.vue'),
         meta: {
           title: '配置管理',
           icon: 'Setting'

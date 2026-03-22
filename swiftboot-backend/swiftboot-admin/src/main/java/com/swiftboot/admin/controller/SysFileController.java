@@ -1,240 +1,118 @@
 package com.swiftboot.admin.controller;
 
-import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.io.IoUtil;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.swiftboot.admin.domain.dto.SysFileQueryDTO;
+import com.swiftboot.admin.domain.dto.SysFileRenameDTO;
+import com.swiftboot.admin.domain.entity.SysFile;
+import com.swiftboot.admin.service.SysFileService;
+import com.swiftboot.admin.storage.StorageObject;
+import com.swiftboot.common.core.domain.PageQuery;
+import com.swiftboot.common.core.exception.BusinessException;
+import com.swiftboot.common.core.result.PageResult;
 import com.swiftboot.common.core.result.R;
+import com.swiftboot.common.log.annotation.Log;
+import com.swiftboot.common.log.enums.BusinessType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.text.SimpleDateFormat;
-import java.util.*;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 /**
- * 文件上传 Controller
+ * File management controller.
  */
 @Slf4j
-@Tag(name = "文件管理")
+@Tag(name = "File management")
 @RestController
 @RequestMapping("/system/file")
+@RequiredArgsConstructor
 public class SysFileController {
 
-    @Value("${swiftboot.file.uploadPath:./upload}")
-    private String uploadPath;
+    private final SysFileService fileService;
 
-    @Operation(summary = "上传文件")
-    @PostMapping("/upload")
-    public R<Map<String, Object>> upload(@RequestParam("file") MultipartFile file) {
-        if (file.isEmpty()) {
-            return R.fail("文件不能为空");
-        }
-
-        try {
-            String datePath = new SimpleDateFormat("yyyyMMdd").format(new Date());
-            File uploadDir = new File(uploadPath, datePath);
-            if (!uploadDir.exists()) {
-                uploadDir.mkdirs();
-            }
-
-            // 保持原始文件名
-            String originalFilename = file.getOriginalFilename();
-            String fileName = originalFilename;
-            
-            // 如果文件已存在，加时间戳避免冲突
-            File targetFile = new File(uploadDir, fileName);
-            if (targetFile.exists()) {
-                String nameWithoutExt = originalFilename.substring(0, originalFilename.lastIndexOf("."));
-                String ext = originalFilename.substring(originalFilename.lastIndexOf("."));
-                fileName = nameWithoutExt + "_" + System.currentTimeMillis() + ext;
-            }
-            
-            File destFile = new File(uploadDir, fileName);
-            file.transferTo(destFile);
-
-            Map<String, Object> result = new HashMap<>();
-            result.put("fileName", fileName);
-            result.put("originalName", originalFilename);
-            result.put("filePath", "/upload/" + datePath + "/" + fileName);
-            result.put("fileSize", file.getSize());
-            result.put("createTime", new Date());
-
-            return R.ok(result);
-        } catch (IOException e) {
-            log.error("文件上传失败", e);
-            return R.fail("文件上传失败: " + e.getMessage());
-        }
-    }
-
-    @Operation(summary = "文件列表")
+    @Operation(summary = "List files")
     @GetMapping("/list")
-    public R<List<Map<String, Object>>> list() {
-        List<Map<String, Object>> fileList = new ArrayList<>();
-        try {
-            File uploadDir = new File(uploadPath);
-            if (uploadDir.exists() && uploadDir.isDirectory()) {
-                File[] dateDirs = uploadDir.listFiles();
-                if (dateDirs != null) {
-                    for (File dateDir : dateDirs) {
-                        if (dateDir.isDirectory()) {
-                            File[] files = dateDir.listFiles();
-                            if (files != null) {
-                                for (File file : files) {
-                                    Map<String, Object> fileInfo = new HashMap<>();
-                                    fileInfo.put("fileName", file.getName());
-                                    fileInfo.put("originalName", file.getName());
-                                    fileInfo.put("filePath", "/upload/" + dateDir.getName() + "/" + file.getName());
-                                    fileInfo.put("fileSize", file.length());
-                                    fileInfo.put("createTime", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(file.lastModified())));
-                                    fileList.add(fileInfo);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.error("获取文件列表失败", e);
-        }
-        return R.ok(fileList);
+    public R<PageResult<SysFile>> list(SysFileQueryDTO query, PageQuery pageQuery) {
+        Page<SysFile> page = fileService.selectFilePage(query, pageQuery);
+        return R.ok(PageResult.of(page.getRecords(), page.getTotal(), page.getCurrent(), page.getSize()));
     }
 
-    @Operation(summary = "删除文件")
-    @DeleteMapping("/{fileName}")
-    public R<Void> delete(@PathVariable String fileName) {
-        try {
-            File uploadDir = new File(uploadPath);
-            if (uploadDir.exists()) {
-                File[] dirs = uploadDir.listFiles();
-                if (dirs != null) {
-                    for (File dir : dirs) {
-                        File target = new File(dir, fileName);
-                        if (target.exists() && target.delete()) {
-                            return R.ok();
-                        }
-                    }
-                }
-            }
-            return R.fail("文件不存在");
-        } catch (Exception e) {
-            log.error("文件删除失败", e);
-            return R.fail("文件删除失败");
-        }
+    @Operation(summary = "Upload file")
+    @Log(title = "File management", businessType = BusinessType.INSERT)
+    @PostMapping("/upload")
+    public R<SysFile> upload(@RequestParam("file") MultipartFile file,
+                             @RequestParam(required = false) String bizType,
+                             @RequestParam(required = false) Long bizId,
+                             @RequestParam(required = false) String visibility) {
+        return R.ok(fileService.upload(file, bizType, bizId, visibility));
     }
 
-    @Operation(summary = "预览文件")
-    @GetMapping("/preview/{fileName}")
-    public void preview(@PathVariable String fileName, HttpServletResponse response) {
+    @Operation(summary = "Delete file")
+    @Log(title = "File management", businessType = BusinessType.DELETE)
+    @DeleteMapping("/{fileId}")
+    public R<Void> delete(@PathVariable Long fileId) {
+        fileService.deleteFile(fileId);
+        return R.ok();
+    }
+
+    @Operation(summary = "Rename file")
+    @Log(title = "File management", businessType = BusinessType.UPDATE)
+    @PutMapping("/{fileId}/rename")
+    public R<Void> rename(@PathVariable Long fileId, @Valid @RequestBody SysFileRenameDTO dto) {
+        fileService.renameFile(fileId, dto.getNewName());
+        return R.ok();
+    }
+
+    @Operation(summary = "Get preview URL")
+    @GetMapping("/{fileId}/preview-url")
+    public R<String> previewUrl(@PathVariable Long fileId) {
+        return R.ok(fileService.createAccessUrl(fileId, "inline"));
+    }
+
+    @Operation(summary = "Get download URL")
+    @GetMapping("/{fileId}/download-url")
+    public R<String> downloadUrl(@PathVariable Long fileId) {
+        return R.ok(fileService.createAccessUrl(fileId, "attachment"));
+    }
+
+    @Operation(summary = "Access file content")
+    @GetMapping("/access/{token}")
+    public void access(@PathVariable String token, HttpServletResponse response) {
         try {
-            File uploadDir = new File(uploadPath);
-            if (uploadDir.exists()) {
-                File[] dirs = uploadDir.listFiles();
-                if (dirs != null) {
-                    for (File dir : dirs) {
-                        File target = new File(dir, fileName);
-                        if (target.exists()) {
-                            String ext = FileUtil.extName(fileName).toLowerCase();
-                            String contentType = getContentType(ext);
-                            response.setContentType(contentType);
-                            response.setHeader("Content-Disposition", "inline; filename=" + fileName);
-                            Files.copy(target.toPath(), response.getOutputStream());
-                            return;
-                        }
-                    }
+            SysFile file = fileService.getFileByToken(token);
+            String disposition = fileService.getDispositionByToken(token);
+            try (StorageObject object = fileService.openStorageObject(file)) {
+                String contentType = object.getContentType() != null ? object.getContentType() : file.getMimeType();
+                response.setContentType(contentType != null ? contentType : "application/octet-stream");
+                if (object.getContentLength() != null && object.getContentLength() >= 0) {
+                    response.setContentLengthLong(object.getContentLength());
                 }
+                String encodedName = URLEncoder.encode(file.getOriginalName(), StandardCharsets.UTF_8).replace("+", "%20");
+                response.setHeader("Content-Disposition", disposition + "; filename*=UTF-8''" + encodedName);
+                IoUtil.copy(object.getInputStream(), response.getOutputStream());
+                response.flushBuffer();
             }
+        } catch (BusinessException e) {
+            log.warn("File access rejected: {}", e.getMessage());
             response.setStatus(404);
         } catch (Exception e) {
-            log.error("文件预览失败", e);
+            log.error("File access failed", e);
             response.setStatus(500);
-        }
-    }
-
-    @Operation(summary = "下载文件")
-    @GetMapping("/download/{fileName}")
-    public void download(@PathVariable String fileName, HttpServletResponse response) {
-        try {
-            File uploadDir = new File(uploadPath);
-            if (uploadDir.exists()) {
-                File[] dirs = uploadDir.listFiles();
-                if (dirs != null) {
-                    for (File dir : dirs) {
-                        File target = new File(dir, fileName);
-                        if (target.exists()) {
-                            String ext = FileUtil.extName(fileName).toLowerCase();
-                            String contentType = getContentType(ext);
-                            response.setContentType(contentType);
-                            response.setHeader("Content-Disposition", "attachment; filename=" + fileName);
-                            Files.copy(target.toPath(), response.getOutputStream());
-                            return;
-                        }
-                    }
-                }
-            }
-            response.setStatus(404);
-        } catch (Exception e) {
-            log.error("文件下载失败", e);
-            response.setStatus(500);
-        }
-    }
-
-    private String getContentType(String ext) {
-        return switch (ext) {
-            case "jpg", "jpeg", "png", "gif", "webp", "bmp" -> "image/" + ext;
-            case "pdf" -> "application/pdf";
-            case "doc", "docx" -> "application/msword";
-            case "xls", "xlsx" -> "application/vnd.ms-excel";
-            case "txt" -> "text/plain";
-            case "zip" -> "application/zip";
-            default -> "application/octet-stream";
-        };
-    }
-
-    @Operation(summary = "重命名文件")
-    @PostMapping("/rename")
-    public R<Void> rename(@RequestBody Map<String, String> params) {
-        try {
-            String oldName = params.get("oldName");
-            String newName = params.get("newName");
-            
-            if (oldName == null || newName == null || oldName.isEmpty() || newName.isEmpty()) {
-                return R.fail("文件名不能为空");
-            }
-            
-            File uploadDir = new File(uploadPath);
-            if (uploadDir.exists()) {
-                File[] dirs = uploadDir.listFiles();
-                if (dirs != null) {
-                    for (File dir : dirs) {
-                        File oldFile = new File(dir, oldName);
-                        if (oldFile.exists()) {
-                            // 获取扩展名
-                            String ext = "";
-                            if (oldName.contains(".")) {
-                                ext = oldName.substring(oldName.lastIndexOf("."));
-                            }
-                            // 新文件名添加扩展名
-                            if (!newName.contains(".")) {
-                                newName = newName + ext;
-                            }
-                            File newFile = new File(dir, newName);
-                            if (oldFile.renameTo(newFile)) {
-                                return R.ok();
-                            }
-                            return R.fail("重命名失败");
-                        }
-                    }
-                }
-            }
-            return R.fail("文件不存在");
-        } catch (Exception e) {
-            log.error("文件重命名失败", e);
-            return R.fail("重命名失败");
         }
     }
 }
