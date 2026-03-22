@@ -546,3 +546,72 @@
 - 技术栈: Vue 3, Element Plus
 
 ---
+
+## [2026-03-20 17:29] 更新摘要
+
+### 📝 变更综述
+本次更新完成了 RAG 稳定性第一阶段优化，从“方案建议”真正落到了代码层。主链路改为并行预检与总预算降级，首轮 LLM 请求增加轻量重试，Python 侧补齐 embedding 预热与缓存机制；同时将这次优化沉淀为原设计文档补充和一份独立的 `优化升级v1.0` 报告。
+
+### 🚀 核心变更
+- **Java 主链路**: `SysAiController` 将 `intent`、`similarity`、`memory` 预检改为并行执行，并引入总预算降级机制。
+- **外部模型调用**: 首轮 LLM 非流式请求增加一次轻量重试，提升 `Connection reset / timeout` 场景下的成功率。
+- **Python AI Engine**: 为相似度计算和长期记忆召回补充缓存，并在启动时预热 embedding function，降低冷启动和重复查询抖动。
+- **设计文档**: 在原升级版设计方案中追加“优化升级 V1.0 落地补充”，并新增独立升级报告。
+
+### 🐛 问题修复
+- 修复了本地预检串行执行导致关键路径过长、任何一段超时都容易连锁退化的问题。
+- 修复了外部模型首轮请求遇到短时网络抖动时直接整轮失败的问题。
+- 修复了 Python 侧相似度与长期记忆重复计算过多、容易放大本地超时抖动的问题。
+
+### 🔧 技术细节
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/controller/SysAiController.java`
+- 修改: `ai-engine/vector_store.py`
+- 修改: `devDoc/设计实现/智能问答RAG引擎升级版设计方案(动态权重与防僵化机制).md`
+- 新增: `devDoc/设计实现/智能问答RAG引擎升级版设计方案(动态权重与防僵化机制)-【优化升级v1.0】.md`
+- 技术栈: Java Spring Boot, Python FastAPI, ChromaDB, Thread Pool, Retry, Cache, Markdown
+
+---
+
+## [2026-03-22 20:21] 更新摘要
+
+### 📝 变更综述
+本次更新补齐了智能会话的“简单常规问题快路径”。对于“你好”“你是谁”“谢谢”“再见”“你能干什么”这类短句，后端现在会直接本地回答，不再进入并行预检与 RAG 主链路；同时修正了安全规则中对身份类自然问句的误拦截。
+
+### 🚀 核心变更
+- **智能会话快路径**: `SysAiController` 新增简单常规问题本地直返逻辑，命中后直接输出固定模板回答。
+- **安全规则修正**: 从 `security_rules.json` 中移除 `你到底是谁` 的越权拦截规则，避免身份问句被误挡。
+
+### 🐛 问题修复
+- 修复了简单闲聊虽然有 CHAT 规则，但仍要进入并行预检的问题。
+- 修复了“你到底是谁”这类自然问法会被安全层误判为指令越权的问题。
+
+### 🔧 技术细节
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/controller/SysAiController.java`
+- 修改: `ai_rule/security_rules.json`
+- 技术栈: Java Spring Boot, JSON Rule Config
+
+---
+
+## [2026-03-22 20:50] 更新摘要
+
+### 📝 变更综述
+本次更新将简单常规问题快路径正式规则化。对于“你好”“你是谁”“你能干什么”“谢谢”“再见”等问题，系统现在会依据独立规则文件直接走轻量 LLM 回答，不再进入并行预检与复杂 RAG 流程；前端也同步去掉了这类问题的空助手占位，体感更轻。
+
+### 🚀 核心变更
+- **快路径规则文件**: 新增 `ai_rule/quick_chat_rules.json`，统一维护简单常规问题的匹配模式、回答指令和兜底答案。
+- **后端快路径升级**: `SysAiController` 对命中规则的问题直接走无工具、无预检、无记忆召回的轻量回答流程。
+- **前端交互优化**: `AiAssistant` 对命中快路径的问题延迟创建助手消息，不再先显示空白占位。
+- **系统规则补充**: `system_identity.md` 同步明确这类问题应直接自然回答，不进入复杂检索链路。
+
+### 🐛 问题修复
+- 修复了简单常规问题虽然已识别为闲聊，但仍会进入并行预检和复杂处理的问题。
+- 修复了简单常规问题在前端仍会先出现空助手占位、影响丝滑体验的问题。
+
+### 🔧 技术细节
+- 新增: `ai_rule/quick_chat_rules.json`
+- 修改: `ai_rule/system_identity.md`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/controller/SysAiController.java`
+- 修改: `swiftboot-ui/src/components/AiAssistant/index.vue`
+- 技术栈: Java Spring Boot, Vue 3, JSON Rule Config
+
+---

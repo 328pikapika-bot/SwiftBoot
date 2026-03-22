@@ -376,6 +376,30 @@ const fetchKnowledgeStats = async () => {
   }
 }
 
+const normalizeQuickChatText = (content: string) =>
+  content
+    .toLowerCase()
+    .replace(/[\s，。！？!?,、~～：:；;“”"'（）()【】\[\]<>《》]+/g, '')
+
+const isQuickChatFastPath = (content: string) => {
+  const normalized = normalizeQuickChatText(content)
+  if (!normalized || normalized.length > 30) return false
+  if (/(代码|源码|接口|类|方法|sql|数据库|功能|模块|业务|架构|项目|swiftboot|报错|异常|bug|之前|上次|历史|记忆|上下文|继续|刚才)/i.test(content)) {
+    return false
+  }
+
+  const patterns = [
+    /^(你好|您好|hello|hi|嗨|在吗|早上好|中午好|下午好|晚上好)[!！~。？?]*$/i,
+    /^(你是谁|你到底是谁|你是什么|你是做什么的|你是干什么的)[!！~。？?]*$/i,
+    /^(你好|您好)[，, ]*(你是谁|你是做什么的|你是干什么的)[!！~。？?]*$/i,
+    /^(你能干什么|你能做什么|你可以做什么|你会什么|你有什么能力)[!！~。？?]*$/i,
+    /^(谢谢|感谢|谢了|辛苦了)[!！~。？?]*$/i,
+    /^(再见|拜拜|bye|回头见)[!！~。？?]*$/i
+  ]
+
+  return patterns.some(pattern => pattern.test(content.trim()))
+}
+
 const openAssistant = () => {
   isMinimized.value = false
   ensureVisible()
@@ -468,14 +492,25 @@ const handleEnterKey = (e: KeyboardEvent) => {
 const sendMessage = async () => {
   const content = inputContent.value.trim()
   if (!content || loading.value) return
+  const useQuickChatFastPath = isQuickChatFastPath(content)
 
   messages.value.push({ role: 'user', content })
   inputContent.value = ''
   loading.value = true
   scrollToBottom(true)
 
-  const assistantMessage = reactive({ role: 'assistant', content: '' })
-  messages.value.push(assistantMessage as any)
+  let assistantMessage: { role: 'assistant', content: string } | null = null
+  const ensureAssistantMessage = () => {
+    if (!assistantMessage) {
+      assistantMessage = reactive({ role: 'assistant', content: '' }) as { role: 'assistant', content: string }
+      messages.value.push(assistantMessage as any)
+    }
+    return assistantMessage
+  }
+
+  if (!useQuickChatFastPath) {
+    ensureAssistantMessage()
+  }
   
   let pendingText = ''
   let isTyping = false
@@ -517,7 +552,7 @@ const sendMessage = async () => {
       } else {
         // 输出安全内容
         if (safeContent) {
-          assistantMessage.content += safeContent
+          ensureAssistantMessage().content += safeContent
         }
         streamBuffer = '' // 清空缓冲区
       }
@@ -526,7 +561,7 @@ const sendMessage = async () => {
     if (isStreamFinished && pendingText.length === 0) {
       // 流结束时，输出缓冲区剩余内容（清洗后）
       if (streamBuffer) {
-        assistantMessage.content += cleanHallucinationTags(streamBuffer)
+        ensureAssistantMessage().content += cleanHallucinationTags(streamBuffer)
       }
       isTyping = false
       loading.value = false
@@ -580,7 +615,7 @@ const sendMessage = async () => {
   } catch (error: any) {
     isStreamFinished = true
     if (error.name !== 'AbortError') {
-      assistantMessage.content += `\n\n[连接异常: ${error.message}]`
+      ensureAssistantMessage().content += `\n\n[连接异常: ${error.message}]`
     }
     loading.value = false
   } finally {

@@ -3,6 +3,8 @@ from chromadb.config import Settings
 import os
 import time
 import hashlib
+from collections import OrderedDict
+from threading import Lock
 from knowledge_ingest import JavaParser
 from typing import List, Dict
 import uuid
@@ -78,6 +80,9 @@ COLLECTION_NAME = config["vector_db"]["collection_name"]
 DOC_COLLECTION_NAME = config["vector_db"]["doc_collection_name"]
 MEMORY_COLLECTION_NAME = config["vector_db"]["memory_collection_name"]
 BACKEND_LOG_API = config["backend"]["api_url"]
+SIMILARITY_CACHE_TTL_SECONDS = 300
+MEMORY_QUERY_CACHE_TTL_SECONDS = 30
+CACHE_MAX_ENTRIES = 256
 
 class VectorStore:
     """
@@ -98,7 +103,49 @@ class VectorStore:
         # doc_collection: 存储文档
         self.collection = self.client.get_or_create_collection(name=COLLECTION_NAME)
         self.doc_collection = self.client.get_or_create_collection(name=DOC_COLLECTION_NAME)
+        self.embedding_function = self._resolve_embedding_function()
+        self._similarity_cache = OrderedDict()
+        self._similarity_cache_lock = Lock()
+        self._prewarm_embedding_function()
         print(f"[{self._now()}]数据库连接成功！Code Collection: {COLLECTION_NAME}, Doc Collection: {DOC_COLLECTION_NAME}")
+
+    def _resolve_embedding_function(self):
+        embedding_function = self.collection._embedding_function
+        if not embedding_function:
+            from chromadb.utils import embedding_functions
+            embedding_function = embedding_functions.DefaultEmbeddingFunction()
+        return embedding_function
+
+    def _prewarm_embedding_function(self):
+        try:
+            self.embedding_function(["swiftboot embedding warmup"])
+            print(f"[{self._now()}]向量 embedding function 预热完成。")
+        except Exception as e:
+            print(f"[{self._now()}]向量 embedding function 预热失败: {e}")
+
+    def _build_similarity_cache_key(self, text1: str, text2: str) -> str:
+        ordered = sorted([(text1 or "").strip().lower(), (text2 or "").strip().lower()])
+        raw_key = "||".join(ordered)
+        return hashlib.sha1(raw_key.encode('utf-8')).hexdigest()
+
+    def _get_similarity_cache(self, cache_key: str):
+        with self._similarity_cache_lock:
+            cached = self._similarity_cache.get(cache_key)
+            if not cached:
+                return None
+            cached_at, score = cached
+            if time.time() - cached_at > SIMILARITY_CACHE_TTL_SECONDS:
+                self._similarity_cache.pop(cache_key, None)
+                return None
+            self._similarity_cache.move_to_end(cache_key)
+            return score
+
+    def _set_similarity_cache(self, cache_key: str, score: float):
+        with self._similarity_cache_lock:
+            self._similarity_cache[cache_key] = (time.time(), score)
+            self._similarity_cache.move_to_end(cache_key)
+            while len(self._similarity_cache) > CACHE_MAX_ENTRIES:
+                self._similarity_cache.popitem(last=False)
 
     def calculate_similarity(self, text1: str, text2: str) -> float:
         """
@@ -106,18 +153,12 @@ class VectorStore:
         利用 ChromaDB 内置的 embedding function 进行向量化
         """
         try:
-            # 获取 embedding function
-            # 注意：ChromaDB 的 collection 默认使用 all-MiniLM-L6-v2
-            # 我们这里直接利用 collection 的 embedding_function
-            embedding_function = self.collection._embedding_function
-            
-            if not embedding_function:
-                # Fallback: 如果没有显式设置，尝试从 chromadb.utils.embedding_functions 导入
-                # 但通常 persistent client 会有默认的
-                from chromadb.utils import embedding_functions
-                embedding_function = embedding_functions.DefaultEmbeddingFunction()
-                
-            embeddings = embedding_function([text1, text2])
+            cache_key = self._build_similarity_cache_key(text1, text2)
+            cached_score = self._get_similarity_cache(cache_key)
+            if cached_score is not None:
+                return cached_score
+
+            embeddings = self.embedding_function([text1, text2])
             
             vec1 = embeddings[0]
             vec2 = embeddings[1]
@@ -140,8 +181,10 @@ class VectorStore:
                 return 0.0
                 
             similarity = dot_product / (norm_v1 * norm_v2)
-            return float(similarity)
-            
+            similarity = float(similarity)
+            self._set_similarity_cache(cache_key, similarity)
+            return similarity
+             
         except Exception as e:
             print(f"[{self._now()}]计算相似度失败: {e}")
             return 0.0
@@ -432,7 +475,36 @@ class ChatMemoryStore:
             settings=Settings(anonymized_telemetry=False)
         )
         self.collection = self.client.get_or_create_collection(name=MEMORY_COLLECTION_NAME)
+        self._query_cache = OrderedDict()
+        self._query_cache_lock = Lock()
         print(f"[{self._now()}]对话记忆数据库连接成功！")
+
+    def _build_query_cache_key(self, query_text: str, user_id: str, n_results: int, session_id: str = None) -> str:
+        raw = f"{user_id}|{session_id or ''}|{n_results}|{(query_text or '').strip().lower()}"
+        return hashlib.sha1(raw.encode('utf-8')).hexdigest()
+
+    def _get_query_cache(self, cache_key: str):
+        with self._query_cache_lock:
+            cached = self._query_cache.get(cache_key)
+            if not cached:
+                return None
+            cached_at, result = cached
+            if time.time() - cached_at > MEMORY_QUERY_CACHE_TTL_SECONDS:
+                self._query_cache.pop(cache_key, None)
+                return None
+            self._query_cache.move_to_end(cache_key)
+            return result
+
+    def _set_query_cache(self, cache_key: str, result):
+        with self._query_cache_lock:
+            self._query_cache[cache_key] = (time.time(), result)
+            self._query_cache.move_to_end(cache_key)
+            while len(self._query_cache) > CACHE_MAX_ENTRIES:
+                self._query_cache.popitem(last=False)
+
+    def _clear_query_cache(self):
+        with self._query_cache_lock:
+            self._query_cache.clear()
 
     def add_messages(self, user_id: str, messages: List[Dict], session_id: str = None):
         if not messages:
@@ -470,6 +542,7 @@ class ChatMemoryStore:
                 metadatas=metadatas,
                 ids=ids
             )
+            self._clear_query_cache()
             print(f"[{self._now()}][记忆存储] 已存入 {len(documents)} 条对话: {' | '.join(summary)}")
 
     def _now(self):
@@ -481,6 +554,11 @@ class ChatMemoryStore:
             where["session_id"] = str(session_id)
             
         print(f"[{self._now()}][记忆检索] 用户: {user_id} | 问题: {query_text[:30]}...")
+        cache_key = self._build_query_cache_key(query_text, user_id, n_results, session_id)
+        cached_result = self._get_query_cache(cache_key)
+        if cached_result is not None:
+            print(f"[{self._now()}][记忆检索] 命中缓存。")
+            return cached_result
         
         # 为了进行重排，先召回更多候选项 (比如 20 条)
         recall_limit = max(n_results * 3, 20)
@@ -548,13 +626,16 @@ class ChatMemoryStore:
                 print(f"  {i+1}. 得分:{item['final_score']:.2f} (基础:{item['base_score']:.2f}, 引用:+{item['citation_bonus']:.2f}, 衰减:-{item['time_penalty']:.2f}) | 内容: {item['document'][:20]}...")
             
             # 重新组装为 ChromaDB 的返回格式
-            return {
+            formatted = {
                 'ids': [[item['id'] for item in top_items]],
                 'documents': [[item['document'] for item in top_items]],
                 'metadatas': [[item['metadata'] for item in top_items]],
                 'distances': [[item['distance'] for item in top_items]]
             }
+            self._set_query_cache(cache_key, formatted)
+            return formatted
             
+        self._set_query_cache(cache_key, results)
         return results
 
     def update_citation(self, user_id: str, memory_id: str = None, text_content: str = None):
@@ -590,6 +671,7 @@ class ChatMemoryStore:
                     metadatas=[meta],
                     documents=[doc]
                 )
+                self._clear_query_cache()
                 print(f"[{self._now()}][记忆更新] 引用次数 +1 (当前:{meta['citation_count']}): {doc[:20]}...")
                 return True
         except Exception as e:
@@ -641,6 +723,7 @@ class ChatMemoryStore:
                         print(f"  - 删除: {preview}")
                         
                     self.collection.delete(ids=ids_to_delete)
+                    self._clear_query_cache()
                     print(f"[{self._now()}][记忆删除] 删除成功。")
                     return len(ids_to_delete)
                 else:
@@ -655,6 +738,7 @@ class ChatMemoryStore:
             if count > 0:
                 print(f"[{self._now()}][记忆删除] 正在删除用户 {user_id} 的 {count} 条记忆...")
                 self.collection.delete(where=where)
+                self._clear_query_cache()
                 print(f"[{self._now()}][记忆删除] 删除成功。")
                 return count
             else:

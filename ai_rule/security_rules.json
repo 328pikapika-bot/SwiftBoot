@@ -12,7 +12,6 @@
         "忽略(之前|前面|上述)的?(所有)?(指令|要求|系统提示词|设定|规则)",
         "ignore\\s+(all\\s+)?(previous|above)\\s+(instructions|prompts|rules)",
         "forget\\s+(all\\s+)?(previous|above)\\s+(instructions|prompts|rules)",
-        "你到底是谁",
         "你现在的身份是",
         "(系统提示词|system prompt)是(什么|什么内容)",
         "输出(你|系统)的(初始|隐藏|内置)?(设定|规则|指令)"

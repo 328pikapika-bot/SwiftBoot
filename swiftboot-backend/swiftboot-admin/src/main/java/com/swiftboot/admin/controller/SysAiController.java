@@ -42,8 +42,13 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 /**
@@ -107,6 +112,9 @@ public class SysAiController {
     
     // 缓存工具搜索规则
     private String toolSearchRuleContext = "";
+
+    // 缓存简单常规问题快路径规则
+    private JSONObject quickChatRulesConfig = null;
     
     // 实时日志流连接池
     private final List<SseEmitter> logEmitters = new CopyOnWriteArrayList<>();
@@ -177,6 +185,67 @@ public class SysAiController {
     private static final String KNOWLEDGE_STATS_URL = "http://localhost:8001/knowledge/stats";
     private static final String INDEX_REBUILD_URL = "http://localhost:8001/index/rebuild";
     private static final String INDEX_REBUILD_STATUS_URL = "http://localhost:8001/index/rebuild/status";
+    private static final ExecutorService AI_AUX_EXECUTOR = Executors.newFixedThreadPool(4);
+    private static final long AUXILIARY_BUDGET_MS = 800L;
+    private static final long INTENT_HTTP_TIMEOUT_MS = 650L;
+    private static final long SIMILARITY_HTTP_TIMEOUT_MS = 650L;
+    private static final long MEMORY_HTTP_TIMEOUT_MS = 1200L;
+    private static final int LLM_FIRST_CALL_MAX_ATTEMPTS = 2;
+    private static final int QUICK_CHAT_LLM_TIMEOUT_MS = 15000;
+
+    private static final class IntentDecision {
+        private final String intent;
+        private final double confidence;
+
+        private IntentDecision(String intent, double confidence) {
+            this.intent = intent;
+            this.confidence = confidence;
+        }
+    }
+
+    private static final class MemoryRecallDecision {
+        private final String context;
+        private final List<String> memoryIds;
+
+        private MemoryRecallDecision(String context, List<String> memoryIds) {
+            this.context = context;
+            this.memoryIds = memoryIds;
+        }
+
+        private static MemoryRecallDecision empty() {
+            return new MemoryRecallDecision(null, new ArrayList<>());
+        }
+    }
+
+    private static final class AiRuntimeConfig {
+        private final String apiUrl;
+        private final String apiKey;
+        private final String model;
+        private final String provider;
+
+        private AiRuntimeConfig(String apiUrl, String apiKey, String model, String provider) {
+            this.apiUrl = apiUrl;
+            this.apiKey = apiKey;
+            this.model = model;
+            this.provider = provider;
+        }
+
+        private boolean isAnthropic() {
+            return "anthropic".equalsIgnoreCase(provider) || apiUrl.contains("/anthropic/");
+        }
+    }
+
+    private static final class QuickChatRuleMatch {
+        private final String id;
+        private final String instruction;
+        private final String fallbackAnswer;
+
+        private QuickChatRuleMatch(String id, String instruction, String fallbackAnswer) {
+            this.id = id;
+            this.instruction = instruction;
+            this.fallbackAnswer = fallbackAnswer;
+        }
+    }
 
     /**
      * 实时索引日志流 (SSE)
@@ -396,7 +465,18 @@ public class SysAiController {
                 toolSearchRuleContext = FileUtil.readString(searchRuleFile, StandardCharsets.UTF_8);
                 System.out.println("Tool Search Rule loaded from external: " + searchRuleFile.getAbsolutePath());
             }
-            
+
+            File quickChatRuleFile = new File(ruleDir, "quick_chat_rules.json");
+            if (quickChatRuleFile.exists()) {
+                try {
+                    String quickChatJsonStr = FileUtil.readString(quickChatRuleFile, StandardCharsets.UTF_8);
+                    quickChatRulesConfig = JSONUtil.parseObj(quickChatJsonStr);
+                    System.out.println("Quick Chat Rules loaded from external: " + quickChatRuleFile.getAbsolutePath());
+                } catch (Exception e) {
+                    System.err.println("Failed to parse quick_chat_rules.json: " + e.getMessage());
+                }
+            }
+             
             // 加载安全拦截规则 V2
             File securityRuleFile = new File(ruleDir, "security_rules.json");
             if (securityRuleFile.exists()) {
@@ -720,6 +800,313 @@ public class SysAiController {
         return sb.toString().trim();
     }
 
+    private String resolveCurrentModelName() {
+        String configJson = stringRedisTemplate.opsForValue().get(AI_CONFIG_KEY);
+        if (StrUtil.isNotEmpty(configJson)) {
+            JSONObject config = JSONUtil.parseObj(configJson);
+            return config.getStr("model", defaultDeepseekModel);
+        }
+        return defaultDeepseekModel;
+    }
+
+    private AiRuntimeConfig resolveCurrentAiRuntimeConfig() {
+        String configJson = stringRedisTemplate.opsForValue().get(AI_CONFIG_KEY);
+        if (StrUtil.isNotEmpty(configJson)) {
+            JSONObject config = JSONUtil.parseObj(configJson);
+            return new AiRuntimeConfig(
+                    config.getStr("apiUrl", defaultDeepseekApiUrl),
+                    config.getStr("apiKey", defaultDeepseekApiKey),
+                    config.getStr("model", defaultDeepseekModel),
+                    config.getStr("provider", "")
+            );
+        }
+        return new AiRuntimeConfig(defaultDeepseekApiUrl, defaultDeepseekApiKey, defaultDeepseekModel, "");
+    }
+
+    private String normalizeQuickChatText(String content) {
+        if (StrUtil.isBlank(content)) {
+            return "";
+        }
+        return content.toLowerCase()
+                .replaceAll("[\\s，。！？!?,、~～：:；;“”\"'（）()【】\\[\\]<>《》]+", "");
+    }
+
+    private boolean containsProjectOrHistoryKeywords(String content) {
+        String lower = content.toLowerCase();
+        return StrUtil.containsAny(lower,
+                "代码", "源码", "接口", "类", "方法", "sql", "数据库",
+                "功能", "模块", "业务", "架构", "项目", "swiftboot", "报错", "异常", "bug",
+                "之前", "上次", "历史", "记忆", "上下文", "继续", "刚才");
+    }
+
+    private QuickChatRuleMatch matchQuickChatRule(String content) {
+        if (StrUtil.isBlank(content) || quickChatRulesConfig == null) {
+            return null;
+        }
+        String normalized = normalizeQuickChatText(content);
+        if (StrUtil.isBlank(normalized) || normalized.length() > 30 || containsProjectOrHistoryKeywords(content)) {
+            return null;
+        }
+        JSONObject settings = quickChatRulesConfig.getJSONObject("settings");
+        int maxLength = settings != null ? settings.getInt("max_length", 30) : 30;
+        if (normalized.length() > maxLength) {
+            return null;
+        }
+        JSONArray rules = quickChatRulesConfig.getJSONArray("rules");
+        if (rules == null) {
+            return null;
+        }
+        for (int i = 0; i < rules.size(); i++) {
+            JSONObject rule = rules.getJSONObject(i);
+            JSONArray patterns = rule.getJSONArray("patterns");
+            if (patterns == null) {
+                continue;
+            }
+            for (int j = 0; j < patterns.size(); j++) {
+                String pattern = patterns.getStr(j);
+                try {
+                    if (pattern != null && java.util.regex.Pattern.compile(pattern, java.util.regex.Pattern.CASE_INSENSITIVE).matcher(content.trim()).find()) {
+                        return new QuickChatRuleMatch(
+                                rule.getStr("id", "QUICK_CHAT"),
+                                rule.getStr("response_instruction", ""),
+                                rule.getStr("fallback_answer", "你好，我是 SwiftBoot 智能助手，可以协助你处理当前项目相关问题。")
+                        );
+                    }
+                } catch (Exception e) {
+                    System.err.println("Quick chat rule regex invalid: " + pattern + ", error: " + e.getMessage());
+                }
+            }
+        }
+        return null;
+    }
+
+    private String buildQuickChatSystemPrompt(QuickChatRuleMatch ruleMatch) {
+        StringBuilder prompt = new StringBuilder();
+        if (StrUtil.isNotBlank(agentRuleContext)) {
+            prompt.append(agentRuleContext).append("\n\n");
+        } else {
+            prompt.append("你是 SwiftBoot 智能助手，请直接自然回答用户，不调用工具，不输出思考标签。\n\n");
+        }
+        prompt.append("【简单常规问题快路径】\n");
+        prompt.append("当前问题属于简单常规问题，请直接自然回答。\n");
+        prompt.append("- 禁止调用任何工具\n");
+        prompt.append("- 禁止检索历史记忆\n");
+        prompt.append("- 禁止输出 <thought>、function_calls、DSML 等标签\n");
+        prompt.append("- 回答尽量短、自然、礼貌\n");
+        if (ruleMatch != null && StrUtil.isNotBlank(ruleMatch.instruction)) {
+            prompt.append("- 本次补充规则：").append(ruleMatch.instruction).append("\n");
+        }
+        return prompt.toString();
+    }
+
+    private String answerQuickChatFastPath(AiRuntimeConfig runtimeConfig, String content, QuickChatRuleMatch ruleMatch) {
+        JSONArray messages = new JSONArray();
+        messages.add(new JSONObject().set("role", "user").set("content", content));
+        String answer = completeNonStream(
+                runtimeConfig.isAnthropic(),
+                runtimeConfig.apiUrl,
+                runtimeConfig.apiKey,
+                runtimeConfig.model,
+                messages,
+                buildQuickChatSystemPrompt(ruleMatch)
+        );
+        if (StrUtil.isNotBlank(answer)) {
+            return answer.trim();
+        }
+        return ruleMatch != null ? ruleMatch.fallbackAnswer : "你好，我是 SwiftBoot 智能助手，可以协助你处理当前项目相关问题。";
+    }
+
+    private String loadLastUserMessage(Long userId) {
+        String redisKey = HISTORY_KEY_PREFIX + userId;
+        Long historySize = stringRedisTemplate.opsForList().size(redisKey);
+        if (historySize == null || historySize <= 0) {
+            return null;
+        }
+        List<String> allHistory = stringRedisTemplate.opsForList().range(redisKey, 0, -1);
+        if (allHistory == null) {
+            return null;
+        }
+        for (int i = allHistory.size() - 1; i >= 0; i--) {
+            JSONObject msg = JSONUtil.parseObj(allHistory.get(i));
+            if ("user".equals(msg.getStr("role"))) {
+                return msg.getStr("content");
+            }
+        }
+        return null;
+    }
+
+    private IntentDecision detectIntentWithFallback(String content) {
+        try {
+            JSONObject intentReq = new JSONObject();
+            intentReq.set("text", content);
+            String intentRes = HttpRequest.post(INTENT_DETECT_URL)
+                    .timeout((int) INTENT_HTTP_TIMEOUT_MS)
+                    .body(intentReq.toString())
+                    .execute()
+                    .body();
+            if (StrUtil.isNotEmpty(intentRes)) {
+                JSONObject intentJson = JSONUtil.parseObj(intentRes);
+                return new IntentDecision(
+                        intentJson.getStr("intent", "CHAT"),
+                        intentJson.getDouble("confidence", 0.5)
+                );
+            }
+        } catch (Exception e) {
+            System.err.println("Intent detection failed: " + e.getMessage());
+        }
+        return new IntentDecision("CHAT", 0.5);
+    }
+
+    private boolean checkHistorySimilarity(String currentContent, String lastUserMsgJson) {
+        if (StrUtil.isBlank(lastUserMsgJson)) {
+            return false;
+        }
+        try {
+            JSONObject simRequest = new JSONObject();
+            simRequest.set("text1", currentContent);
+            simRequest.set("text2", lastUserMsgJson);
+            String simResult = HttpRequest.post(NLP_SIMILARITY_URL)
+                    .timeout((int) SIMILARITY_HTTP_TIMEOUT_MS)
+                    .body(simRequest.toString())
+                    .execute()
+                    .body();
+            if (StrUtil.isNotEmpty(simResult)) {
+                double similarity = JSONUtil.parseObj(simResult).getDouble("similarity");
+                System.out.println("Context Similarity: " + similarity + " (Current: " + currentContent + " vs Last: " + lastUserMsgJson + ")");
+                return similarity >= 0.5;
+            }
+        } catch (Exception e) {
+            System.err.println("Similarity check failed: " + e.getMessage());
+        }
+        return false;
+    }
+
+    private boolean shouldAttemptMemoryRecall(String content) {
+        if (StrUtil.isBlank(content)) {
+            return false;
+        }
+        String lower = content.toLowerCase();
+        boolean obviousChat = StrUtil.containsAny(lower, "你好", "hello", "hi", "谢谢", "感谢", "哈哈", "再见", "在吗");
+        boolean projectRelated = StrUtil.containsAny(lower,
+                "代码", "源码", "接口", "类", "方法", "sql", "数据库",
+                "功能", "模块", "业务", "架构", "项目", "swiftboot", "报错", "异常", "bug",
+                "之前", "上次", "历史", "记忆", "上下文");
+        if (obviousChat && !projectRelated && content.length() <= 20) {
+            return false;
+        }
+        return projectRelated || content.length() >= 12;
+    }
+
+    private MemoryRecallDecision recallMemoryContext(Long userId, String content) {
+        if (!shouldAttemptMemoryRecall(content)) {
+            return MemoryRecallDecision.empty();
+        }
+        try {
+            JSONObject memReq = new JSONObject();
+            memReq.set("user_id", String.valueOf(userId));
+            memReq.set("question", content);
+            memReq.set("n_results", 3);
+            memReq.set("max_distance", 1.0);
+
+            String memRes = HttpRequest.post(MEMORY_QUERY_URL)
+                    .timeout((int) MEMORY_HTTP_TIMEOUT_MS)
+                    .body(memReq.toString())
+                    .execute()
+                    .body();
+            if (StrUtil.isEmpty(memRes)) {
+                return MemoryRecallDecision.empty();
+            }
+
+            JSONObject memJson = JSONUtil.parseObj(memRes);
+            JSONArray memResults = memJson.getJSONArray("results");
+            if (memResults == null || memResults.isEmpty()) {
+                return MemoryRecallDecision.empty();
+            }
+
+            StringBuilder memContext = new StringBuilder("【系统提示：以下是您过去的高频重要记忆，请参考】\n");
+            List<String> hitMemoryIds = new ArrayList<>();
+            for (int i = 0; i < memResults.size(); i++) {
+                JSONObject item = memResults.getJSONObject(i);
+                String text = item.getStr("content");
+                JSONObject meta = item.getJSONObject("metadata");
+                String role = meta != null ? meta.getStr("role", "unknown") : "unknown";
+                memContext.append("[").append(role).append("]: ").append(text).append("\n");
+
+                if (item.containsKey("id")) {
+                    hitMemoryIds.add(item.getStr("id"));
+                } else if (item.containsKey("metadata") && item.getJSONObject("metadata").containsKey("id")) {
+                    hitMemoryIds.add(item.getJSONObject("metadata").getStr("id"));
+                }
+            }
+            System.out.println("[Agent] 已准备长期记忆上下文，数量: " + memResults.size());
+            return new MemoryRecallDecision(memContext.toString(), hitMemoryIds);
+        } catch (Exception e) {
+            System.err.println("Memory recall failed: " + e.getMessage());
+            return MemoryRecallDecision.empty();
+        }
+    }
+
+    private <T> T awaitWithinBudget(CompletableFuture<T> future, T fallback, long deadlineMillis, String stageName) {
+        long remaining = deadlineMillis - System.currentTimeMillis();
+        if (remaining <= 0) {
+            future.cancel(true);
+            System.out.println("[Agent Budget] " + stageName + " 超出总预算，直接降级");
+            return fallback;
+        }
+        try {
+            return future.get(remaining, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            future.cancel(true);
+            System.out.println("[Agent Budget] " + stageName + " 预算耗尽，降级处理");
+            return fallback;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return fallback;
+        } catch (ExecutionException e) {
+            return fallback;
+        }
+    }
+
+    private boolean isRetryableLlmException(Exception e) {
+        if (e == null || StrUtil.isBlank(e.getMessage())) {
+            return false;
+        }
+        String msg = e.getMessage().toLowerCase();
+        return msg.contains("connection reset")
+                || msg.contains("read timed out")
+                || msg.contains("connect timed out")
+                || msg.contains("broken pipe")
+                || msg.contains("socketexception");
+    }
+
+    private HttpResponse executeFirstLlmCall(String apiUrl, String apiKey, JSONObject requestBody) throws Exception {
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= LLM_FIRST_CALL_MAX_ATTEMPTS; attempt++) {
+            try {
+                return HttpRequest.post(apiUrl)
+                        .timeout(120000)
+                        .header("Authorization", "Bearer " + apiKey)
+                        .header("Content-Type", "application/json")
+                        .header("Accept", "application/json")
+                        .body(requestBody.toString())
+                        .execute();
+            } catch (Exception e) {
+                lastException = e;
+                if (attempt >= LLM_FIRST_CALL_MAX_ATTEMPTS || !isRetryableLlmException(e)) {
+                    throw e;
+                }
+                System.err.println("[Agent] 首轮 LLM 请求异常，准备重试(" + attempt + "/" + LLM_FIRST_CALL_MAX_ATTEMPTS + "): " + e.getMessage());
+                try {
+                    Thread.sleep(300L * attempt);
+                } catch (InterruptedException interruptedException) {
+                    Thread.currentThread().interrupt();
+                    throw e;
+                }
+            }
+        }
+        throw lastException == null ? new IllegalStateException("LLM request failed") : lastException;
+    }
+
     /**
      * 前置安全拦截 (轻量级 V2)
      * 支持多层防御、正则匹配与关键词匹配，返回拦截信息。
@@ -825,14 +1212,7 @@ public class SysAiController {
             try {
                 boolean queryAllUsers = isAllUsersQuestionHistoryRequest(content);
                 String directAnswer = buildQuestionHistoryAnswer(userId, queryAllUsers);
-
-                String configJson = stringRedisTemplate.opsForValue().get(AI_CONFIG_KEY);
-                String currentModel = defaultDeepseekModel;
-                if (StrUtil.isNotEmpty(configJson)) {
-                    JSONObject config = JSONUtil.parseObj(configJson);
-                    currentModel = config.getStr("model", defaultDeepseekModel);
-                }
-
+                String currentModel = resolveCurrentModelName();
                 saveConversationHistory(userId, content, directAnswer, startTime, userIp, currentModel);
                 emitter.send(new JSONObject().set("content", directAnswer).toString());
             } catch (Exception e) {
@@ -841,6 +1221,30 @@ public class SysAiController {
                 } catch (Exception ignored) {}
             }
             emitter.complete();
+            return emitter;
+        }
+
+        // 简单常规问题快路径：命中新规则后直接走轻量 LLM 回答，跳过并行预检与 RAG 主链路
+        QuickChatRuleMatch quickChatRuleMatch = matchQuickChatRule(content);
+        if (quickChatRuleMatch != null) {
+            java.lang.Thread quickThread = new java.lang.Thread(() -> {
+                try {
+                    AiRuntimeConfig runtimeConfig = resolveCurrentAiRuntimeConfig();
+                    String quickChatAnswer = answerQuickChatFastPath(runtimeConfig, content, quickChatRuleMatch);
+                    saveConversationHistory(userId, content, quickChatAnswer, startTime, userIp, runtimeConfig.model);
+                    emitter.send(new JSONObject().set("content", quickChatAnswer).toString());
+                } catch (Exception e) {
+                    try {
+                        String fallbackAnswer = quickChatRuleMatch.fallbackAnswer;
+                        saveConversationHistory(userId, content, fallbackAnswer, startTime, userIp, resolveCurrentModelName());
+                        emitter.send(new JSONObject().set("content", fallbackAnswer).toString());
+                    } catch (Exception ignored) {
+                    }
+                } finally {
+                    emitter.complete();
+                }
+            });
+            quickThread.start();
             return emitter;
         }
 
@@ -877,30 +1281,47 @@ public class SysAiController {
                 JSONArray messages = new JSONArray();
                 messages.add(new JSONObject().set("role", "system").set("content", systemPrompt));
                 
-                // 3. 意图预检 (Intent Detection) & 工具路由动态调整
-                String detectedIntent = "CHAT";
-                double intentConfidence = 0.5;
-                try {
-                    JSONObject intentReq = new JSONObject();
-                    intentReq.set("text", content);
-                    String intentRes = HttpRequest.post(INTENT_DETECT_URL)
-                            .timeout(500)
-                            .body(intentReq.toString())
-                            .execute()
-                            .body();
-                    if (StrUtil.isNotEmpty(intentRes)) {
-                        JSONObject intentJson = JSONUtil.parseObj(intentRes);
-                        detectedIntent = intentJson.getStr("intent", "CHAT");
-                        intentConfidence = intentJson.getDouble("confidence", 0.5);
-                    }
-                } catch (Exception e) {
-                    System.err.println("Intent detection failed: " + e.getMessage());
-                }
-                
-                // 根据意图动态调整 Tool Choice
+                // 3. 并行执行本地预检，并在总预算内按结果动态降级
+                long auxStart = System.currentTimeMillis();
+                long auxDeadline = auxStart + AUXILIARY_BUDGET_MS;
+                String lastUserMsgJson = loadLastUserMessage(userId);
+
+                CompletableFuture<IntentDecision> intentFuture = CompletableFuture.supplyAsync(
+                        () -> detectIntentWithFallback(content), AI_AUX_EXECUTOR
+                );
+                CompletableFuture<Boolean> historyFuture = StrUtil.isNotBlank(lastUserMsgJson)
+                        ? CompletableFuture.supplyAsync(() -> checkHistorySimilarity(content, lastUserMsgJson), AI_AUX_EXECUTOR)
+                        : CompletableFuture.completedFuture(false);
+                CompletableFuture<MemoryRecallDecision> memoryFuture = CompletableFuture.supplyAsync(
+                        () -> recallMemoryContext(userId, content), AI_AUX_EXECUTOR
+                );
+
+                IntentDecision intentDecision = awaitWithinBudget(
+                        intentFuture,
+                        new IntentDecision("CHAT", 0.5),
+                        auxDeadline,
+                        "intent"
+                );
+                boolean shouldIncludeHistory = awaitWithinBudget(
+                        historyFuture,
+                        false,
+                        auxDeadline,
+                        "history_similarity"
+                );
+                MemoryRecallDecision memoryDecision = awaitWithinBudget(
+                        memoryFuture,
+                        MemoryRecallDecision.empty(),
+                        auxDeadline,
+                        "memory_recall"
+                );
+                long auxElapsed = System.currentTimeMillis() - auxStart;
+                System.out.println("[Agent Budget] 本地预检完成，耗时: " + auxElapsed + "ms");
+
+                String detectedIntent = intentDecision.intent;
+                double intentConfidence = intentDecision.confidence;
+
                 JSONObject dynamicToolChoice = new JSONObject();
-                dynamicToolChoice.set("type", "auto"); // 默认交给大模型自己选
-                
+                dynamicToolChoice.set("type", "auto");
                 if (intentConfidence > 0.8) {
                     if ("CODE".equals(detectedIntent)) {
                         JSONObject f = new JSONObject();
@@ -914,119 +1335,23 @@ public class SysAiController {
                         dynamicToolChoice.set("function", f);
                     }
                 }
-                
-                // 4. 智能上下文判断 (基于向量相似度)
-                // 获取 Redis 中最近的一条用户提问
-                String redisKey = HISTORY_KEY_PREFIX + userId;
-                String lastUserMsgJson = null;
-                
-                // 优化：仅当 Redis 中确实存在历史记录时才尝试获取
-                Long historySize = stringRedisTemplate.opsForList().size(redisKey);
-                if (historySize != null && historySize > 0) {
-                    List<String> history = stringRedisTemplate.opsForList().range(redisKey, -2, -2);
-                    if (history != null && !history.isEmpty()) {
-                         List<String> allHistory = stringRedisTemplate.opsForList().range(redisKey, 0, -1);
-                         if (allHistory != null) {
-                             for (int i = allHistory.size() - 1; i >= 0; i--) {
-                                 JSONObject msg = JSONUtil.parseObj(allHistory.get(i));
-                                 if ("user".equals(msg.getStr("role"))) {
-                                     lastUserMsgJson = msg.getStr("content");
-                                     break;
-                                 }
-                             }
-                         }
-                    }
-                }
-                
-                boolean shouldIncludeHistory = true;
-                // 优化：仅当存在历史提问时才进行相似度检查
-                if (lastUserMsgJson != null) {
-                    try {
-                        JSONObject simRequest = new JSONObject();
-                        simRequest.set("text1", content);
-                        simRequest.set("text2", lastUserMsgJson);
-                        
-                        String simResult = HttpRequest.post(NLP_SIMILARITY_URL)
-                                .timeout(500) // 进一步降低超时时间到 500ms
-                                .body(simRequest.toString())
-                                .execute()
-                                .body();
-                                
-                        if (StrUtil.isNotEmpty(simResult)) {
-                            double similarity = JSONUtil.parseObj(simResult).getDouble("similarity");
-                            System.out.println("Context Similarity: " + similarity + " (Current: " + content + " vs Last: " + lastUserMsgJson + ")");
-                            
-                            if (similarity < 0.5) {
-                                shouldIncludeHistory = false;
-                                System.out.println("Topic switched (similarity < 0.5), history context dropped.");
-                            }
-                        }
-                    } catch (Exception e) {
-                        System.err.println("Similarity check failed: " + e.getMessage());
-                        // 相似度检查失败时，默认不包含历史，避免不相关的上下文干扰
-                        shouldIncludeHistory = false;
-                    }
-                } else {
-                    // 历史为空，无需包含历史
-                    shouldIncludeHistory = false;
-                }
-                
-                // 5. 注入近期对话历史 (如果判定为相关)
+
+                // 4. 注入近期对话历史（仅在预算内判定相关时）
                 if (shouldIncludeHistory) {
                     addRecentHistory(messages, userId);
                 }
-                
-                // 5.1 注入高权重长期记忆 (主链路召回)
-                try {
-                    JSONObject memReq = new JSONObject();
-                    memReq.set("user_id", String.valueOf(userId));
-                    memReq.set("question", content);
-                    memReq.set("n_results", 3);
-                    memReq.set("max_distance", 1.0); // 距离阈值过滤
-                    
-                    String memRes = HttpRequest.post(MEMORY_QUERY_URL)
-                            .timeout(1000)
-                            .body(memReq.toString())
-                            .execute()
-                            .body();
-                            
-                    if (StrUtil.isNotEmpty(memRes)) {
-                        JSONObject memJson = JSONUtil.parseObj(memRes);
-                        JSONArray memResults = memJson.getJSONArray("results");
-                        if (memResults != null && !memResults.isEmpty()) {
-                            StringBuilder memContext = new StringBuilder("【系统提示：以下是您过去的高频重要记忆，请参考】\n");
-                            JSONArray hitMemoryIds = new JSONArray();
-                            for (int i = 0; i < memResults.size(); i++) {
-                                JSONObject item = memResults.getJSONObject(i);
-                                String text = item.getStr("content");
-                                JSONObject meta = item.getJSONObject("metadata");
-                                String role = meta != null ? meta.getStr("role", "unknown") : "unknown";
-                                
-                                memContext.append("[").append(role).append("]: ").append(text).append("\n");
-                                
-                                // 提取记忆 ID 用于后续更新权重
-                                if (item.containsKey("id")) {
-                                    hitMemoryIds.add(item.getStr("id"));
-                                } else if (item.containsKey("metadata") && item.getJSONObject("metadata").containsKey("id")) {
-                                    hitMemoryIds.add(item.getJSONObject("metadata").getStr("id"));
-                                }
-                            }
-                            // 作为一个 user 消息注入到上下文最前面，或者系统消息后
-                            JSONObject memMsg = new JSONObject();
-                            memMsg.set("role", "user");
-                            memMsg.set("content", memContext.toString());
-                            messages.add(1, memMsg); // 插入到 system prompt 之后
-                            System.out.println("[Agent] 已注入长期记忆上下文，数量: " + memResults.size());
-                            
-                            // 将命中的记忆 ID 存入 ThreadLocal 上下文，供后续更新权重和发散提问使用
-                            com.swiftboot.admin.context.AiTraceContext.AiTraceData traceData = com.swiftboot.admin.context.AiTraceContext.get();
-                            if (traceData != null && !hitMemoryIds.isEmpty()) {
-                                com.swiftboot.admin.context.AiTraceContext.setMemoryHitIds(hitMemoryIds.toList(String.class));
-                            }
-                        }
+
+                // 5. 注入长期记忆（预算内召回成功才使用）
+                if (StrUtil.isNotBlank(memoryDecision.context)) {
+                    JSONObject memMsg = new JSONObject();
+                    memMsg.set("role", "user");
+                    memMsg.set("content", memoryDecision.context);
+                    messages.add(1, memMsg);
+
+                    com.swiftboot.admin.context.AiTraceContext.AiTraceData traceData = com.swiftboot.admin.context.AiTraceContext.get();
+                    if (traceData != null && memoryDecision.memoryIds != null && !memoryDecision.memoryIds.isEmpty()) {
+                        com.swiftboot.admin.context.AiTraceContext.setMemoryHitIds(memoryDecision.memoryIds);
                     }
-                } catch (Exception e) {
-                    System.err.println("Memory recall failed: " + e.getMessage());
                 }
                 
                 // 6. 添加用户消息
@@ -1168,16 +1493,7 @@ public class SysAiController {
                     }
                     
                     System.out.println("[Agent] 发送请求到 LLM，当前工具调用轮次: " + (toolCallCount + 1) + " URL: " + currentApiUrl);
-                    
-                    // 设置更长的超时时间 (120s)，有些模型第一次请求或复杂 prompt 会比较慢
-                    HttpResponse response = HttpRequest.post(currentApiUrl)
-                            .timeout(120000)
-                            .header("Authorization", "Bearer " + currentApiKey)
-                            .header("Content-Type", "application/json")
-                            // 必须添加 Accept 头，否则可能会报 400 甚至引起连接被服务端异常关闭
-                            .header("Accept", "application/json")
-                            .body(requestBody.toString())
-                            .execute();
+                    HttpResponse response = executeFirstLlmCall(currentApiUrl, currentApiKey, requestBody);
                     
                     if (!response.isOk()) {
                         emitter.send(new JSONObject().set("content", "AI 服务响应异常: " + response.getStatus()).toString());
