@@ -2,36 +2,56 @@ package com.swiftboot.test.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.swiftboot.test.domain.entity.TestProject;
 import com.swiftboot.common.core.domain.PageQuery;
+import com.swiftboot.test.domain.entity.TestProject;
+import com.swiftboot.test.domain.vo.TestProjectImportResultVO;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
 /**
- * 项目示例 Service
- *
- * @author SwiftBoot_chenshuang
- * @date 2026-01-24 00:32:22
+ * 示例项目服务
  */
 public interface TestProjectService extends IService<TestProject> {
 
     /**
-     * 分页查询项目示例列表
+     * 分页查询示例项目列表
      */
     Page<TestProject> selectTestProjectPage(TestProject testProject, PageQuery pageQuery);
 
     /**
-     * 新增项目示例
+     * 查询示例项目列表
+     */
+    List<TestProject> selectTestProjectList(TestProject testProject, List<Long> ids);
+
+    /**
+     * 新增示例项目
      */
     void insertTestProject(TestProject testProject);
 
     /**
-     * 修改项目示例
+     * 修改示例项目
      */
     void updateTestProject(TestProject testProject);
 
     /**
-     * 删除项目示例
+     * 删除示例项目
      */
     void deleteTestProjectByIds(List<Long> ids);
+
+    /**
+     * 导出示例项目
+     */
+    void exportTestProject(TestProject testProject, List<Long> ids, HttpServletResponse response);
+
+    /**
+     * 导入示例项目
+     */
+    TestProjectImportResultVO importTestProject(MultipartFile file, boolean updateSupport);
+
+    /**
+     * 下载导入模板
+     */
+    void downloadImportTemplate(HttpServletResponse response);
 }

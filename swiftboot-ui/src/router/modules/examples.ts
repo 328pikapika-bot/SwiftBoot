@@ -16,12 +16,6 @@ const exampleRoutes: RouteRecordRaw[] = [
         name: 'ExampleProject',
         component: () => import('@/views/testProject/index.vue'),
         meta: { title: '项目示例', icon: 'Document' }
-      },
-      {
-        path: 'student',
-        name: 'ExampleStudent',
-        component: () => import('@/views/testStudent/index.vue'),
-        meta: { title: '学生示例', icon: 'Document' }
       }
     ]
   }

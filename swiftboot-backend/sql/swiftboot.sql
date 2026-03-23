@@ -348,7 +348,6 @@ INSERT INTO `sys_menu` VALUES (212, 210, 'AI配置', 'C', 'config', 'tool/config
 -- 示例业务
 INSERT INTO `sys_menu` VALUES (4, 0, '示例业务', 'M', 'examples', NULL, NULL, 'folder', 6, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '示例业务目录');
 INSERT INTO `sys_menu` VALUES (400, 4, '项目示例', 'C', 'project', 'testProject/index', 'test:testProject:list', 'folder', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '项目示例菜单');
-INSERT INTO `sys_menu` VALUES (401, 4, '学生示例', 'C', 'student', 'testStudent/index', 'student:testStudent:list', 'folder', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '学生示例菜单');
 
 -- 用户管理按钮
 INSERT INTO `sys_menu` VALUES (1001, 100, '用户查询', 'F', '', '', 'system:user:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
@@ -449,10 +448,9 @@ INSERT INTO `sys_menu` VALUES (4001, 400, '项目示例查询', 'F', '', '', 'te
 INSERT INTO `sys_menu` VALUES (4002, 400, '项目示例新增', 'F', '', '', 'test:testProject:add', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 INSERT INTO `sys_menu` VALUES (4003, 400, '项目示例修改', 'F', '', '', 'test:testProject:edit', '', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 INSERT INTO `sys_menu` VALUES (4004, 400, '项目示例删除', 'F', '', '', 'test:testProject:remove', '', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
-INSERT INTO `sys_menu` VALUES (4011, 401, '学生示例查询', 'F', '', '', 'student:testStudent:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
-INSERT INTO `sys_menu` VALUES (4012, 401, '学生示例新增', 'F', '', '', 'student:testStudent:add', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
-INSERT INTO `sys_menu` VALUES (4013, 401, '学生示例修改', 'F', '', '', 'student:testStudent:edit', '', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
-INSERT INTO `sys_menu` VALUES (4014, 401, '学生示例删除', 'F', '', '', 'student:testStudent:remove', '', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (4005, 400, '项目示例导入', 'F', '', '', 'test:testProject:import', '', 5, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (4006, 400, '项目示例导出', 'F', '', '', 'test:testProject:export', '', 6, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (4007, 400, '项目示例模板下载', 'F', '', '', 'test:testProject:template', '', 7, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 
 -- 用户-角色关联
 INSERT INTO `sys_user_role` VALUES (1, 1);

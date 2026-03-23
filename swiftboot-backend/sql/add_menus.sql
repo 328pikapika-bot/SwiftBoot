@@ -75,10 +75,6 @@ INSERT INTO `sys_menu`
 SELECT 400, 4, '项目示例', 'C', 'project', 'testProject/index', 'test:testProject:list', 'folder', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '项目示例菜单'
 WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 400);
 
-INSERT INTO `sys_menu`
-SELECT 401, 4, '学生示例', 'C', 'student', 'testStudent/index', 'student:testStudent:list', 'folder', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '学生示例菜单'
-WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 401);
-
 -- 三、修正已有菜单到新的产品分组
 UPDATE `sys_menu` SET `menu_name` = '权限中心', `path` = 'access', `icon` = 'admin_panel_settings', `sort` = 1, `remark` = '权限中心目录' WHERE `id` = 1;
 UPDATE `sys_menu` SET `menu_name` = '平台中心', `path` = 'platform', `icon` = 'widgets', `sort` = 2, `remark` = '平台中心目录' WHERE `id` = 5;
@@ -113,8 +109,6 @@ UPDATE `sys_menu` SET `parent_id` = 210, `path` = 'chat', `component` = 'ai/chat
 UPDATE `sys_menu` SET `parent_id` = 210, `path` = 'config', `component` = 'tool/config/index', `perms` = 'tool:config:list', `icon` = 'tune', `sort` = 2 WHERE `id` = 212;
 
 UPDATE `sys_menu` SET `parent_id` = 4, `menu_name` = '项目示例', `path` = 'project', `component` = 'testProject/index', `remark` = '项目示例菜单', `sort` = 1 WHERE `id` = 400;
-UPDATE `sys_menu` SET `parent_id` = 4, `menu_name` = '学生示例', `path` = 'student', `component` = 'testStudent/index', `remark` = '学生示例菜单', `sort` = 2 WHERE `id` = 401;
-
 -- 四、补齐相关按钮权限
 INSERT INTO `sys_menu`
 SELECT 2021, 202, 'AI会话查询', 'F', '', '', 'monitor:ai-session:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), ''
@@ -157,20 +151,16 @@ SELECT 4004, 400, '项目示例删除', 'F', '', '', 'test:testProject:remove', 
 WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 4004);
 
 INSERT INTO `sys_menu`
-SELECT 4011, 401, '学生示例查询', 'F', '', '', 'student:testStudent:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), ''
-WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 4011);
+SELECT 4005, 400, '项目示例导入', 'F', '', '', 'test:testProject:import', '', 5, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), ''
+WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 4005);
 
 INSERT INTO `sys_menu`
-SELECT 4012, 401, '学生示例新增', 'F', '', '', 'student:testStudent:add', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), ''
-WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 4012);
+SELECT 4006, 400, '项目示例导出', 'F', '', '', 'test:testProject:export', '', 6, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), ''
+WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 4006);
 
 INSERT INTO `sys_menu`
-SELECT 4013, 401, '学生示例修改', 'F', '', '', 'student:testStudent:edit', '', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), ''
-WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 4013);
-
-INSERT INTO `sys_menu`
-SELECT 4014, 401, '学生示例删除', 'F', '', '', 'student:testStudent:remove', '', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), ''
-WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 4014);
+SELECT 4007, 400, '项目示例模板下载', 'F', '', '', 'test:testProject:template', '', 7, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), ''
+WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 4007);
 
 -- 五、管理员授权
 INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)
@@ -180,8 +170,7 @@ WHERE m.id IN (
   4, 5, 105, 106, 107, 108, 109, 110, 1101, 1102,
   202, 2021, 2022, 2023, 203, 2031, 210, 211, 212,
   300, 301, 302,
-  400, 4001, 4002, 4003, 4004,
-  401, 4011, 4012, 4013, 4014
+  400, 4001, 4002, 4003, 4004, 4005, 4006, 4007
 )
   AND NOT EXISTS (
     SELECT 1
@@ -189,3 +178,11 @@ WHERE m.id IN (
     WHERE rm.role_id = 1
       AND rm.menu_id = m.id
   );
+
+-- 清理旧的测试菜单与测试学生残留
+DELETE FROM `sys_role_menu`
+WHERE `menu_id` IN (401, 4011, 4012, 4013, 4014, 2016505823958016001, 2021512895305023489);
+
+DELETE FROM `sys_menu`
+WHERE `id` IN (401, 4011, 4012, 4013, 4014, 2016505823958016001, 2021512895305023489)
+   OR `perms` LIKE 'student:testStudent:%';

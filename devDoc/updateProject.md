@@ -894,6 +894,51 @@
 
 ---
 
+## [2026-03-23 17:20] 更新摘要
+
+### 📝 变更综述
+
+本次更新把“测试学生表 / 测试菜单”从项目中彻底清理，并把“示例_项目表”升级为更完整的业务示范页。除了基础 CRUD，这一轮还补齐了附件上传、Excel 导入导出、勾选导出、模板下载，以及可配置化的通用操作栏组件，让该示例更适合作为后续业务模块的复制模板。
+
+### 🚀 核心变更
+
+- **测试模块清理**: 删除 `testStudent` 前端页面、接口、路由与后端 `com.swiftboot.student` 全链路代码，移除 `test_student.sql`，并补充旧库清理脚本。
+- **项目示例增强**: `testProject` 新增导入、导出、模板下载、勾选导出、附件管理联动与保存后继续上传附件的编辑流程。
+- **后端能力补齐**: `TestProjectController` / `TestProjectServiceImpl` 增加 Excel 导入导出、导入结果回执、项目编号唯一校验、预算与日期合法性校验。
+- **操作区组件化**: 新增 `CrudActionToolbar` 通用组件，通过配置驱动按钮权限、禁用态、加载态和图标，方便其它列表页复用。
+- **下载流兼容**: 前端 `request.ts` 增加 `blob` 响应兼容和下载失败提示解析，支持文件导出和模板下载场景。
+
+### 🐛 问题修复
+
+- 修复了“学生示例”仍作为正式菜单能力存在，影响演示与初始化基线纯净度的问题。
+- 修复了项目示例页只有基础 CRUD、缺少导入导出与模板下载能力，示范价值不足的问题。
+- 修复了附件必须先退出弹窗再重新进入才能继续管理的体验问题，新增后可直接留在弹窗继续上传附件。
+- 修复了前端请求封装对二进制下载不友好、导出失败时难以正确提示的问题。
+
+### 🔧 技术细节
+
+- 修改: `swiftboot-backend/sql/swiftboot.sql`, `swiftboot-backend/sql/add_menus.sql`
+- 新增: `swiftboot-backend/sql/remove_test_student_cleanup.sql`
+- 删除: `swiftboot-backend/sql/test_student.sql`
+- 删除: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/student/...`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/test/controller/TestProjectController.java`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/test/domain/entity/TestProject.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/test/domain/excel/TestProjectExcelVO.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/test/domain/vo/TestProjectImportResultVO.java`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/test/service/TestProjectService.java`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/test/service/impl/TestProjectServiceImpl.java`
+- 新增: `swiftboot-ui/src/components/CrudActionToolbar/index.vue`
+- 修改: `swiftboot-ui/src/views/testProject/index.vue`
+- 修改: `swiftboot-ui/src/api/testProject.ts`
+- 修改: `swiftboot-ui/src/utils/request.ts`
+- 修改: `swiftboot-ui/src/router/modules/examples.ts`
+- 删除: `swiftboot-ui/src/router/modules/testProject.ts`, `swiftboot-ui/src/router/modules/testStudent-routes.ts`
+- 删除: `swiftboot-ui/src/api/testStudent.ts`, `swiftboot-ui/src/views/testStudent/index.vue`
+- 修改: `swiftboot-ui/src/locales/zh-cn.ts`, `swiftboot-ui/src/locales/en.ts`
+- 验证: `mvn -pl swiftboot-admin -am -DskipTests compile`、`npx.cmd vite build`
+
+---
+
 ## [2026-03-23 15:32] 更新摘要
 
 ### 📝 变更综述

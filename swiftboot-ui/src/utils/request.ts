@@ -45,20 +45,23 @@ service.interceptors.request.use(
   (config) => {
     const userStore = useUserStore()
     if (userStore.token) {
-      config.headers['Authorization'] = userStore.token
+      config.headers.Authorization = userStore.token
     }
     return config
   },
   (error) => {
-    console.error('请求错误:', error)
+    console.error('Request error:', error)
     return Promise.reject(error)
   }
 )
 
 service.interceptors.response.use(
   (response: AxiosResponse): any => {
-    const res = response.data as ApiResponse
+    if (response.config.responseType === 'blob') {
+      return response.data
+    }
 
+    const res = response.data as ApiResponse
     if (res.code === 200) {
       return res
     }
@@ -78,8 +81,22 @@ service.interceptors.response.use(
     ElMessage.error(res.msg || '请求失败')
     return Promise.reject(new Error(res.msg || '请求失败'))
   },
-  (error) => {
-    console.error('响应错误:', error)
+  async (error) => {
+    console.error('Response error:', error)
+
+    if (error.config?.responseType === 'blob' && error.response?.data instanceof Blob) {
+      try {
+        const text = await error.response.data.text()
+        const payload = JSON.parse(text) as ErrorResponse
+        const message = payload?.msg || '文件下载失败'
+        ElMessage.error(message)
+        return Promise.reject(new Error(message))
+      } catch {
+        ElMessage.error('文件下载失败')
+        return Promise.reject(new Error('文件下载失败'))
+      }
+    }
+
     const responseData = error.response?.data as ErrorResponse | undefined
     let message = responseData?.msg || error.message
 

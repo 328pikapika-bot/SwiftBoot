@@ -9,6 +9,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     AiAssistant: typeof import('./components/AiAssistant/index.vue')['default']
     AttachmentManager: typeof import('./components/AttachmentManager/index.vue')['default']
+    CrudActionToolbar: typeof import('./components/CrudActionToolbar/index.vue')['default']
     DictTag: typeof import('./components/DictTag/index.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElButton: typeof import('element-plus/es')['ElButton']
@@ -31,6 +32,7 @@ declare module 'vue' {
     ElLink: typeof import('element-plus/es')['ElLink']
     ElOption: typeof import('element-plus/es')['ElOption']
     ElPagination: typeof import('element-plus/es')['ElPagination']
+    ElProgress: typeof import('element-plus/es')['ElProgress']
     ElRadio: typeof import('element-plus/es')['ElRadio']
     ElRadioButton: typeof import('element-plus/es')['ElRadioButton']
     ElRadioGroup: typeof import('element-plus/es')['ElRadioGroup']
