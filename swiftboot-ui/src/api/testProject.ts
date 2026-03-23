@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 
 /**
- * 示例_项目表列表
+ * 项目示例列表
  */
 export function listTestProject(query: any) {
   return request({
@@ -12,7 +12,7 @@ export function listTestProject(query: any) {
 }
 
 /**
- * 示例_项目表详情
+ * 项目示例详情
  */
 export function getTestProject(id: number) {
   return request({
@@ -22,7 +22,7 @@ export function getTestProject(id: number) {
 }
 
 /**
- * 新增示例_项目表
+ * 新增项目示例
  */
 export function addTestProject(data: any) {
   return request({
@@ -33,7 +33,7 @@ export function addTestProject(data: any) {
 }
 
 /**
- * 修改示例_项目表
+ * 修改项目示例
  */
 export function updateTestProject(data: any) {
   return request({
@@ -44,7 +44,7 @@ export function updateTestProject(data: any) {
 }
 
 /**
- * 删除示例_项目表
+ * 删除项目示例
  */
 export function deleteTestProject(ids: string) {
   return request({

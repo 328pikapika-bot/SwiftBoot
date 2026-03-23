@@ -27,7 +27,7 @@
     <el-card shadow="never" class="table-card">
       <template #header>
         <div class="card-header">
-          <span>示例_项目表列表</span>
+          <span>项目示例列表</span>
           <div>
             <el-button type="primary" @click="handleAdd">
               <el-icon><Plus /></el-icon>新增
@@ -101,7 +101,7 @@
         </el-form-item>
       </el-form>
       <div class="attachment-section">
-        <AttachmentManager biz-type="test:testProject" :biz-id="formData.id || null" title="项目附件" />
+        <AttachmentManager biz-type="test:testProject" :biz-id="formData.id || null" title="示例项目附件" />
       </div>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -184,7 +184,7 @@ const handleSelectionChange = (selection: any[]) => {
 
 const handleAdd = () => {
   resetForm()
-  dialogTitle.value = '新增示例_项目表'
+  dialogTitle.value = '新增项目示例'
   dialogVisible.value = true
 }
 
@@ -192,7 +192,7 @@ const handleEdit = async (row: any) => {
   resetForm()
   const { data } = await getTestProject(row.id)
   Object.assign(formData, data)
-  dialogTitle.value = '编辑示例_项目表'
+  dialogTitle.value = '编辑项目示例'
   dialogVisible.value = true
 }
 

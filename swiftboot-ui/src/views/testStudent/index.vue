@@ -34,7 +34,7 @@
     <el-card shadow="never" class="table-card">
       <template #header>
         <div class="card-header">
-          <span>测试学生表列表</span>
+          <span>学生示例列表</span>
           <div>
             <el-button type="primary" @click="handleAdd">
               <el-icon><Plus /></el-icon>新增
@@ -208,7 +208,7 @@ const handleSelectionChange = (selection: any[]) => {
 
 const handleAdd = () => {
   resetForm()
-  dialogTitle.value = '新增测试学生表'
+  dialogTitle.value = '新增学生示例'
   dialogVisible.value = true
 }
 
@@ -216,7 +216,7 @@ const handleEdit = async (row: any) => {
   resetForm()
   const { data } = await getTestStudent(row.id)
   Object.assign(formData, data)
-  dialogTitle.value = '编辑测试学生表'
+  dialogTitle.value = '编辑学生示例'
   dialogVisible.value = true
 }
 

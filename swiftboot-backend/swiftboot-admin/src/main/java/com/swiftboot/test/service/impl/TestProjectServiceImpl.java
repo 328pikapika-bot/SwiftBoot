@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * 示例_项目表 Service 实现
+ * 项目示例 Service 实现
  *
  * @author SwiftBoot_chenshuang
  * @date 2026-01-24 00:32:22

@@ -7,7 +7,7 @@ const testProjectRoutes: RouteRecordRaw[] = [
     component: () => import('@/layout/index.vue'),
     redirect: '/testProject/index',
     meta: {
-      title: '测试项目',
+      title: '项目示例',
       icon: 'Folder'
     },
     children: [
@@ -16,7 +16,7 @@ const testProjectRoutes: RouteRecordRaw[] = [
         name: 'TestProjectIndex',
         component: () => import('@/views/testProject/index.vue'),
         meta: {
-          title: '项目测试首页',
+          title: '项目示例首页',
           icon: 'Document'
         }
       }

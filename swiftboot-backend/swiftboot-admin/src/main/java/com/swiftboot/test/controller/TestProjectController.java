@@ -18,12 +18,12 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * 示例_项目表 控制器
+ * 项目示例控制器
  *
  * @author SwiftBoot_chenshuang
  * @date 2026-01-24 00:32:22
  */
-@Tag(name = "示例_项目表")
+@Tag(name = "项目示例")
 @RestController
 @RequestMapping("/test/testProject")
 @RequiredArgsConstructor
@@ -31,7 +31,7 @@ public class TestProjectController {
 
     private final TestProjectService testProjectService;
 
-    @Operation(summary = "分页查询示例_项目表列表")
+    @Operation(summary = "分页查询项目示例列表")
     @SaCheckPermission("test:testProject:list")
     @GetMapping("/list")
     public R<PageResult<TestProject>> list(TestProject testProject, PageQuery pageQuery) {
@@ -39,7 +39,7 @@ public class TestProjectController {
         return R.ok(PageResult.of(page.getRecords(), page.getTotal(), page.getCurrent(), page.getSize()));
     }
 
-    @Operation(summary = "查询示例_项目表详情")
+    @Operation(summary = "查询项目示例详情")
     @SaCheckPermission("test:testProject:query")
     @GetMapping("/{id}")
     public R<TestProject> getInfo(@PathVariable Long id) {
@@ -47,27 +47,27 @@ public class TestProjectController {
         return R.ok(testProject);
     }
 
-    @Operation(summary = "新增示例_项目表")
+    @Operation(summary = "新增项目示例")
     @SaCheckPermission("test:testProject:add")
-    @Log(title = "示例_项目表", businessType = BusinessType.INSERT)
+    @Log(title = "项目示例", businessType = BusinessType.INSERT)
     @PostMapping
     public R<Void> add(@Valid @RequestBody TestProject testProject) {
         testProjectService.insertTestProject(testProject);
         return R.ok();
     }
 
-    @Operation(summary = "修改示例_项目表")
+    @Operation(summary = "修改项目示例")
     @SaCheckPermission("test:testProject:edit")
-    @Log(title = "示例_项目表", businessType = BusinessType.UPDATE)
+    @Log(title = "项目示例", businessType = BusinessType.UPDATE)
     @PutMapping
     public R<Void> edit(@Valid @RequestBody TestProject testProject) {
         testProjectService.updateTestProject(testProject);
         return R.ok();
     }
 
-    @Operation(summary = "删除示例_项目表")
+    @Operation(summary = "删除项目示例")
     @SaCheckPermission("test:testProject:remove")
-    @Log(title = "示例_项目表", businessType = BusinessType.DELETE)
+    @Log(title = "项目示例", businessType = BusinessType.DELETE)
     @DeleteMapping("/{ids}")
     public R<Void> remove(@PathVariable List<Long> ids) {
         testProjectService.deleteTestProjectByIds(ids);

@@ -8,7 +8,7 @@ import com.swiftboot.common.core.domain.PageQuery;
 import java.util.List;
 
 /**
- * 示例_项目表 Service
+ * 项目示例 Service
  *
  * @author SwiftBoot_chenshuang
  * @date 2026-01-24 00:32:22
@@ -16,22 +16,22 @@ import java.util.List;
 public interface TestProjectService extends IService<TestProject> {
 
     /**
-     * 分页查询示例_项目表列表
+     * 分页查询项目示例列表
      */
     Page<TestProject> selectTestProjectPage(TestProject testProject, PageQuery pageQuery);
 
     /**
-     * 新增示例_项目表
+     * 新增项目示例
      */
     void insertTestProject(TestProject testProject);
 
     /**
-     * 修改示例_项目表
+     * 修改项目示例
      */
     void updateTestProject(TestProject testProject);
 
     /**
-     * 删除示例_项目表
+     * 删除项目示例
      */
     void deleteTestProjectByIds(List<Long> ids);
 }

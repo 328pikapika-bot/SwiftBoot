@@ -7,7 +7,7 @@ const testStudentRoutes: RouteRecordRaw[] = [
     component: () => import('@/layout/index.vue'),
     redirect: '/testStudent/index',
     meta: {
-      title: '测试学生表',
+      title: '学生示例',
       icon: 'Folder'
     },
     children: [
@@ -16,7 +16,7 @@ const testStudentRoutes: RouteRecordRaw[] = [
         name: 'TestStudentIndex',
         component: () => import('@/views/testStudent/index.vue'),
         meta: {
-          title: '测试学生表首页',
+          title: '学生示例首页',
           icon: 'Document'
         }
       }

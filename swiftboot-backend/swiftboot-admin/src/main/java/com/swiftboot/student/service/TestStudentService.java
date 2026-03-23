@@ -8,7 +8,7 @@ import com.swiftboot.common.core.domain.PageQuery;
 import java.util.List;
 
 /**
- * 测试学生表 Service
+ * 学生示例 Service
  *
  * @author SwiftBoot_chenshuang
  * @date 2026-01-28 21:47:45
@@ -16,22 +16,22 @@ import java.util.List;
 public interface TestStudentService extends IService<TestStudent> {
 
     /**
-     * 分页查询测试学生表列表
+     * 分页查询学生示例列表
      */
     Page<TestStudent> selectTestStudentPage(TestStudent testStudent, PageQuery pageQuery);
 
     /**
-     * 新增测试学生表
+     * 新增学生示例
      */
     void insertTestStudent(TestStudent testStudent);
 
     /**
-     * 修改测试学生表
+     * 修改学生示例
      */
     void updateTestStudent(TestStudent testStudent);
 
     /**
-     * 删除测试学生表
+     * 删除学生示例
      */
     void deleteTestStudentByIds(List<Long> ids);
 }

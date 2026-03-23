@@ -5,7 +5,7 @@ import com.swiftboot.student.domain.entity.TestStudent;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 测试学生表 Mapper
+ * 学生示例 Mapper
  *
  * @author SwiftBoot_chenshuang
  * @date 2026-01-28 21:47:45

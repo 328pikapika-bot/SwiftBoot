@@ -9,7 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 测试学生表
+ * 学生示例实体
  *
  * @author SwiftBoot_chenshuang
  * @date 2026-01-28 21:47:45
@@ -17,7 +17,7 @@ import lombok.EqualsAndHashCode;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("test_student")
-@Schema(description = "测试学生表")
+@Schema(description = "学生示例")
 public class TestStudent extends BaseEntity {
 
     @Schema(description = "学生名称")

@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 
 /**
- * 测试学生表列表
+ * 学生示例列表
  */
 export function listTestStudent(query: any) {
   return request({
@@ -12,7 +12,7 @@ export function listTestStudent(query: any) {
 }
 
 /**
- * 测试学生表详情
+ * 学生示例详情
  */
 export function getTestStudent(id: number) {
   return request({
@@ -22,7 +22,7 @@ export function getTestStudent(id: number) {
 }
 
 /**
- * 新增测试学生表
+ * 新增学生示例
  */
 export function addTestStudent(data: any) {
   return request({
@@ -33,7 +33,7 @@ export function addTestStudent(data: any) {
 }
 
 /**
- * 修改测试学生表
+ * 修改学生示例
  */
 export function updateTestStudent(data: any) {
   return request({
@@ -44,7 +44,7 @@ export function updateTestStudent(data: any) {
 }
 
 /**
- * 删除测试学生表
+ * 删除学生示例
  */
 export function deleteTestStudent(ids: string) {
   return request({

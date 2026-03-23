@@ -3,17 +3,17 @@ import { RouteRecordRaw } from 'vue-router'
 const monitorRoutes: RouteRecordRaw[] = [
   {
     path: '/monitor',
-    name: 'Monitor',
+    name: 'MonitorCenter',
     component: () => import('@/layout/index.vue'),
     redirect: '/monitor/operlog',
     meta: {
-      title: '系统监控',
+      title: '监控中心',
       icon: 'Monitor'
     },
     children: [
       {
         path: 'operlog',
-        name: 'Operlog',
+        name: 'MonitorOperlog',
         component: () => import('@/views/monitor/operlog/index.vue'),
         meta: {
           title: '操作日志',
@@ -22,7 +22,7 @@ const monitorRoutes: RouteRecordRaw[] = [
       },
       {
         path: 'loginlog',
-        name: 'Loginlog',
+        name: 'MonitorLoginlog',
         component: () => import('@/views/monitor/loginlog/index.vue'),
         meta: {
           title: '登录日志',
@@ -30,8 +30,17 @@ const monitorRoutes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'ai-dashboard',
+        name: 'MonitorAiDashboard',
+        component: () => import('@/views/monitor/ai-session/index.vue'),
+        meta: {
+          title: 'AI看板',
+          icon: 'DataAnalysis'
+        }
+      },
+      {
         path: 'server',
-        name: 'ServerMonitor',
+        name: 'MonitorServer',
         component: () => import('@/views/monitor/server/index.vue'),
         meta: {
           title: '基础资源',

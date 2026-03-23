@@ -306,23 +306,49 @@ INSERT INTO `sys_role` VALUES (1, '超级管理员', 'admin', 1, 0, 0, 'admin', 
 INSERT INTO `sys_role` VALUES (2, '普通角色', 'common', 2, 0, 0, 'admin', NOW(), 'admin', NOW(), '普通角色');
 
 -- 菜单数据
--- 系统管理
-INSERT INTO `sys_menu` VALUES (1, 0, '系统管理', 'M', 'system', NULL, NULL, 'setting', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '系统管理目录');
+-- 说明：
+-- 1. 本文件中的菜单初始化数据为 SwiftBoot 的权威基线。
+-- 2. 新环境初始化请以本文件为准，避免依赖额外的补丁脚本拼接基础菜单。
+-- 3. add_menus.sql 仅保留给历史环境做兼容补丁使用。
+-- 权限中心
+INSERT INTO `sys_menu` VALUES (1, 0, '权限中心', 'M', 'access', NULL, NULL, 'admin_panel_settings', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '权限中心目录');
 INSERT INTO `sys_menu` VALUES (100, 1, '用户管理', 'C', 'user', 'system/user/index', 'system:user:list', 'user', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '用户管理菜单');
-INSERT INTO `sys_menu` VALUES (101, 1, '角色管理', 'C', 'role', 'system/role/index', 'system:role:list', 'peoples', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '角色管理菜单');
+INSERT INTO `sys_menu` VALUES (101, 1, '角色管理', 'C', 'role', 'system/role/index', 'system:role:list', 'manage_accounts', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '角色管理菜单');
 INSERT INTO `sys_menu` VALUES (102, 1, '菜单管理', 'C', 'menu', 'system/menu/index', 'system:menu:list', 'menu', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '菜单管理菜单');
-INSERT INTO `sys_menu` VALUES (103, 1, '部门管理', 'C', 'dept', 'system/dept/index', 'system:dept:list', 'tree', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '部门管理菜单');
-INSERT INTO `sys_menu` VALUES (104, 1, '字典管理', 'C', 'dict', 'system/dict/index', 'system:dict:list', 'dict', 5, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '字典管理菜单');
+INSERT INTO `sys_menu` VALUES (103, 1, '部门管理', 'C', 'dept', 'system/dept/index', 'system:dept:list', 'corporate_fare', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '部门管理菜单');
+INSERT INTO `sys_menu` VALUES (105, 1, '岗位管理', 'C', 'post', 'system/post/index', 'system:post:list', 'briefcase', 5, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '岗位管理菜单');
 
--- 系统监控
-INSERT INTO `sys_menu` VALUES (2, 0, '系统监控', 'M', 'monitor', NULL, NULL, 'monitor', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '系统监控目录');
+-- 平台中心
+INSERT INTO `sys_menu` VALUES (5, 0, '平台中心', 'M', 'platform', NULL, NULL, 'widgets', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '平台中心目录');
+INSERT INTO `sys_menu` VALUES (104, 5, '字典管理', 'C', 'dict', 'system/dict/index', 'system:dict:list', 'book', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '字典管理菜单');
+INSERT INTO `sys_menu` VALUES (109, 5, '文件管理', 'C', 'file', 'system-file-manage', 'system:file:list', 'folder', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '文件管理菜单');
+INSERT INTO `sys_menu` VALUES (107, 5, '系统公告', 'C', 'notice', 'system/notice/index', 'system:notice:list', 'campaign', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '系统公告菜单');
+INSERT INTO `sys_menu` VALUES (108, 5, '站内消息', 'C', 'message', 'system/message/index', 'system:message:list', 'mail', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '站内消息菜单');
+INSERT INTO `sys_menu` VALUES (106, 5, '定时任务', 'C', 'job', 'system/job/index', 'monitor:job:list', 'schedule', 5, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '定时任务菜单');
+INSERT INTO `sys_menu` VALUES (110, 5, '配置管理', 'C', 'config', 'tool-config-page', 'tool:config:list', 'tune', 6, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '平台配置管理菜单');
+
+-- 监控中心
+INSERT INTO `sys_menu` VALUES (2, 0, '监控中心', 'M', 'monitor', NULL, NULL, 'monitor_heart', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '监控中心目录');
 INSERT INTO `sys_menu` VALUES (200, 2, '操作日志', 'C', 'operlog', 'monitor/operlog/index', 'monitor:operlog:list', 'form', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '操作日志菜单');
 INSERT INTO `sys_menu` VALUES (201, 2, '登录日志', 'C', 'loginlog', 'monitor/loginlog/index', 'monitor:loginlog:list', 'logininfor', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '登录日志菜单');
+INSERT INTO `sys_menu` VALUES (203, 2, '基础资源', 'C', 'server', 'monitor/server/index', 'monitor:server:list', 'histogram', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '基础资源监控菜单');
+INSERT INTO `sys_menu` VALUES (202, 2, 'AI看板', 'C', 'ai-dashboard', 'monitor/ai-session/index', 'monitor:ai-session:list', 'insights', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), 'AI会话分析看板');
 
--- 系统工具
-INSERT INTO `sys_menu` VALUES (3, 0, '系统工具', 'M', 'tool', NULL, NULL, 'tool', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '系统工具目录');
+-- 开发工具
+INSERT INTO `sys_menu` VALUES (3, 0, '开发工具', 'M', 'develop', NULL, NULL, 'build', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '开发工具目录');
 INSERT INTO `sys_menu` VALUES (300, 3, '代码生成', 'C', 'gen', 'tool/gen/index', 'tool:gen:list', 'code', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '代码生成菜单');
-INSERT INTO `sys_menu` VALUES (301, 3, '图标参考', 'C', 'icon', 'tool/icon/index', 'tool:icon:list', 'star-filled', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '图标参考菜单');
+INSERT INTO `sys_menu` VALUES (302, 3, '图表设计', 'C', 'chart', 'tool/chart/index', 'tool:chart:list', 'pie_chart', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '图表设计菜单');
+INSERT INTO `sys_menu` VALUES (301, 3, '图标选择', 'C', 'icon', 'tool/icon/index', 'tool:icon:list', 'star', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '图标选择菜单');
+
+-- 智能助手
+INSERT INTO `sys_menu` VALUES (210, 0, '智能助手', 'M', 'assistant', NULL, NULL, 'smart_toy', 5, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '智能助手目录');
+INSERT INTO `sys_menu` VALUES (211, 210, '会话窗口', 'C', 'chat', 'ai/chat/index', NULL, 'chat', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '智能会话窗口');
+INSERT INTO `sys_menu` VALUES (212, 210, 'AI配置', 'C', 'config', 'tool/config/index', 'tool:config:list', 'tune', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), 'AI配置菜单');
+
+-- 示例业务
+INSERT INTO `sys_menu` VALUES (4, 0, '示例业务', 'M', 'examples', NULL, NULL, 'folder', 6, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '示例业务目录');
+INSERT INTO `sys_menu` VALUES (400, 4, '项目示例', 'C', 'project', 'testProject/index', 'test:testProject:list', 'folder', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '项目示例菜单');
+INSERT INTO `sys_menu` VALUES (401, 4, '学生示例', 'C', 'student', 'testStudent/index', 'student:testStudent:list', 'folder', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '学生示例菜单');
 
 -- 用户管理按钮
 INSERT INTO `sys_menu` VALUES (1001, 100, '用户查询', 'F', '', '', 'system:user:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
@@ -355,6 +381,40 @@ INSERT INTO `sys_menu` VALUES (1042, 104, '字典新增', 'F', '', '', 'system:d
 INSERT INTO `sys_menu` VALUES (1043, 104, '字典修改', 'F', '', '', 'system:dict:edit', '', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 INSERT INTO `sys_menu` VALUES (1044, 104, '字典删除', 'F', '', '', 'system:dict:remove', '', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 
+-- 岗位管理按钮
+INSERT INTO `sys_menu` VALUES (1051, 105, '岗位查询', 'F', '', '', 'system:post:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1052, 105, '岗位新增', 'F', '', '', 'system:post:add', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1053, 105, '岗位修改', 'F', '', '', 'system:post:edit', '', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1054, 105, '岗位删除', 'F', '', '', 'system:post:remove', '', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+
+-- 定时任务按钮
+INSERT INTO `sys_menu` VALUES (1061, 106, '任务查询', 'F', '', '', 'monitor:job:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1062, 106, '任务新增', 'F', '', '', 'monitor:job:add', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1063, 106, '任务修改', 'F', '', '', 'monitor:job:edit', '', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1064, 106, '任务删除', 'F', '', '', 'monitor:job:remove', '', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1065, 106, '任务状态修改', 'F', '', '', 'monitor:job:changeStatus', '', 5, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1066, 106, '任务立即执行', 'F', '', '', 'monitor:job:run', '', 6, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+
+-- 公告管理按钮
+INSERT INTO `sys_menu` VALUES (1071, 107, '公告查询', 'F', '', '', 'system:notice:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1072, 107, '公告新增', 'F', '', '', 'system:notice:add', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1073, 107, '公告修改', 'F', '', '', 'system:notice:edit', '', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1074, 107, '公告删除', 'F', '', '', 'system:notice:remove', '', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+
+-- 站内消息按钮
+INSERT INTO `sys_menu` VALUES (1081, 108, '消息查询', 'F', '', '', 'system:message:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1082, 108, '消息新增', 'F', '', '', 'system:message:add', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1083, 108, '消息修改', 'F', '', '', 'system:message:edit', '', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1084, 108, '消息删除', 'F', '', '', 'system:message:remove', '', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+
+-- 文件管理按钮
+INSERT INTO `sys_menu` VALUES (1091, 109, '文件查询', 'F', '', '', 'system:file:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1092, 109, '文件上传', 'F', '', '', 'system:file:upload', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1093, 109, '文件删除', 'F', '', '', 'system:file:remove', '', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1094, 109, '文件重命名', 'F', '', '', 'system:file:rename', '', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1095, 109, '文件预览', 'F', '', '', 'system:file:preview', '', 5, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1096, 109, '文件下载', 'F', '', '', 'system:file:download', '', 6, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+
 -- 操作日志按钮
 INSERT INTO `sys_menu` VALUES (2001, 200, '操作日志查询', 'F', '', '', 'monitor:operlog:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 INSERT INTO `sys_menu` VALUES (2002, 200, '操作日志删除', 'F', '', '', 'monitor:operlog:remove', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
@@ -362,6 +422,12 @@ INSERT INTO `sys_menu` VALUES (2002, 200, '操作日志删除', 'F', '', '', 'mo
 -- 登录日志按钮
 INSERT INTO `sys_menu` VALUES (2011, 201, '登录日志查询', 'F', '', '', 'monitor:loginlog:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 INSERT INTO `sys_menu` VALUES (2012, 201, '登录日志删除', 'F', '', '', 'monitor:loginlog:remove', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+
+-- AI看板与监控按钮
+INSERT INTO `sys_menu` VALUES (2021, 202, 'AI会话查询', 'F', '', '', 'monitor:ai-session:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (2022, 202, 'AI会话删除', 'F', '', '', 'monitor:ai-session:remove', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (2023, 202, 'AI会话清空', 'F', '', '', 'monitor:ai-session:clean', '', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (2031, 203, '资源监控查询', 'F', '', '', 'monitor:server:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 
 -- 代码生成按钮
 INSERT INTO `sys_menu` VALUES (3001, 300, '生成查询', 'F', '', '', 'tool:gen:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
@@ -373,6 +439,20 @@ INSERT INTO `sys_menu` VALUES (3006, 300, '生成代码', 'F', '', '', 'tool:gen
 
 -- 图标参考按钮
 INSERT INTO `sys_menu` VALUES (3011, 301, '图标查询', 'F', '', '', 'tool:icon:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+
+-- 配置管理按钮
+INSERT INTO `sys_menu` VALUES (1101, 110, '配置查询', 'F', '', '', 'tool:config:list', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1102, 110, '配置修改', 'F', '', '', 'tool:config:edit', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+
+-- 示例业务按钮
+INSERT INTO `sys_menu` VALUES (4001, 400, '项目示例查询', 'F', '', '', 'test:testProject:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (4002, 400, '项目示例新增', 'F', '', '', 'test:testProject:add', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (4003, 400, '项目示例修改', 'F', '', '', 'test:testProject:edit', '', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (4004, 400, '项目示例删除', 'F', '', '', 'test:testProject:remove', '', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (4011, 401, '学生示例查询', 'F', '', '', 'student:testStudent:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (4012, 401, '学生示例新增', 'F', '', '', 'student:testStudent:add', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (4013, 401, '学生示例修改', 'F', '', '', 'student:testStudent:edit', '', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (4014, 401, '学生示例删除', 'F', '', '', 'student:testStudent:remove', '', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 
 -- 用户-角色关联
 INSERT INTO `sys_user_role` VALUES (1, 1);

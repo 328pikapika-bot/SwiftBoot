@@ -564,13 +564,13 @@ let timer: any = null
 let statsTimer: any = null
 
 const quickLinks = [
-  { title: '用户管理', path: '/system/user', icon: 'person' },
-  { title: '角色管理', path: '/system/role', icon: 'manage_accounts' },
-  { title: '菜单管理', path: '/system/menu', icon: 'menu' },
-  { title: '字典管理', path: '/system/dict', icon: 'book' },
-  { title: '代码生成', path: '/tool/gen', icon: 'terminal' },
-  { title: 'AI 看板', path: '/ai/dashboard', icon: 'dashboard' },
-  { title: '配置管理', path: '/tool/config', icon: 'tune' },
+  { title: '用户管理', path: '/access/user', icon: 'person' },
+  { title: '角色管理', path: '/access/role', icon: 'manage_accounts' },
+  { title: '菜单管理', path: '/access/menu', icon: 'menu' },
+  { title: '字典管理', path: '/platform/dict', icon: 'book' },
+  { title: '代码生成', path: '/develop/gen', icon: 'terminal' },
+  { title: 'AI 看板', path: '/monitor/ai-dashboard', icon: 'dashboard' },
+  { title: '配置管理', path: '/platform/config', icon: 'tune' },
   { title: '监控大屏', path: '/monitor/server', icon: 'monitoring' }
 ]
 
@@ -756,12 +756,12 @@ const runtimeSummaryItems = computed(() => [
 ])
 
 const goToAiDashboard = () => {
-  router.push('/ai/dashboard')
+  router.push('/monitor/ai-dashboard')
 }
 
 const goToKnowledgeDetail = () => {
   router.push({
-    path: '/ai/dashboard',
+    path: '/monitor/ai-dashboard',
     query: { focus: 'knowledge' }
   })
 }

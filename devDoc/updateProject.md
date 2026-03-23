@@ -893,3 +893,38 @@
 - 验证: mvn -pl swiftboot-admin -am -DskipTests compile、npx.cmd vite build
 
 ---
+
+## [2026-03-23 15:32] 更新摘要
+
+### 📝 变更综述
+
+本次更新把“菜单树与产品分组建议”从说明文档真正落到了项目代码里。菜单初始化来源已统一到主 SQL，历史菜单补丁脚本已转为兼容迁移脚本；同时前端新增了新的产品化路由分组，示例模块也从测试命名升级为正式示例命名，菜单总览文档和 README 入口一并补齐。
+
+### 🚀 核心变更
+
+- **菜单初始化收口**: `swiftboot.sql` 升级为菜单权威基线，纳入岗位、任务、公告、消息、文件、配置、AI、监控、示例业务等完整菜单与按钮权限。
+- **兼容迁移脚本**: `add_menus.sql` 重构为历史数据库兼容迁移脚本，统一修正 `sys_role_menu`、菜单父子关系与产品分组迁移。
+- **产品化菜单重组**: 菜单分组调整为 `权限中心 / 平台中心 / 监控中心 / 开发工具 / 智能助手 / 示例业务`，前端新增对应路由模块承接。
+- **示例模块升级**: “测试项目 / 测试学生”升级为“项目示例 / 学生示例”，前端页面标题、路由文案、后端控制器说明、实体与服务注释同步收口。
+- **文档官方化**: 新增并完善 `SwiftBoot产品视角菜单树与重分组建议.md`，README 增加文档入口，并在文档中标注本轮 6 项事项已全部完成。
+
+### 🐛 问题修复
+
+- 修复了主菜单来源分散在 `swiftboot.sql`、`add_menus.sql`、历史 SQL 和前端路由中的问题。
+- 修复了 `add_menus.sql` 中使用错误表名 `role_menu` 的问题，统一改为 `sys_role_menu`。
+- 修复了配置管理菜单父级挂载错误的问题，避免继续落在旧的“系统管理”分组下。
+- 修复了 AI 看板、基础资源、示例业务等真实能力未完整纳入主菜单基线的问题。
+- 修复了示例模块长期使用“测试”命名，不利于对外演示和内部示范的问题。
+
+### 🔧 技术细节
+
+- 修改: `swiftboot-backend/sql/swiftboot.sql`, `swiftboot-backend/sql/add_menus.sql`
+- 修改: `swiftboot-ui/src/router/modules/access.ts`, `platform.ts`, `develop.ts`, `assistant.ts`, `examples.ts`, `monitor.ts`
+- 修改: `swiftboot-ui/src/views/dashboard/index.vue`, `swiftboot-ui/src/views/testProject/index.vue`, `swiftboot-ui/src/views/testStudent/index.vue`
+- 修改: `swiftboot-ui/src/router/modules/testProject.ts`, `swiftboot-ui/src/router/modules/testStudent-routes.ts`
+- 修改: `swiftboot-ui/src/api/testProject.ts`, `swiftboot-ui/src/api/testStudent.ts`, `swiftboot-ui/src/locales/zh-cn.ts`, `swiftboot-ui/src/locales/en.ts`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/test/...`, `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/student/...`
+- 新增/完善: `devDoc/说明文档/SwiftBoot产品视角菜单树与重分组建议.md`, `README.md`
+- 验证: `npm.cmd run build`
+
+---
