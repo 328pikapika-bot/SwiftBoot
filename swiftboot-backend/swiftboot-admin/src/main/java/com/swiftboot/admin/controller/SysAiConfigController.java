@@ -1,10 +1,12 @@
 package com.swiftboot.admin.controller;
 
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.swiftboot.admin.domain.dto.SysAiConfigDTO;
 import com.swiftboot.admin.domain.vo.SysAiConfigVO;
+import com.swiftboot.common.core.exception.BusinessException;
 import com.swiftboot.common.core.result.R;
 import com.swiftboot.common.log.annotation.Log;
 import com.swiftboot.common.log.enums.BusinessType;
@@ -12,6 +14,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
@@ -66,6 +69,7 @@ public class SysAiConfigController {
      */
     @Operation(summary = "获取AI配置")
     @GetMapping
+    @SaCheckPermission("tool:config:list")
     public R<SysAiConfigVO> getConfig() {
         SysAiConfigVO vo = new SysAiConfigVO();
         
@@ -97,6 +101,7 @@ public class SysAiConfigController {
     @Operation(summary = "更新AI配置")
     @Log(title = "AI配置", businessType = BusinessType.UPDATE)
     @PutMapping
+    @SaCheckPermission("tool:config:edit")
     public R<Void> updateConfig(@Valid @RequestBody SysAiConfigDTO dto) {
         // 构建配置对象
         JSONObject config = new JSONObject();
@@ -125,6 +130,7 @@ public class SysAiConfigController {
      */
     @Operation(summary = "测试模型连通性")
     @PostMapping("/test-connection")
+    @SaCheckPermission("tool:config:edit")
     public R<String> testConnection(@Valid @RequestBody SysAiConfigDTO dto) {
         String apiUrl = dto.getApiUrl();
         if (StrUtil.isBlank(apiUrl)) {
@@ -154,10 +160,14 @@ public class SysAiConfigController {
             if (response.isOk()) {
                 return R.ok("连接成功！模型响应正常。");
             } else {
-                return R.fail("连接失败：HTTP 状态码 " + response.getStatus() + "\n" + response.body());
+                throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "连接失败：HTTP 状态码 " + response.getStatus() + "\n" + response.body());
             }
         } catch (Exception e) {
-            return R.fail("请求异常：" + e.getMessage());
+            if (e instanceof BusinessException businessException) {
+                throw businessException;
+            }
+            throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "请求异常：" + e.getMessage());
         }
     }
 

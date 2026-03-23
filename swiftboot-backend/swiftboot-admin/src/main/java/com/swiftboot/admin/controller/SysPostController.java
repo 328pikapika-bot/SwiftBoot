@@ -1,14 +1,25 @@
 package com.swiftboot.admin.controller;
 
+import com.swiftboot.admin.domain.dto.SysPostDTO;
 import com.swiftboot.admin.domain.entity.SysPost;
 import com.swiftboot.admin.service.SysPostService;
+import com.swiftboot.common.core.exception.BusinessException;
 import com.swiftboot.common.core.result.R;
+import com.swiftboot.common.core.result.ResultCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.BeanUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -42,28 +53,31 @@ public class SysPostController {
 
     @Operation(summary = "新增岗位")
     @PostMapping
-    public R<Void> add(@RequestBody SysPost post) {
-        if (!postService.checkPostCodeUnique(post)) {
-            return R.fail("岗位编码已存在");
-        }
-        postService.insertPost(post);
+    public R<Void> add(@Valid @RequestBody SysPostDTO postDTO) {
+        postService.insertPost(toPost(postDTO));
         return R.ok();
     }
 
     @Operation(summary = "修改岗位")
     @PutMapping
-    public R<Void> edit(@RequestBody SysPost post) {
-        if (!postService.checkPostCodeUnique(post)) {
-            return R.fail("岗位编码已存在");
+    public R<Void> edit(@Valid @RequestBody SysPostDTO postDTO) {
+        if (postDTO.getPostId() == null) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "岗位ID不能为空");
         }
-        postService.updatePost(post);
+        postService.updatePost(toPost(postDTO));
         return R.ok();
     }
 
     @Operation(summary = "删除岗位")
     @DeleteMapping("/{postIds}")
-    public R<Void> remove(@PathVariable Long[] postIds) {
-        Arrays.asList(postIds).forEach(id -> postService.deletePostById(id));
+    public R<Void> remove(@PathVariable List<Long> postIds) {
+        postIds.forEach(postService::deletePostById);
         return R.ok();
+    }
+
+    private SysPost toPost(SysPostDTO postDTO) {
+        SysPost post = new SysPost();
+        BeanUtils.copyProperties(postDTO, post);
+        return post;
     }
 }

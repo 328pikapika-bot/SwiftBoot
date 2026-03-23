@@ -8,7 +8,7 @@ echo   SwiftBoot Frontend + Backend Starter
 echo ========================================
 echo.
 
-set "ROOT=%~dp0.."
+for %%I in ("%~dp0..") do set "ROOT=%%~fI"
 set "CONFIG_FILE=%~dp0start_config.ini"
 set "REDIS_DIR="
 set "DB_PASSWORD="
@@ -46,27 +46,39 @@ timeout /t 2 /nobreak >nul
 
 echo.
 echo [3/3] Starting backend...
-call mvn -v >nul 2>&1
+where mvn.cmd >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Maven was not found.
+    echo [ERROR] mvn.cmd was not found in PATH.
     pause
     exit /b 1
 )
 if defined SWIFTBOOT_DB_PASSWORD echo [OK] Loaded DB password from start_config.ini
 if defined SWIFTBOOT_REDIS_PASSWORD echo [OK] Loaded Redis password from start_config.ini
 if defined SWIFTBOOT_DEEPSEEK_API_KEY echo [OK] Loaded DeepSeek API key from start_config.ini
-start "SwiftBoot Backend" cmd /k "cd /d "%ROOT%\swiftboot-backend" && echo Building dependencies and starting backend... && mvn clean install -DskipTests -pl swiftboot-admin -am && mvn -pl swiftboot-admin spring-boot:run"
+set "BACKEND_CMD=cd /d ""%ROOT%\swiftboot-backend"" && title SwiftBoot Backend (8080) && echo Building dependencies and starting backend... && call mvn.cmd -pl swiftboot-admin -am -DskipTests package && echo. && echo Starting Spring Boot... && call mvn.cmd -pl swiftboot-admin spring-boot:run"
+start "SwiftBoot Backend" cmd /k "%BACKEND_CMD%"
+if errorlevel 1 (
+    echo [ERROR] Failed to create backend window.
+    pause
+    exit /b 1
+)
 echo [OK] Backend start command sent.
 
 echo.
 echo [3/3] Starting frontend...
-call npm -v >nul 2>&1
+where npm.cmd >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] npm was not found.
+    echo [ERROR] npm.cmd was not found in PATH.
     pause
     exit /b 1
 )
-start "SwiftBoot Frontend" cmd /k "cd /d "%ROOT%\swiftboot-ui" && npm run dev"
+set "FRONTEND_CMD=cd /d ""%ROOT%\swiftboot-ui"" && title SwiftBoot Frontend (30328) && call npm.cmd run dev"
+start "SwiftBoot Frontend" cmd /k "%FRONTEND_CMD%"
+if errorlevel 1 (
+    echo [ERROR] Failed to create frontend window.
+    pause
+    exit /b 1
+)
 echo [OK] Frontend start command sent.
 
 echo.

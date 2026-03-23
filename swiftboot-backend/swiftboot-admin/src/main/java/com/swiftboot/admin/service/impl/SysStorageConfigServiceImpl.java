@@ -22,6 +22,7 @@ import java.util.Set;
 public class SysStorageConfigServiceImpl implements SysStorageConfigService {
 
     private static final String STORAGE_CONFIG_KEY = "storage:config";
+    private static final String MASK = "****";
 
     private static final Set<String> SUPPORTED_TYPES = Set.of(StorageType.LOCAL, StorageType.MINIO, StorageType.OSS, StorageType.COS);
 
@@ -31,25 +32,32 @@ public class SysStorageConfigServiceImpl implements SysStorageConfigService {
 
     @Override
     public SysStorageConfigVO getConfig() {
-        String configJson = stringRedisTemplate.opsForValue().get(STORAGE_CONFIG_KEY);
-        if (StrUtil.isNotBlank(configJson)) {
-            return JSONUtil.toBean(configJson, SysStorageConfigVO.class);
-        }
-        return JSONUtil.toBean(JSONUtil.toJsonStr(storageProperties), SysStorageConfigVO.class);
+        return maskSensitiveFields(loadConfig());
     }
 
     @Override
     public SysStorageConfigVO getRuntimeConfig() {
-        return getConfig();
+        return loadConfig();
     }
 
     @Override
     public void updateConfig(SysStorageConfigDTO dto) {
-        validateConfig(dto);
-        stringRedisTemplate.opsForValue().set(STORAGE_CONFIG_KEY, JSONUtil.toJsonStr(dto));
+        SysStorageConfigVO currentConfig = loadConfig();
+        SysStorageConfigDTO mergedConfig = mergeSensitiveFields(dto, currentConfig);
+        validateConfig(mergedConfig);
+        stringRedisTemplate.opsForValue().set(STORAGE_CONFIG_KEY, JSONUtil.toJsonStr(mergedConfig));
+    }
+
+    private SysStorageConfigVO loadConfig() {
+        String configJson = stringRedisTemplate.opsForValue().get(STORAGE_CONFIG_KEY);
+        if (StrUtil.isNotBlank(configJson)) {
+            return normalizeConfig(JSONUtil.toBean(configJson, SysStorageConfigVO.class));
+        }
+        return normalizeConfig(JSONUtil.toBean(JSONUtil.toJsonStr(storageProperties), SysStorageConfigVO.class));
     }
 
     private void validateConfig(SysStorageConfigDTO dto) {
+        normalizeConfig(dto);
         if (!SUPPORTED_TYPES.contains(dto.getActiveType())) {
             throw new BusinessException("Unsupported storage type");
         }
@@ -76,5 +84,75 @@ public class SysStorageConfigServiceImpl implements SysStorageConfigService {
             }
             default -> throw new BusinessException("Unsupported storage type");
         }
+    }
+
+    private SysStorageConfigVO maskSensitiveFields(SysStorageConfigVO config) {
+        SysStorageConfigVO masked = copyConfig(config, SysStorageConfigVO.class);
+        masked.getMinio().setAccessKey(maskSecret(masked.getMinio().getAccessKey()));
+        masked.getMinio().setSecretKey(maskSecret(masked.getMinio().getSecretKey()));
+        masked.getOss().setAccessKeyId(maskSecret(masked.getOss().getAccessKeyId()));
+        masked.getOss().setAccessKeySecret(maskSecret(masked.getOss().getAccessKeySecret()));
+        masked.getCos().setSecretId(maskSecret(masked.getCos().getSecretId()));
+        masked.getCos().setSecretKey(maskSecret(masked.getCos().getSecretKey()));
+        return masked;
+    }
+
+    private SysStorageConfigDTO mergeSensitiveFields(SysStorageConfigDTO incoming, SysStorageConfigVO current) {
+        SysStorageConfigDTO merged = copyConfig(normalizeConfig(incoming), SysStorageConfigDTO.class);
+        SysStorageConfigVO normalizedCurrent = normalizeConfig(current);
+
+        if (shouldKeepCurrentSecret(merged.getMinio().getAccessKey())) {
+            merged.getMinio().setAccessKey(normalizedCurrent.getMinio().getAccessKey());
+        }
+        if (shouldKeepCurrentSecret(merged.getMinio().getSecretKey())) {
+            merged.getMinio().setSecretKey(normalizedCurrent.getMinio().getSecretKey());
+        }
+        if (shouldKeepCurrentSecret(merged.getOss().getAccessKeyId())) {
+            merged.getOss().setAccessKeyId(normalizedCurrent.getOss().getAccessKeyId());
+        }
+        if (shouldKeepCurrentSecret(merged.getOss().getAccessKeySecret())) {
+            merged.getOss().setAccessKeySecret(normalizedCurrent.getOss().getAccessKeySecret());
+        }
+        if (shouldKeepCurrentSecret(merged.getCos().getSecretId())) {
+            merged.getCos().setSecretId(normalizedCurrent.getCos().getSecretId());
+        }
+        if (shouldKeepCurrentSecret(merged.getCos().getSecretKey())) {
+            merged.getCos().setSecretKey(normalizedCurrent.getCos().getSecretKey());
+        }
+        return merged;
+    }
+
+    private String maskSecret(String value) {
+        if (StrUtil.isBlank(value)) {
+            return value;
+        }
+        if (value.length() <= 8) {
+            return MASK;
+        }
+        return value.substring(0, 4) + MASK + value.substring(value.length() - 4);
+    }
+
+    private boolean shouldKeepCurrentSecret(String value) {
+        return StrUtil.isBlank(value) || value.contains(MASK);
+    }
+
+    private <T extends SysStorageConfigDTO> T copyConfig(SysStorageConfigDTO source, Class<T> type) {
+        return JSONUtil.toBean(JSONUtil.toJsonStr(source), type);
+    }
+
+    private <T extends SysStorageConfigDTO> T normalizeConfig(T config) {
+        if (config.getLocal() == null) {
+            config.setLocal(new SysStorageConfigDTO.LocalConfig());
+        }
+        if (config.getMinio() == null) {
+            config.setMinio(new SysStorageConfigDTO.MinioConfig());
+        }
+        if (config.getOss() == null) {
+            config.setOss(new SysStorageConfigDTO.OssConfig());
+        }
+        if (config.getCos() == null) {
+            config.setCos(new SysStorageConfigDTO.CosConfig());
+        }
+        return config;
     }
 }

@@ -17,6 +17,10 @@ export interface PageResult<T = any> {
   pages: number
 }
 
+type ErrorResponse = Partial<ApiResponse> & {
+  msg?: string
+}
+
 type RequestInstance = AxiosInstance & {
   <T = any>(config: AxiosRequestConfig): Promise<ApiResponse<T>>
   request<T = any>(config: AxiosRequestConfig): Promise<ApiResponse<T>>
@@ -29,7 +33,6 @@ type RequestInstance = AxiosInstance & {
   patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>>
 }
 
-// 创建 axios 实例
 const service = axios.create({
   baseURL: '/api',
   timeout: 60000,
@@ -38,7 +41,6 @@ const service = axios.create({
   }
 })
 
-// 请求拦截器
 service.interceptors.request.use(
   (config) => {
     const userStore = useUserStore()
@@ -53,17 +55,14 @@ service.interceptors.request.use(
   }
 )
 
-// 响应拦截器
 service.interceptors.response.use(
   (response: AxiosResponse): any => {
     const res = response.data as ApiResponse
-    
-    // 成功
+
     if (res.code === 200) {
       return res
     }
-    
-    // 未登录
+
     if (res.code === 401) {
       ElMessageBox.confirm('登录已过期，请重新登录', '提示', {
         confirmButtonText: '重新登录',
@@ -75,25 +74,33 @@ service.interceptors.response.use(
       })
       return Promise.reject(new Error(res.msg || '登录已过期'))
     }
-    
-    // 其他错误
+
     ElMessage.error(res.msg || '请求失败')
     return Promise.reject(new Error(res.msg || '请求失败'))
   },
   (error) => {
     console.error('响应错误:', error)
-    let message = error.message
-    if (error.response?.status === 401) {
-      message = '登录已过期'
-    } else if (error.response?.status === 403) {
-      message = '没有权限'
-    } else if (error.response?.status === 404) {
-      message = '请求资源不存在'
-    } else if (error.response?.status === 500) {
-      message = '服务器错误'
+    const responseData = error.response?.data as ErrorResponse | undefined
+    let message = responseData?.msg || error.message
+
+    if (!responseData?.msg) {
+      if (error.response?.status === 401) {
+        message = '登录已过期'
+      } else if (error.response?.status === 403) {
+        message = '没有权限'
+      } else if (error.response?.status === 404) {
+        message = '请求资源不存在'
+      } else if (error.response?.status === 409) {
+        message = '数据状态冲突'
+      } else if (error.response?.status === 422) {
+        message = '业务校验未通过'
+      } else if (error.response?.status === 500) {
+        message = '服务器错误'
+      }
     }
+
     ElMessage.error(message)
-    return Promise.reject(error)
+    return Promise.reject(new Error(message))
   }
 )
 

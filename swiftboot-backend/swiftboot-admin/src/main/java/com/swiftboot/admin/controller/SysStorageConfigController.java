@@ -1,5 +1,6 @@
 package com.swiftboot.admin.controller;
 
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.swiftboot.admin.domain.dto.SysStorageConfigDTO;
 import com.swiftboot.admin.domain.vo.SysStorageConfigVO;
 import com.swiftboot.admin.service.SysStorageConfigService;
@@ -29,6 +30,7 @@ public class SysStorageConfigController {
 
     @Operation(summary = "Get storage config")
     @GetMapping
+    @SaCheckPermission("tool:config:list")
     public R<SysStorageConfigVO> getConfig() {
         return R.ok(storageConfigService.getConfig());
     }
@@ -36,6 +38,7 @@ public class SysStorageConfigController {
     @Operation(summary = "Update storage config")
     @Log(title = "Storage configuration", businessType = BusinessType.UPDATE)
     @PutMapping
+    @SaCheckPermission("tool:config:edit")
     public R<Void> updateConfig(@Valid @RequestBody SysStorageConfigDTO dto) {
         storageConfigService.updateConfig(dto);
         return R.ok();

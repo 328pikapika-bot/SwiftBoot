@@ -50,10 +50,18 @@
               <el-input v-model="form.minio.endpoint" placeholder="http://127.0.0.1:9000" />
             </el-form-item>
             <el-form-item label="Access Key">
-              <el-input v-model="form.minio.accessKey" />
+              <el-input
+                v-model="form.minio.accessKey"
+                :placeholder="secretPlaceholder(secretFlags.minioAccessKey, '请输入 Access Key')"
+              />
             </el-form-item>
             <el-form-item label="Secret Key">
-              <el-input v-model="form.minio.secretKey" type="password" show-password />
+              <el-input
+                v-model="form.minio.secretKey"
+                type="password"
+                show-password
+                :placeholder="secretPlaceholder(secretFlags.minioSecretKey, '请输入 Secret Key')"
+              />
             </el-form-item>
             <el-form-item label="Bucket">
               <el-input v-model="form.minio.bucket" />
@@ -73,10 +81,18 @@
               <el-input v-model="form.oss.endpoint" placeholder="https://oss-cn-hangzhou.aliyuncs.com" />
             </el-form-item>
             <el-form-item label="Access Key ID">
-              <el-input v-model="form.oss.accessKeyId" />
+              <el-input
+                v-model="form.oss.accessKeyId"
+                :placeholder="secretPlaceholder(secretFlags.ossAccessKeyId, '请输入 Access Key ID')"
+              />
             </el-form-item>
             <el-form-item label="Access Key Secret">
-              <el-input v-model="form.oss.accessKeySecret" type="password" show-password />
+              <el-input
+                v-model="form.oss.accessKeySecret"
+                type="password"
+                show-password
+                :placeholder="secretPlaceholder(secretFlags.ossAccessKeySecret, '请输入 Access Key Secret')"
+              />
             </el-form-item>
             <el-form-item label="Bucket">
               <el-input v-model="form.oss.bucket" />
@@ -96,10 +112,18 @@
               <el-input v-model="form.cos.region" placeholder="ap-shanghai" />
             </el-form-item>
             <el-form-item label="Secret ID">
-              <el-input v-model="form.cos.secretId" />
+              <el-input
+                v-model="form.cos.secretId"
+                :placeholder="secretPlaceholder(secretFlags.cosSecretId, '请输入 Secret ID')"
+              />
             </el-form-item>
             <el-form-item label="Secret Key">
-              <el-input v-model="form.cos.secretKey" type="password" show-password />
+              <el-input
+                v-model="form.cos.secretKey"
+                type="password"
+                show-password
+                :placeholder="secretPlaceholder(secretFlags.cosSecretKey, '请输入 Secret Key')"
+              />
             </el-form-item>
             <el-form-item label="Bucket">
               <el-input v-model="form.cos.bucket" placeholder="bucket-1250000000" />
@@ -129,6 +153,15 @@ import { getStorageConfig, updateStorageConfig, type StorageConfig } from '@/api
 
 const loading = ref(false)
 const providerTab = ref<'local' | 'minio' | 'oss' | 'cos'>('local')
+const MASK_TOKEN = '****'
+
+type SecretFieldKey =
+  | 'minioAccessKey'
+  | 'minioSecretKey'
+  | 'ossAccessKeyId'
+  | 'ossAccessKeySecret'
+  | 'cosSecretId'
+  | 'cosSecretKey'
 
 const typeLabelMap: Record<string, string> = {
   local: '本地存储',
@@ -171,6 +204,36 @@ const createDefaultForm = (): StorageConfig => ({
 })
 
 const form = reactive<StorageConfig>(createDefaultForm())
+const secretFlags = reactive<Record<SecretFieldKey, boolean>>({
+  minioAccessKey: false,
+  minioSecretKey: false,
+  ossAccessKeyId: false,
+  ossAccessKeySecret: false,
+  cosSecretId: false,
+  cosSecretKey: false
+})
+
+const resetSecretFlags = () => {
+  secretFlags.minioAccessKey = false
+  secretFlags.minioSecretKey = false
+  secretFlags.ossAccessKeyId = false
+  secretFlags.ossAccessKeySecret = false
+  secretFlags.cosSecretId = false
+  secretFlags.cosSecretKey = false
+}
+
+const normalizeSecretField = (value: string | undefined, key: SecretFieldKey) => {
+  if (value && value.includes(MASK_TOKEN)) {
+    secretFlags[key] = true
+    return ''
+  }
+  secretFlags[key] = !!value
+  return value || ''
+}
+
+const secretPlaceholder = (hasSecret: boolean, fallback: string) => {
+  return hasSecret ? '已配置，留空则保持不变' : fallback
+}
 
 const assignForm = (target: StorageConfig) => {
   Object.assign(form, createDefaultForm(), target)
@@ -178,6 +241,13 @@ const assignForm = (target: StorageConfig) => {
   form.minio = { ...createDefaultForm().minio, ...(target.minio || {}) }
   form.oss = { ...createDefaultForm().oss, ...(target.oss || {}) }
   form.cos = { ...createDefaultForm().cos, ...(target.cos || {}) }
+  resetSecretFlags()
+  form.minio.accessKey = normalizeSecretField(form.minio.accessKey, 'minioAccessKey')
+  form.minio.secretKey = normalizeSecretField(form.minio.secretKey, 'minioSecretKey')
+  form.oss.accessKeyId = normalizeSecretField(form.oss.accessKeyId, 'ossAccessKeyId')
+  form.oss.accessKeySecret = normalizeSecretField(form.oss.accessKeySecret, 'ossAccessKeySecret')
+  form.cos.secretId = normalizeSecretField(form.cos.secretId, 'cosSecretId')
+  form.cos.secretKey = normalizeSecretField(form.cos.secretKey, 'cosSecretKey')
   providerTab.value = form.activeType
 }
 
@@ -203,6 +273,7 @@ const handleSubmit = async () => {
       oss: { ...form.oss },
       cos: { ...form.cos }
     })
+    await loadConfig()
     providerTab.value = form.activeType
     ElMessage.success('存储配置已保存')
   } catch (error) {

@@ -13,6 +13,7 @@ import com.swiftboot.admin.event.OperLogEvent;
 import com.swiftboot.admin.service.SysAiSessionService;
 import com.swiftboot.admin.service.SysOperLogService;
 import com.swiftboot.common.core.domain.PageQuery;
+import com.swiftboot.common.core.exception.BusinessException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.swiftboot.common.core.result.R;
@@ -27,6 +28,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.util.StreamUtils;
 import org.springframework.web.bind.annotation.*;
@@ -409,7 +411,7 @@ public class SysAiController {
             Map<String, Object> map = JSONUtil.toBean(resp, Map.class);
             return R.ok(map);
         } catch (Exception e) {
-            return R.fail("AI 引擎未启动或重建失败: " + e.getMessage());
+            throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "AI 引擎未启动或重建失败: " + e.getMessage());
         }
     }
 
@@ -579,7 +581,7 @@ public class SysAiController {
         Long currentUserId = SecurityUtils.getUserId();
         if (targetUserId != null && !currentUserId.equals(targetUserId)) {
             if (!SecurityUtils.isAdmin()) {
-                return R.fail("无权操作其他用户的缓存");
+                throw new BusinessException(HttpStatus.FORBIDDEN, "无权操作其他用户的缓存");
             }
         } else {
             targetUserId = currentUserId;

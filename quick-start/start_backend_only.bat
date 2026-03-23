@@ -8,8 +8,7 @@ echo   SwiftBoot Backend Starter
 echo ========================================
 echo.
 
-cd /d "%~dp0.."
-set "ROOT=%cd%"
+for %%I in ("%~dp0..") do set "ROOT=%%~fI"
 set "CONFIG_FILE=%~dp0start_config.ini"
 set "DB_PASSWORD="
 set "REDIS_PASSWORD="
@@ -35,11 +34,24 @@ if not exist "%ROOT%\swiftboot-backend" (
     exit /b 1
 )
 
+where mvn.cmd >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] mvn.cmd was not found in PATH.
+    pause
+    exit /b 1
+)
+
 if defined SWIFTBOOT_DB_PASSWORD echo [OK] Loaded DB password from start_config.ini
 if defined SWIFTBOOT_REDIS_PASSWORD echo [OK] Loaded Redis password from start_config.ini
 if defined SWIFTBOOT_DEEPSEEK_API_KEY echo [OK] Loaded DeepSeek API key from start_config.ini
 
-start "SwiftBoot Backend" cmd /k "cd /d "%ROOT%\swiftboot-backend" && title SwiftBoot Backend (8080) && echo --------------------------------------------- && echo   Rebuilding and Starting Backend... && echo --------------------------------------------- && mvn clean install -DskipTests -pl swiftboot-admin -am && echo. && echo Starting Spring Boot... && mvn -pl swiftboot-admin spring-boot:run"
+set "BACKEND_CMD=cd /d ""%ROOT%\swiftboot-backend"" && title SwiftBoot Backend (8080) && echo --------------------------------------------- && echo   Rebuilding and Starting Backend... && echo --------------------------------------------- && call mvn.cmd -pl swiftboot-admin -am -DskipTests package && echo. && echo Starting Spring Boot... && call mvn.cmd -pl swiftboot-admin spring-boot:run"
+start "SwiftBoot Backend" cmd /k "%BACKEND_CMD%"
+if errorlevel 1 (
+    echo [ERROR] Failed to create backend window.
+    pause
+    exit /b 1
+)
 
 echo.
 echo Startup command sent. Check the new backend window.

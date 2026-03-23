@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.swiftboot.admin.domain.entity.SysPost;
 import com.swiftboot.admin.mapper.SysPostMapper;
 import com.swiftboot.admin.service.SysPostService;
+import com.swiftboot.common.core.exception.BusinessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -53,11 +55,17 @@ public class SysPostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impl
 
     @Override
     public int insertPost(SysPost post) {
+        if (!checkPostCodeUnique(post)) {
+            throw new BusinessException(HttpStatus.CONFLICT, "岗位编码已存在");
+        }
         return baseMapper.insert(post);
     }
 
     @Override
     public int updatePost(SysPost post) {
+        if (!checkPostCodeUnique(post)) {
+            throw new BusinessException(HttpStatus.CONFLICT, "岗位编码已存在");
+        }
         return baseMapper.updateById(post);
     }
 

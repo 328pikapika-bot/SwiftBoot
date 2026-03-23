@@ -16,6 +16,8 @@ INSERT INTO `sys_menu` VALUES (109, 1, '文件管理', 'C', 'file', 'system/file
 
 -- 配置管理（系统工具子菜单）
 INSERT INTO `sys_menu` VALUES (110, 1, '配置管理', 'C', 'config', 'tool/config/index', 'tool:config:list', 'Setting', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), 'AI配置管理菜单');
+INSERT INTO `sys_menu` VALUES (1101, 110, '配置查询', 'F', '', '', 'tool:config:list', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (1102, 110, '配置修改', 'F', '', '', 'tool:config:edit', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 
 -- 给管理员角色赋予所有新菜单权限
-INSERT INTO `role_menu` SELECT 1, id FROM sys_menu WHERE id IN (105, 106, 107, 108, 109, 110);
+INSERT INTO `role_menu` SELECT 1, id FROM sys_menu WHERE id IN (105, 106, 107, 108, 109, 110, 1101, 1102);

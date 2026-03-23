@@ -2,6 +2,8 @@ package com.swiftboot.admin.controller;
 
 import com.swiftboot.admin.domain.SysAiTrace;
 import com.swiftboot.admin.service.SysAiTraceService;
+import com.swiftboot.common.core.exception.BusinessException;
+import com.swiftboot.common.core.result.ResultCode;
 import com.swiftboot.common.core.result.R;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,7 +30,7 @@ public class SysAiTraceController {
     public R<SysAiTrace> getInfo(@PathVariable("traceId") String traceId) {
         SysAiTrace trace = sysAiTraceService.getByTraceId(traceId);
         if (trace == null) {
-            return R.fail("Trace record not found");
+            throw new BusinessException(ResultCode.NOT_FOUND, "Trace record not found");
         }
         return R.ok(trace);
     }
