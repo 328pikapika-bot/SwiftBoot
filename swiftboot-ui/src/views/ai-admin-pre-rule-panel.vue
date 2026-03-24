@@ -4,9 +4,9 @@
       <section class="hero-card">
         <div class="hero-copy">
           <span class="eyebrow">AI Governance</span>
-          <h2>管理员安全校验前置规则</h2>
+          <h2>管理员治理规则</h2>
           <p>
-            在用户提问进入 AI 主链路前，先由管理员规则做一次治理判定。命中后直接拦截，避免把系统安全边界写死在代码里。
+            这里写下的规则会直接参与 AI 回答行为治理。既可以作为前置拦截条件，也可以作为回答约束，例如要求每次回答结尾追加固定信息。
           </p>
         </div>
         <div class="hero-metrics">
@@ -46,7 +46,7 @@
                 :rows="3"
                 maxlength="120"
                 show-word-limit
-                placeholder="命中管理员前置规则时，直接返回给用户的文案"
+                placeholder="当规则被用于拦截时，直接返回给用户的文案"
               />
             </div>
             <div class="limit-strip">
@@ -69,16 +69,16 @@
 
           <div class="guide-list">
             <div class="guide-item">
-              <strong>一行一个条件</strong>
-              <p>普通文本按“包含匹配”处理，适合词组、命令、敏感短语。</p>
+              <strong>直接写规则</strong>
+              <p>可以直接写自然语言规则，例如“每个问题回答结尾添加 联系方式：17334981104”。</p>
             </div>
             <div class="guide-item">
-              <strong>`regex:` 前缀</strong>
-              <p>以 `regex:` 开头的行会按正则执行，适合越权指令、变体句式。</p>
+              <strong>`regex:` / `keyword:`</strong>
+              <p>当你确实想做匹配拦截时，再使用 `regex:` 或 `keyword:` 前缀；中文冒号 `：` 也支持。</p>
             </div>
             <div class="guide-item">
-              <strong>运营治理优先</strong>
-              <p>这是管理员策略层，先于系统内置安全基线执行，适合临时收紧与专题治理。</p>
+              <strong>治理优先级</strong>
+              <p>管理员规则会先参与运行时治理，再进入系统内置安全基线，适合临时收紧或追加统一答复要求。</p>
             </div>
           </div>
         </el-card>
@@ -113,7 +113,7 @@
             <div class="rule-index">#{{ index + 1 }}</div>
             <div class="rule-main">
               <div class="rule-header">
-                <el-input v-model="rule.ruleName" maxlength="40" placeholder="规则名称，例如：涉密上线指令拦截" />
+                <el-input v-model="rule.ruleName" maxlength="40" placeholder="规则名称，例如：统一附加联系方式" />
                 <el-tag :type="rule.enabled ? 'success' : 'info'" effect="plain">
                   {{ rule.enabled ? '启用中' : '已停用' }}
                 </el-tag>
@@ -140,8 +140,9 @@
               :rows="4"
               :maxlength="form.maxRuleLength"
               show-word-limit
-              placeholder="一行一个条件，例如：
-删除生产库
+              placeholder="直接写规则，例如：
+每个问题回答结尾添加 联系方式：17334981104
+keyword:删库
 regex:忽略(之前|上述).*(规则|限制)"
             />
           </div>

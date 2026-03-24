@@ -20,6 +20,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -39,6 +41,13 @@ public class SysAdminPreRuleConfigServiceImpl implements SysAdminPreRuleConfigSe
     private static final int MAX_RULE_LENGTH = 200;
     private static final String DEFAULT_INTERCEPTION_MESSAGE = "⚠️ 管理员安全前置规则已命中，当前问题不允许直接回答，请调整问题内容后重试。";
     private static final String REGEX_PREFIX = "regex:";
+    private static final String REGEX_PREFIX_CN = "regex：";
+    private static final String KEYWORD_PREFIX = "keyword:";
+    private static final String KEYWORD_PREFIX_CN = "keyword：";
+    private static final Pattern ANSWER_SUFFIX_PATTERN = Pattern.compile(
+            "(?:每个|所有|每次)?(?:问题|回答|回复).{0,12}(?:结尾|最后|后面|末尾).{0,12}(?:添加|附上|追加|加上)\\s*[:：]?\\s*(.+)",
+            Pattern.CASE_INSENSITIVE
+    );
 
     private final StringRedisTemplate stringRedisTemplate;
     private final SysAdminPreRuleConfigMapper adminPreRuleConfigMapper;
@@ -79,12 +88,63 @@ public class SysAdminPreRuleConfigServiceImpl implements SysAdminPreRuleConfigSe
             if (!Boolean.TRUE.equals(rule.getEnabled())) {
                 continue;
             }
-            if (matchRule(content, lowerContent, rule.getRuleContent())) {
+            if (matchRuleOrInstruction(content, lowerContent, rule.getRuleContent())) {
                 log.info("[AdminPreRule] blocked by rule={}, priority={}", rule.getRuleName(), rule.getPriority());
                 return StrUtil.blankToDefault(config.getInterceptionMessage(), DEFAULT_INTERCEPTION_MESSAGE);
             }
         }
         return null;
+    }
+
+    @Override
+    public String buildGovernancePrompt() {
+        SysAdminPreRuleConfigVO config = runtimeConfig;
+        if (config == null || !Boolean.TRUE.equals(config.getEnabled()) || config.getRules() == null || config.getRules().isEmpty()) {
+            return "";
+        }
+        List<String> instructions = new ArrayList<>();
+        for (SysAdminPreRuleConfigDTO.RuleItem rule : config.getRules()) {
+            if (!Boolean.TRUE.equals(rule.getEnabled())) {
+                continue;
+            }
+            String instruction = normalizeRuleInstruction(rule.getRuleContent());
+            if (StrUtil.isBlank(instruction) || isMatcherOnlyRule(rule.getRuleContent())) {
+                continue;
+            }
+            instructions.add(rule.getRuleName() + "：" + instruction);
+        }
+        if (instructions.isEmpty()) {
+            return "";
+        }
+        StringBuilder prompt = new StringBuilder("【管理员治理规则】\n");
+        for (int i = 0; i < instructions.size(); i++) {
+            prompt.append(i + 1).append(". ").append(instructions.get(i)).append("\n");
+        }
+        prompt.append("以上规则为管理员运行时治理要求，回答时必须严格遵守。");
+        return prompt.toString().trim();
+    }
+
+    @Override
+    public String applyAnswerRules(String answer) {
+        if (StrUtil.isBlank(answer)) {
+            return answer;
+        }
+        SysAdminPreRuleConfigVO config = runtimeConfig;
+        if (config == null || !Boolean.TRUE.equals(config.getEnabled()) || config.getRules() == null || config.getRules().isEmpty()) {
+            return answer;
+        }
+        String finalAnswer = answer.trim();
+        for (SysAdminPreRuleConfigDTO.RuleItem rule : config.getRules()) {
+            if (!Boolean.TRUE.equals(rule.getEnabled())) {
+                continue;
+            }
+            String suffix = extractAnswerSuffix(normalizeRuleInstruction(rule.getRuleContent()));
+            if (StrUtil.isBlank(suffix) || finalAnswer.contains(suffix)) {
+                continue;
+            }
+            finalAnswer = finalAnswer + "\n\n" + suffix;
+        }
+        return finalAnswer;
     }
 
     private void refreshRuntimeConfig() {
@@ -163,8 +223,8 @@ public class SysAdminPreRuleConfigServiceImpl implements SysAdminPreRuleConfigSe
 
     private void verifyRegexLines(String content, String ruleName) {
         for (String rawLine : StrUtil.splitTrim(content, '\n')) {
-            if (StrUtil.startWithIgnoreCase(rawLine, REGEX_PREFIX)) {
-                String regex = StrUtil.trim(StrUtil.removePrefixIgnoreCase(rawLine, REGEX_PREFIX));
+            if (isRegexLine(rawLine)) {
+                String regex = stripRegexPrefix(rawLine);
                 if (StrUtil.isBlank(regex)) {
                     throw new BusinessException("Rule [" + ruleName + "] contains an empty regex expression");
                 }
@@ -182,8 +242,8 @@ public class SysAdminPreRuleConfigServiceImpl implements SysAdminPreRuleConfigSe
             if (StrUtil.isBlank(rawLine)) {
                 continue;
             }
-            if (StrUtil.startWithIgnoreCase(rawLine, REGEX_PREFIX)) {
-                String regex = StrUtil.trim(StrUtil.removePrefixIgnoreCase(rawLine, REGEX_PREFIX));
+            if (isRegexLine(rawLine)) {
+                String regex = stripRegexPrefix(rawLine);
                 try {
                     if (Pattern.compile(regex, Pattern.CASE_INSENSITIVE).matcher(content).find()) {
                         return true;
@@ -191,11 +251,117 @@ public class SysAdminPreRuleConfigServiceImpl implements SysAdminPreRuleConfigSe
                 } catch (PatternSyntaxException ex) {
                     log.warn("Skip invalid regex rule line: {}", rawLine, ex);
                 }
-            } else if (lowerContent.contains(rawLine.toLowerCase(Locale.ROOT))) {
-                return true;
+            } else {
+                String keyword = stripKeywordPrefix(rawLine);
+                if (StrUtil.isNotBlank(keyword) && lowerContent.contains(keyword.toLowerCase(Locale.ROOT))) {
+                    return true;
+                }
             }
         }
         return false;
+    }
+
+    private boolean isRegexLine(String line) {
+        return StrUtil.startWithIgnoreCase(line, REGEX_PREFIX) || StrUtil.startWithIgnoreCase(line, REGEX_PREFIX_CN);
+    }
+
+    private String stripRegexPrefix(String line) {
+        String normalized = StrUtil.trim(line);
+        if (StrUtil.startWithIgnoreCase(normalized, REGEX_PREFIX_CN)) {
+            return StrUtil.trim(StrUtil.removePrefixIgnoreCase(normalized, REGEX_PREFIX_CN));
+        }
+        return StrUtil.trim(StrUtil.removePrefixIgnoreCase(normalized, REGEX_PREFIX));
+    }
+
+    private String stripKeywordPrefix(String line) {
+        String normalized = StrUtil.trim(line);
+        if (StrUtil.startWithIgnoreCase(normalized, KEYWORD_PREFIX_CN)) {
+            return StrUtil.trim(StrUtil.removePrefixIgnoreCase(normalized, KEYWORD_PREFIX_CN));
+        }
+        if (StrUtil.startWithIgnoreCase(normalized, KEYWORD_PREFIX)) {
+            return StrUtil.trim(StrUtil.removePrefixIgnoreCase(normalized, KEYWORD_PREFIX));
+        }
+        return normalized;
+    }
+
+    private String normalizeRuleInstruction(String ruleContent) {
+        return StrUtil.splitTrim(ruleContent, '\n').stream()
+                .filter(StrUtil::isNotBlank)
+                .map(line -> {
+                    if (isRegexLine(line)) {
+                        return stripRegexPrefix(line);
+                    }
+                    return stripKeywordPrefix(line);
+                })
+                .filter(StrUtil::isNotBlank)
+                .collect(Collectors.joining("；"));
+    }
+
+    private boolean isMatcherOnlyRule(String ruleContent) {
+        List<String> lines = StrUtil.splitTrim(ruleContent, '\n');
+        if (lines.isEmpty()) {
+            return true;
+        }
+        return lines.stream().allMatch(line -> isRegexLine(line) && looksLikeRegexExpression(stripRegexPrefix(line)));
+    }
+
+    private boolean looksLikeRegexExpression(String text) {
+        return StrUtil.containsAny(text, ".*", ".+", "|", "\\d", "\\s", "\\w", "[", "]", "(", ")", "^", "$");
+    }
+
+    private String extractAnswerSuffix(String instruction) {
+        if (StrUtil.isBlank(instruction)) {
+            return null;
+        }
+        Matcher matcher = ANSWER_SUFFIX_PATTERN.matcher(instruction);
+        if (!matcher.find()) {
+            return null;
+        }
+        String suffix = StrUtil.trim(matcher.group(1));
+        if (StrUtil.isBlank(suffix)) {
+            return null;
+        }
+        if (suffix.endsWith("。") || suffix.endsWith("；") || suffix.endsWith(";")) {
+            suffix = suffix.substring(0, suffix.length() - 1).trim();
+        }
+        return suffix;
+    }
+
+    private String normalizeRuleLineForStorage(String line) {
+        String trimmed = StrUtil.trim(line);
+        if (StrUtil.isBlank(trimmed)) {
+            return null;
+        }
+        if (StrUtil.startWithIgnoreCase(trimmed, REGEX_PREFIX_CN)) {
+            return REGEX_PREFIX + stripRegexPrefix(trimmed);
+        }
+        if (StrUtil.startWithIgnoreCase(trimmed, KEYWORD_PREFIX_CN)) {
+            return KEYWORD_PREFIX + stripKeywordPrefix(trimmed);
+        }
+        return trimmed;
+    }
+
+    private List<String> normalizeRuleLines(String ruleContent) {
+        return StrUtil.splitTrim(ruleContent, '\n').stream()
+                .map(this::normalizeRuleLineForStorage)
+                .filter(StrUtil::isNotBlank)
+                .toList();
+    }
+
+    private boolean canBeGovernanceInstruction(String ruleContent) {
+        return StrUtil.isNotBlank(normalizeRuleInstruction(ruleContent)) && !isMatcherOnlyRule(ruleContent);
+    }
+
+    private boolean shouldTreatAsInstructionOnly(String ruleContent) {
+        return canBeGovernanceInstruction(ruleContent)
+                && !StrUtil.splitTrim(ruleContent, '\n').stream().anyMatch(line -> isRegexLine(line) || StrUtil.startWithIgnoreCase(line, KEYWORD_PREFIX) || StrUtil.startWithIgnoreCase(line, KEYWORD_PREFIX_CN));
+    }
+
+    private boolean matchRuleOrInstruction(String content, String lowerContent, String ruleContent) {
+        if (shouldTreatAsInstructionOnly(ruleContent)) {
+            return false;
+        }
+        return matchRule(content, lowerContent, ruleContent);
     }
 
     private SysAdminPreRuleConfigVO normalize(SysAdminPreRuleConfigVO config) {
@@ -223,7 +389,7 @@ public class SysAdminPreRuleConfigServiceImpl implements SysAdminPreRuleConfigSe
                 rule.setPriority(100);
             }
             rule.setRuleName(StrUtil.trim(rule.getRuleName()));
-            rule.setRuleContent(StrUtil.trim(rule.getRuleContent()));
+            rule.setRuleContent(String.join("\n", normalizeRuleLines(rule.getRuleContent())));
             normalizedRules.add(rule);
         }
         normalizedRules.sort(Comparator.comparing(SysAdminPreRuleConfigDTO.RuleItem::getPriority, Comparator.nullsLast(Integer::compareTo)).reversed());

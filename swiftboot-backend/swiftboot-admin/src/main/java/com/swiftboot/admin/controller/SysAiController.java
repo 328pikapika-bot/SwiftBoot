@@ -52,6 +52,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -192,10 +193,10 @@ public class SysAiController {
     private static final String INDEX_REBUILD_URL = "http://localhost:8001/index/rebuild";
     private static final String INDEX_REBUILD_STATUS_URL = "http://localhost:8001/index/rebuild/status";
     private static final ExecutorService AI_AUX_EXECUTOR = Executors.newFixedThreadPool(4);
-    private static final long AUXILIARY_BUDGET_MS = 800L;
-    private static final long INTENT_HTTP_TIMEOUT_MS = 650L;
-    private static final long SIMILARITY_HTTP_TIMEOUT_MS = 650L;
-    private static final long MEMORY_HTTP_TIMEOUT_MS = 1200L;
+    private static final long AUXILIARY_BUDGET_MS = 30000L;
+    private static final long INTENT_HTTP_TIMEOUT_MS = 30000L;
+    private static final long SIMILARITY_HTTP_TIMEOUT_MS = 30000L;
+    private static final long MEMORY_HTTP_TIMEOUT_MS = 30000L;
     private static final int LLM_FIRST_CALL_MAX_ATTEMPTS = 2;
     private static final int QUICK_CHAT_LLM_TIMEOUT_MS = 15000;
 
@@ -221,6 +222,51 @@ public class SysAiController {
         private static MemoryRecallDecision empty() {
             return new MemoryRecallDecision(null, new ArrayList<>());
         }
+    }
+
+    private static <T> CompletableFuture<T> supplyAsyncWithTiming(String stageName,
+                                                                  Supplier<T> supplier,
+                                                                  ExecutorService executor,
+                                                                  Map<String, Long> stageTimings) {
+        return CompletableFuture.supplyAsync(() -> {
+            long stageStart = System.currentTimeMillis();
+            try {
+                return supplier.get();
+            } finally {
+                stageTimings.put(stageName, System.currentTimeMillis() - stageStart);
+            }
+        }, executor);
+    }
+
+    private static void addStageTiming(Map<String, Long> stageTimings, String stageName, long durationMs) {
+        stageTimings.merge(stageName, durationMs, Long::sum);
+    }
+
+    private static void setStageTiming(Map<String, Long> stageTimings, String stageName, long durationMs) {
+        stageTimings.put(stageName, durationMs);
+    }
+
+    private static void printStageTimings(String question, Map<String, Long> stageTimings) {
+        String preview = StrUtil.blankToDefault(question, "").replaceAll("\\s+", " ").trim();
+        if (preview.length() > 36) {
+            preview = preview.substring(0, 36) + "...";
+        }
+
+        StringBuilder sb = new StringBuilder("[Agent Timing] question=\"")
+                .append(preview)
+                .append("\"");
+
+        synchronized (stageTimings) {
+            for (Map.Entry<String, Long> entry : stageTimings.entrySet()) {
+                sb.append(" | ")
+                        .append(entry.getKey())
+                        .append("=")
+                        .append(entry.getValue())
+                        .append("ms");
+            }
+        }
+
+        System.out.println(sb);
     }
 
     private static final class AiRuntimeConfig {
@@ -893,6 +939,10 @@ public class SysAiController {
         } else {
             prompt.append("你是 SwiftBoot 智能助手，请直接自然回答用户，不调用工具，不输出思考标签。\n\n");
         }
+        String governancePrompt = adminPreRuleConfigService.buildGovernancePrompt();
+        if (StrUtil.isNotBlank(governancePrompt)) {
+            prompt.append(governancePrompt).append("\n\n");
+        }
         prompt.append("【简单常规问题快路径】\n");
         prompt.append("当前问题属于简单常规问题，请直接自然回答。\n");
         prompt.append("- 禁止调用任何工具\n");
@@ -917,9 +967,10 @@ public class SysAiController {
                 buildQuickChatSystemPrompt(ruleMatch)
         );
         if (StrUtil.isNotBlank(answer)) {
-            return answer.trim();
+            return adminPreRuleConfigService.applyAnswerRules(answer.trim());
         }
-        return ruleMatch != null ? ruleMatch.fallbackAnswer : "你好，我是 SwiftBoot 智能助手，可以协助你处理当前项目相关问题。";
+        String fallback = ruleMatch != null ? ruleMatch.fallbackAnswer : "你好，我是 SwiftBoot 智能助手，可以协助你处理当前项目相关问题。";
+        return adminPreRuleConfigService.applyAnswerRules(fallback);
     }
 
     private String loadLastUserMessage(Long userId) {
@@ -1220,17 +1271,24 @@ public class SysAiController {
 
         // 特殊优先级：历史问题查询走真实会话表，不交给大模型猜测
         if (isQuestionHistoryRequest(content)) {
+            Map<String, Long> stageTimings = new LinkedHashMap<>();
             try {
+                long historyAnswerStart = System.currentTimeMillis();
                 boolean queryAllUsers = isAllUsersQuestionHistoryRequest(content);
                 String directAnswer = buildQuestionHistoryAnswer(userId, queryAllUsers);
+                setStageTiming(stageTimings, "question_history_build", System.currentTimeMillis() - historyAnswerStart);
                 String currentModel = resolveCurrentModelName();
+                long saveHistoryStart = System.currentTimeMillis();
                 saveConversationHistory(userId, content, directAnswer, startTime, userIp, currentModel);
+                setStageTiming(stageTimings, "save_history", System.currentTimeMillis() - saveHistoryStart);
                 emitter.send(new JSONObject().set("content", directAnswer).toString());
             } catch (Exception e) {
                 try {
                     emitter.send(new JSONObject().set("content", "历史问题查询失败：" + e.getMessage()).toString());
                 } catch (Exception ignored) {}
             }
+            setStageTiming(stageTimings, "request_total", System.currentTimeMillis() - startTime);
+            printStageTimings(content, stageTimings);
             emitter.complete();
             return emitter;
         }
@@ -1239,19 +1297,30 @@ public class SysAiController {
         QuickChatRuleMatch quickChatRuleMatch = matchQuickChatRule(content);
         if (quickChatRuleMatch != null) {
             java.lang.Thread quickThread = new java.lang.Thread(() -> {
+                Map<String, Long> stageTimings = new LinkedHashMap<>();
                 try {
+                    long runtimeConfigStart = System.currentTimeMillis();
                     AiRuntimeConfig runtimeConfig = resolveCurrentAiRuntimeConfig();
+                    setStageTiming(stageTimings, "runtime_config", System.currentTimeMillis() - runtimeConfigStart);
+                    long quickChatStart = System.currentTimeMillis();
                     String quickChatAnswer = answerQuickChatFastPath(runtimeConfig, content, quickChatRuleMatch);
+                    setStageTiming(stageTimings, "quick_chat_answer", System.currentTimeMillis() - quickChatStart);
+                    long saveHistoryStart = System.currentTimeMillis();
                     saveConversationHistory(userId, content, quickChatAnswer, startTime, userIp, runtimeConfig.model);
+                    setStageTiming(stageTimings, "save_history", System.currentTimeMillis() - saveHistoryStart);
                     emitter.send(new JSONObject().set("content", quickChatAnswer).toString());
                 } catch (Exception e) {
                     try {
-                        String fallbackAnswer = quickChatRuleMatch.fallbackAnswer;
+                        String fallbackAnswer = adminPreRuleConfigService.applyAnswerRules(quickChatRuleMatch.fallbackAnswer);
+                        long saveHistoryStart = System.currentTimeMillis();
                         saveConversationHistory(userId, content, fallbackAnswer, startTime, userIp, resolveCurrentModelName());
+                        setStageTiming(stageTimings, "save_history", System.currentTimeMillis() - saveHistoryStart);
                         emitter.send(new JSONObject().set("content", fallbackAnswer).toString());
                     } catch (Exception ignored) {
                     }
                 } finally {
+                    setStageTiming(stageTimings, "request_total", System.currentTimeMillis() - startTime);
+                    printStageTimings(content, stageTimings);
                     emitter.complete();
                 }
             });
@@ -1262,9 +1331,11 @@ public class SysAiController {
         java.lang.Thread thread = new java.lang.Thread(() -> {
             com.swiftboot.admin.context.AiTraceContext.init();
             StringBuilder fullReply = new StringBuilder();
+            Map<String, Long> stageTimings = Collections.synchronizedMap(new LinkedHashMap<>());
             
             try {
                 // 从 Redis 获取并加载当前 AI 配置 (确保线程内变量一致性)
+                long runtimeConfigStart = System.currentTimeMillis();
                 String configJson = stringRedisTemplate.opsForValue().get(AI_CONFIG_KEY);
                 final String currentApiUrl;
                 final String currentApiKey;
@@ -1282,11 +1353,14 @@ public class SysAiController {
                     currentModel = defaultDeepseekModel;
                     currentProvider = "";
                 }
+                setStageTiming(stageTimings, "runtime_config", System.currentTimeMillis() - runtimeConfigStart);
                 
                 final boolean isAnthropic = "anthropic".equalsIgnoreCase(currentProvider) || currentApiUrl.contains("/anthropic/");
                 
                 // 1. 构建 Agent 模式的 System Prompt
+                long systemPromptStart = System.currentTimeMillis();
                 String systemPrompt = buildAgentSystemPrompt();
+                setStageTiming(stageTimings, "system_prompt", System.currentTimeMillis() - systemPromptStart);
                 
                 // 2. 构建消息列表
                 JSONArray messages = new JSONArray();
@@ -1297,14 +1371,25 @@ public class SysAiController {
                 long auxDeadline = auxStart + AUXILIARY_BUDGET_MS;
                 String lastUserMsgJson = loadLastUserMessage(userId);
 
-                CompletableFuture<IntentDecision> intentFuture = CompletableFuture.supplyAsync(
-                        () -> detectIntentWithFallback(content), AI_AUX_EXECUTOR
+                CompletableFuture<IntentDecision> intentFuture = supplyAsyncWithTiming(
+                        "intent_detect",
+                        () -> detectIntentWithFallback(content),
+                        AI_AUX_EXECUTOR,
+                        stageTimings
                 );
                 CompletableFuture<Boolean> historyFuture = StrUtil.isNotBlank(lastUserMsgJson)
-                        ? CompletableFuture.supplyAsync(() -> checkHistorySimilarity(content, lastUserMsgJson), AI_AUX_EXECUTOR)
+                        ? supplyAsyncWithTiming(
+                                "history_similarity",
+                                () -> checkHistorySimilarity(content, lastUserMsgJson),
+                                AI_AUX_EXECUTOR,
+                                stageTimings
+                        )
                         : CompletableFuture.completedFuture(false);
-                CompletableFuture<MemoryRecallDecision> memoryFuture = CompletableFuture.supplyAsync(
-                        () -> recallMemoryContext(userId, content), AI_AUX_EXECUTOR
+                CompletableFuture<MemoryRecallDecision> memoryFuture = supplyAsyncWithTiming(
+                        "memory_recall",
+                        () -> recallMemoryContext(userId, content),
+                        AI_AUX_EXECUTOR,
+                        stageTimings
                 );
 
                 IntentDecision intentDecision = awaitWithinBudget(
@@ -1326,6 +1411,7 @@ public class SysAiController {
                         "memory_recall"
                 );
                 long auxElapsed = System.currentTimeMillis() - auxStart;
+                setStageTiming(stageTimings, "auxiliary_total", auxElapsed);
                 System.out.println("[Agent Budget] 本地预检完成，耗时: " + auxElapsed + "ms");
 
                 String detectedIntent = intentDecision.intent;
@@ -1349,15 +1435,19 @@ public class SysAiController {
 
                 // 4. 注入近期对话历史（仅在预算内判定相关时）
                 if (shouldIncludeHistory) {
+                    long historyInjectStart = System.currentTimeMillis();
                     addRecentHistory(messages, userId);
+                    setStageTiming(stageTimings, "recent_history_inject", System.currentTimeMillis() - historyInjectStart);
                 }
 
                 // 5. 注入长期记忆（预算内召回成功才使用）
                 if (StrUtil.isNotBlank(memoryDecision.context)) {
+                    long memoryInjectStart = System.currentTimeMillis();
                     JSONObject memMsg = new JSONObject();
                     memMsg.set("role", "user");
                     memMsg.set("content", memoryDecision.context);
                     messages.add(1, memMsg);
+                    setStageTiming(stageTimings, "memory_context_inject", System.currentTimeMillis() - memoryInjectStart);
 
                     com.swiftboot.admin.context.AiTraceContext.AiTraceData traceData = com.swiftboot.admin.context.AiTraceContext.get();
                     if (traceData != null && memoryDecision.memoryIds != null && !memoryDecision.memoryIds.isEmpty()) {
@@ -1385,6 +1475,7 @@ public class SysAiController {
                 boolean hasMemoryHit = false; // 记录本次对话是否命中了历史记忆
                 
                 while (toolCallCount < maxToolCalls) {
+                    long llmPlanStart = System.currentTimeMillis();
                     JSONObject requestBody = new JSONObject();
                     requestBody.set("model", currentModel);
                     requestBody.set("stream", false);
@@ -1505,6 +1596,7 @@ public class SysAiController {
                     
                     System.out.println("[Agent] 发送请求到 LLM，当前工具调用轮次: " + (toolCallCount + 1) + " URL: " + currentApiUrl);
                     HttpResponse response = executeFirstLlmCall(currentApiUrl, currentApiKey, requestBody);
+                    setStageTiming(stageTimings, "llm_plan_round_" + (toolCallCount + 1), System.currentTimeMillis() - llmPlanStart);
                     
                     if (!response.isOk()) {
                         emitter.send(new JSONObject().set("content", "AI 服务响应异常: " + response.getStatus()).toString());
@@ -1586,7 +1678,9 @@ public class SysAiController {
                                 
                                 System.out.println("[Agent] 执行工具: " + functionName + ", 参数: " + argumentsStr);
                                 
+                                long toolStart = System.currentTimeMillis();
                                 String toolResult = executeAgentTool(functionName, argumentsStr, detectedIntent, emitter);
+                                addStageTiming(stageTimings, "tool_" + functionName, System.currentTimeMillis() - toolStart);
                                 
                                 JSONObject toolMessage = new JSONObject();
                                 toolMessage.set("role", "tool");
@@ -1623,6 +1717,7 @@ public class SysAiController {
                 // 【重要修改】：对于 DeepSeek 模型，如果之前强制使用了 tools，流式请求中必须保持 messages 格式一致
                 // 由于我们前面为了避免幻觉去掉了 tools，但部分模型（特别是 DeepSeek）会因为之前的 assistant 消息中带有 tool_calls 而强制要求当前请求也带 tools 或者要求更严格的上下文格式。
                 // 解决策略：在最后一步生成最终回答时，重构 messages 数组，将 tool_calls 和 tool_result 转换为普通的文本上下文，彻底切断模型与 Function Calling 的关联。
+                long streamPrepareStart = System.currentTimeMillis();
                 JSONObject streamRequest = new JSONObject();
                 streamRequest.set("model", currentModel);
                 streamRequest.set("stream", true);
@@ -1679,6 +1774,8 @@ public class SysAiController {
                 
                 System.out.println("[Agent] 开始生成最终回答 (Stream Mode), 已重构上下文切断幻觉源");
                 
+                setStageTiming(stageTimings, "stream_prepare", System.currentTimeMillis() - streamPrepareStart);
+                long streamStart = System.currentTimeMillis();
                 try (HttpResponse streamResponse = HttpRequest.post(currentApiUrl)
                         .timeout(300000) // 延长超时时间到 5分钟，避免长文本生成中断
                         .header("Authorization", "Bearer " + currentApiKey)
@@ -1865,6 +1962,7 @@ public class SysAiController {
                 }
                 
                     // 7. 存储对话历史
+                setStageTiming(stageTimings, "llm_stream", System.currentTimeMillis() - streamStart);
                     if (fullReply.length() > 0) {
                         String fullContent = fullReply.toString();
                         String thought = null;
@@ -1896,9 +1994,23 @@ public class SysAiController {
                             .replaceAll("<function_calls>.*$", "")
                             .replaceAll("<invoke.*$", "")
                             .trim();
-                        
+
+                        String answerBeforeGovernance = finalAnswer;
+                        finalAnswer = adminPreRuleConfigService.applyAnswerRules(finalAnswer);
+                        if (StrUtil.isNotBlank(answerBeforeGovernance) && finalAnswer.length() > answerBeforeGovernance.length()) {
+                            String appendedTail = finalAnswer.substring(answerBeforeGovernance.length());
+                            if (StrUtil.isNotBlank(appendedTail)) {
+                                try {
+                                    emitter.send(new JSONObject().set("content", appendedTail).toString());
+                                } catch (Exception ignored) {
+                                }
+                            }
+                        }
+
                         // 保存会话记录
+                        long saveHistoryStart = System.currentTimeMillis();
                         SysAiSession savedSession = saveConversationHistory(userId, content, finalAnswer, startTime, userIp, currentModel);
+                        setStageTiming(stageTimings, "save_history", System.currentTimeMillis() - saveHistoryStart);
                         System.out.println("[Agent] 流式响应正常结束，回复长度: " + fullReply.length());
                         
                         // 【异步机制】：处理记忆权重更新与发散提问
@@ -1994,6 +2106,7 @@ public class SysAiController {
                         // 保存 Trace
                         try {
                             if (traceData != null) {
+                                long traceSaveStart = System.currentTimeMillis();
                                 com.swiftboot.admin.domain.SysAiTrace trace = new com.swiftboot.admin.domain.SysAiTrace();
                                 trace.setTraceId(traceData.getTraceId());
                                 if (savedSession != null && savedSession.getId() != null) {
@@ -2009,6 +2122,7 @@ public class SysAiController {
                                 trace.setUpdateTime(java.time.LocalDateTime.now());
                                 
                                 aiTraceService.save(trace);
+                                setStageTiming(stageTimings, "trace_save", System.currentTimeMillis() - traceSaveStart);
                                 System.out.println("[Trace] Saved trace record: " + trace.getTraceId());
                             }
                         } catch (Exception e) {
@@ -2034,6 +2148,9 @@ public class SysAiController {
                 } catch (Exception ignored) {
                 }
                 emitter.complete();
+            } finally {
+                setStageTiming(stageTimings, "request_total", System.currentTimeMillis() - startTime);
+                printStageTimings(content, stageTimings);
             }
         });
         thread.start();
@@ -2126,6 +2243,11 @@ public class SysAiController {
         if (StrUtil.isNotEmpty(skillsContext)) {
             prompt.append("【项目背景知识】\n");
             prompt.append(skillsContext).append("\n\n");
+        }
+
+        String governancePrompt = adminPreRuleConfigService.buildGovernancePrompt();
+        if (StrUtil.isNotBlank(governancePrompt)) {
+            prompt.append(governancePrompt).append("\n\n");
         }
         
         // 额外强化：防止DSML幻觉 (这部分非常核心，保留硬编码以防规则文件丢失导致灾难性输出)

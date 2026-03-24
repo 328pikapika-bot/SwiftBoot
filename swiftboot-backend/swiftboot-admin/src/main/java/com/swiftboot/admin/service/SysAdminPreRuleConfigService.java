@@ -13,4 +13,8 @@ public interface SysAdminPreRuleConfigService {
     void updateConfig(SysAdminPreRuleConfigDTO dto);
 
     String check(String content);
+
+    String buildGovernancePrompt();
+
+    String applyAnswerRules(String answer);
 }
