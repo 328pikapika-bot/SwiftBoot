@@ -108,7 +108,7 @@ UPDATE `sys_menu` SET `parent_id` = 3, `path` = 'icon', `component` = 'tool/icon
 UPDATE `sys_menu` SET `parent_id` = 210, `path` = 'chat', `component` = 'ai/chat/index', `icon` = 'chat', `sort` = 1 WHERE `id` = 211;
 UPDATE `sys_menu` SET `parent_id` = 210, `path` = 'config', `component` = 'tool/config/index', `perms` = 'tool:config:list', `icon` = 'tune', `sort` = 2 WHERE `id` = 212;
 
-UPDATE `sys_menu` SET `parent_id` = 4, `menu_name` = '项目示例', `path` = 'project', `component` = 'testProject/index', `remark` = '项目示例菜单', `sort` = 1 WHERE `id` = 400;
+UPDATE `sys_menu` SET `parent_id` = 4, `menu_name` = '项目示例', `path` = 'project', `component` = 'testProject/index', `perms` = 'test:testProject:list', `remark` = '项目示例菜单', `sort` = 1 WHERE `id` = 400;
 -- 四、补齐相关按钮权限
 INSERT INTO `sys_menu`
 SELECT 2021, 202, 'AI会话查询', 'F', '', '', 'monitor:ai-session:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), ''

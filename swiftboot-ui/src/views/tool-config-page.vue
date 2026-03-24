@@ -7,6 +7,9 @@
       <el-tab-pane label="存储配置" name="storage">
         <StorageConfigPanel />
       </el-tab-pane>
+      <el-tab-pane label="管理员前置规则" name="adminRule">
+        <AdminPreRulePanel />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -15,8 +18,9 @@
 import { ref } from 'vue'
 import AiConfigPage from '@/views/tool/config/index.vue'
 import StorageConfigPanel from '@/views/storage-config-panel.vue'
+import AdminPreRulePanel from '@/views/ai-admin-pre-rule-panel.vue'
 
-const activeTab = ref<'ai' | 'storage'>('ai')
+const activeTab = ref<'ai' | 'storage' | 'adminRule'>('ai')
 </script>
 
 <style scoped>

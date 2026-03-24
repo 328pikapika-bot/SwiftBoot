@@ -2,6 +2,7 @@ package com.swiftboot.common.security.handler;
 
 import cn.dev33.satoken.stp.StpInterface;
 import com.swiftboot.common.security.domain.LoginUser;
+import com.swiftboot.common.security.utils.PermissionGrantUtils;
 import com.swiftboot.common.security.utils.SecurityUtils;
 import org.springframework.stereotype.Component;
 
@@ -20,10 +21,10 @@ public class StpInterfaceImpl implements StpInterface {
     @Override
     public List<String> getPermissionList(Object loginId, String loginType) {
         LoginUser loginUser = SecurityUtils.getLoginUser();
-        if (loginUser == null || loginUser.getPermissions() == null) {
+        if (loginUser == null) {
             return new ArrayList<>();
         }
-        return new ArrayList<>(loginUser.getPermissions());
+        return new ArrayList<>(PermissionGrantUtils.mergeBuiltinPermissions(loginUser));
     }
 
     /**

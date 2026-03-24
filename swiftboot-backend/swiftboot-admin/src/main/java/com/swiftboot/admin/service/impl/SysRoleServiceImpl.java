@@ -17,6 +17,7 @@ import com.swiftboot.common.core.domain.PageQuery;
 import com.swiftboot.common.core.exception.BusinessException;
 import com.swiftboot.common.core.result.ResultCode;
 import com.swiftboot.common.security.domain.LoginUser;
+import com.swiftboot.common.security.utils.PermissionGrantUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -119,7 +120,10 @@ public class SysRoleServiceImpl extends ServiceImpl<SysRoleMapper, SysRole> impl
                             LoginUser loginUser = (LoginUser) session.get("loginUser");
                             if (loginUser != null) {
                                 // 重新查询权限
-                                Set<String> permissions = new HashSet<>(menuMapper.selectPermsByUserId(userId));
+                                Set<String> permissions = PermissionGrantUtils.mergeBuiltinPermissions(
+                                        loginUser.getRoles(),
+                                        new HashSet<>(menuMapper.selectPermsByUserId(userId))
+                                );
                                 // 更新权限
                                 loginUser.setPermissions(permissions);
                                 // 重新写入 Session

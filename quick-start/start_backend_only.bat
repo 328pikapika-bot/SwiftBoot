@@ -45,8 +45,26 @@ if defined SWIFTBOOT_DB_PASSWORD echo [OK] Loaded DB password from start_config.
 if defined SWIFTBOOT_REDIS_PASSWORD echo [OK] Loaded Redis password from start_config.ini
 if defined SWIFTBOOT_DEEPSEEK_API_KEY echo [OK] Loaded DeepSeek API key from start_config.ini
 
-set "BACKEND_CMD=cd /d ""%ROOT%\swiftboot-backend"" && title SwiftBoot Backend (8080) && echo --------------------------------------------- && echo   Rebuilding and Starting Backend... && echo --------------------------------------------- && call mvn.cmd -pl swiftboot-admin -am -DskipTests package && echo. && echo Starting Spring Boot... && call mvn.cmd -pl swiftboot-admin spring-boot:run"
-start "SwiftBoot Backend" cmd /k "%BACKEND_CMD%"
+set "PS_BACKEND_ROOT=%ROOT%\swiftboot-backend"
+start "SwiftBoot Backend" powershell.exe -NoExit -ExecutionPolicy Bypass -Command ^
+  "$Host.UI.RawUI.WindowTitle='SwiftBoot Backend (8080)';" ^
+  "Set-Location -LiteralPath '%PS_BACKEND_ROOT%';" ^
+  "Write-Host '---------------------------------------------';" ^
+  "Write-Host '  Rebuilding and Starting Backend...';" ^
+  "Write-Host '---------------------------------------------';" ^
+  "& mvn.cmd -pl swiftboot-admin -am -DskipTests package;" ^
+  "if ($LASTEXITCODE -ne 0) {" ^
+  "  Write-Host '';" ^
+  "  Write-Host 'Backend package failed. Window kept open for inspection.' -ForegroundColor Red;" ^
+  "} else {" ^
+  "  Write-Host '';" ^
+  "  Write-Host 'Starting Spring Boot...';" ^
+  "  & mvn.cmd -pl swiftboot-admin spring-boot:run;" ^
+  "  if ($LASTEXITCODE -ne 0) {" ^
+  "    Write-Host '';" ^
+  "    Write-Host 'Backend startup failed. Window kept open for inspection.' -ForegroundColor Red;" ^
+  "  }" ^
+  "}"
 if errorlevel 1 (
     echo [ERROR] Failed to create backend window.
     pause

@@ -16,6 +16,7 @@ import com.swiftboot.common.core.exception.BusinessException;
 import com.swiftboot.common.core.result.ResultCode;
 import com.swiftboot.common.core.utils.ip.AddressUtils;
 import com.swiftboot.common.security.domain.LoginUser;
+import com.swiftboot.common.security.utils.PermissionGrantUtils;
 import com.swiftboot.common.security.utils.SecurityUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -114,7 +115,7 @@ public class AuthServiceImpl implements AuthService {
             loginUser.setDeptId(user.getDeptId());
             loginUser.setDeptName(user.getDeptName());
             loginUser.setRoles(roles);
-            loginUser.setPermissions(permissions);
+            loginUser.setPermissions(PermissionGrantUtils.mergeBuiltinPermissions(roles, permissions));
             loginUser.setLoginTime(System.currentTimeMillis());
             loginUser.setLoginIp(getClientIp());
 
@@ -161,7 +162,7 @@ public class AuthServiceImpl implements AuthService {
         userInfo.setNickname(loginUser.getNickname());
         userInfo.setAvatar(loginUser.getAvatar());
         userInfo.setRoles(loginUser.getRoles());
-        userInfo.setPermissions(loginUser.getPermissions());
+        userInfo.setPermissions(PermissionGrantUtils.mergeBuiltinPermissions(loginUser));
 
         // 查询菜单
         List<SysMenu> menus = menuService.selectMenuTreeByUserId(loginUser.getUserId());

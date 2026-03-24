@@ -973,3 +973,48 @@
 - 验证: `npm.cmd run build`
 
 ---
+
+## [2026-03-24 11:05] 更新摘要
+
+### 📝 变更综述
+
+本次更新在现有“配置管理”上继续向治理化方向推进，新增了“管理员安全校验前置规则”能力，并把该能力从演示级缓存方案升级成正式的“数据库持久化 + Redis 缓存 + 运行时即时生效”模型。与此同时，还补齐了管理员角色的配置权限兜底，解决了保存规则时 `tool:config:edit` 被拦截的问题。
+
+### 🚀 核心变更
+
+- **配置管理三标签化**: `tool-config-page` 新增“管理员前置规则”标签，和现有 `AI 配置 / 存储配置` 并列，形成统一治理入口。
+- **管理员规则治理台**: 新增规则治理 UI，支持全局启停、统一拦截文案、规则新增删除、启用状态、优先级、容量展示与编写指引。
+- **AI 前置安全治理**: `SysAiController` 在原有 `security_rules.json` 之前新增管理员规则前置校验层，命中后直接拦截，不再进入后续问答链路。
+- **正式持久化模型**: 管理员规则从“仅 Redis”升级为“数据库最终持久化 + Redis 缓存回填”，Redis 重启后可从数据库恢复。
+- **管理员权限兜底**: 为 `admin` 角色增加内建配置权限补足，自动获得 `tool:config:list` 与 `tool:config:edit`，解决管理员保存规则时的权限不足问题。
+- **数据库升级落地**: 新增并执行 `upgrade_admin_pre_rule_config.sql`，本地 MySQL 已创建 `sys_ai_admin_pre_rule_config` 表。
+
+### 🐛 问题修复
+
+- 修复了管理员规则只存 Redis、Redis 重启后配置可能丢失的问题。
+- 修复了管理员角色在实际保存规则时仍被 `tool:config:edit` 拦截的问题。
+- 修复了新增管理员规则服务缺少显式事务边界、读写链路不够稳的问题。
+- 修复了配置管理页只能维护 AI 和存储配置，缺少运营治理入口的问题。
+
+### 🔧 技术细节
+
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/controller/SysAdminPreRuleConfigController.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/domain/dto/SysAdminPreRuleConfigDTO.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/domain/vo/SysAdminPreRuleConfigVO.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/domain/entity/SysAdminPreRuleConfig.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/mapper/SysAdminPreRuleConfigMapper.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/service/SysAdminPreRuleConfigService.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/service/impl/SysAdminPreRuleConfigServiceImpl.java`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/controller/SysAiController.java`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/service/impl/AuthServiceImpl.java`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/service/impl/SysRoleServiceImpl.java`
+- 新增: `swiftboot-backend/swiftboot-common/common-security/src/main/java/com/swiftboot/common/security/utils/PermissionGrantUtils.java`
+- 修改: `swiftboot-backend/swiftboot-common/common-security/src/main/java/com/swiftboot/common/security/handler/StpInterfaceImpl.java`
+- 新增: `swiftboot-backend/sql/upgrade_admin_pre_rule_config.sql`
+- 新增: `swiftboot-ui/src/api/system/adminPreRules.ts`
+- 新增: `swiftboot-ui/src/views/ai-admin-pre-rule-panel.vue`
+- 修改: `swiftboot-ui/src/views/tool-config-page.vue`
+- 执行: 本地 MySQL 升级脚本已执行，`sys_ai_admin_pre_rule_config` 表已创建
+- 验证: `mvn -pl swiftboot-admin -am -DskipTests compile`、`npx.cmd vite build`
+
+---

@@ -10,6 +10,7 @@ import cn.hutool.json.JSONUtil;
 import com.swiftboot.admin.domain.entity.SysAiSession;
 import com.swiftboot.admin.domain.entity.SysOperLog;
 import com.swiftboot.admin.event.OperLogEvent;
+import com.swiftboot.admin.service.SysAdminPreRuleConfigService;
 import com.swiftboot.admin.service.SysAiSessionService;
 import com.swiftboot.admin.service.SysOperLogService;
 import com.swiftboot.common.core.domain.PageQuery;
@@ -81,6 +82,9 @@ public class SysAiController {
 
     @Resource
     private SysOperLogService operLogService;
+
+    @Resource
+    private SysAdminPreRuleConfigService adminPreRuleConfigService;
 
     // Redis 历史记录 Key 前缀
     private static final String HISTORY_KEY_PREFIX = "ai:history:";
@@ -1118,7 +1122,12 @@ public class SysAiController {
         if (StrUtil.isBlank(content)) {
             return null;
         }
-        
+
+        String adminInterceptionMessage = adminPreRuleConfigService.check(content);
+        if (StrUtil.isNotBlank(adminInterceptionMessage)) {
+            return adminInterceptionMessage;
+        }
+
         if (securityRulesConfig == null) {
             // 降级：简单的默认拦截
             String lowerContent = content.toLowerCase();

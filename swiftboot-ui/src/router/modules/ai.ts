@@ -28,6 +28,15 @@ const aiRoutes: RouteRecordRaw[] = [
           title: '会话窗口',
           icon: 'message'
         }
+      },
+      {
+        path: 'config',
+        name: 'AiConfig',
+        component: () => import('@/views/tool/config/index.vue'),
+        meta: {
+          title: 'AI配置',
+          icon: 'tune'
+        }
       }
     ]
   }
