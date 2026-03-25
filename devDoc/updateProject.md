@@ -1018,3 +1018,66 @@
 - 验证: `mvn -pl swiftboot-admin -am -DskipTests compile`、`npx.cmd vite build`
 
 ---
+
+## [2026-03-25 10:40] 更新摘要
+
+### 📝 变更综述
+
+本次更新把原先偏演示级的“管理员前置规则”能力继续产品化，演进成“屏蔽词模块 + 规则列表模块 + 命中日志监控”的完整治理闭环。后端完成了屏蔽词分类/词条/命中日志的数据库真源、内存高性能匹配器与无重启热更新；前端则补齐了分类卡片、词库弹窗、批量新增、勾选删除、命中详情高亮、监控菜单和配置页跳转，同时对配置管理三页签做了一轮视觉基线统一。
+
+### 🚀 核心变更
+
+- **屏蔽词模块正式落地**: 配置页演进为“屏蔽词模块 + 规则列表模块”双模块，屏蔽词命中后直接拦截，不调用 LLM。
+- **高性能运行时识别**: 屏蔽词从数据库加载后构建进程内多模式匹配自动机，运行时纯内存识别，不查 MySQL / Redis，请求路径只做单次扫描。
+- **保存后无重启热更新**: 新增分类、单条词、批量词、删除词后都会立即刷新内存 matcher，保存成功即可生效。
+- **命中日志监控**: 监控中心新增“屏蔽词命中日志”菜单与独立页面，支持命中统计、日志列表和详情查看。
+- **详情高亮命中词**: 命中日志详情弹窗会在问题内容中高亮被触发的屏蔽词，便于管理员复盘。
+- **分类与字典联动**: 新增固定字典类型 `ai_block_category`，分类可通过 `dict_data_id` 关联字典项，统一分类编码来源。
+- **默认数据生产化**: 直接在数据库中补齐 6 个分类、6 条字典项和 26 条默认屏蔽词，并修复中文乱码与“默认示例词”风格备注。
+- **配置中心 UI 收口**: 配置管理标题改为“平台配置管理”，三页签统一背景、圆角、卡片层级和控件风格，屏蔽词页弹窗/抽屉尺寸和 footer 操作区也做了统一化。
+
+### 🐛 问题修复
+
+- 修复了屏蔽词命中后仍可能进入 LLM 逻辑的问题，现已变成真正的前置硬拦截。
+- 修复了运行时识别依赖逐条 `contains` 遍历、词条多时性能劣化的问题，改为内存多模式匹配。
+- 修复了新增分类/新增屏蔽词/批量新增等弹窗按钮显示不全、尺寸不一致和布局别扭的问题。
+- 修复了“新增屏蔽词”按钮文案与实际行为不一致的问题，现已明确区分单条新增与批量新增。
+- 修复了查看词库弹窗没有项目公共分页、无法批量勾选删除的问题。
+- 修复了命中日志监控菜单在数据库中显示问号的问题，已直接修正菜单中文名称。
+- 修复了默认分类、字典项、屏蔽词和备注中的中文乱码、问号与不真实说明问题。
+- 修复了顶部“启用规则”卡片滚动定位不稳定的问题，改为滚向规则列表内容区的真实 DOM 锚点。
+
+### 🔧 技术细节
+
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/domain/entity/SysAiBlockCategory.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/domain/entity/SysAiBlockWord.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/domain/entity/SysAiBlockHitLog.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/domain/dto/SysAiBlockCategoryDTO.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/domain/dto/SysAiBlockWordDTO.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/domain/dto/SysAiBlockWordBatchDTO.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/domain/vo/SysAiBlockCategoryVO.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/domain/vo/SysAiBlockWordVO.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/domain/vo/SysAiBlockOverviewVO.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/mapper/SysAiBlockCategoryMapper.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/mapper/SysAiBlockWordMapper.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/mapper/SysAiBlockHitLogMapper.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/service/SysAiBlockWordService.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/service/SysAiBlockHitLogService.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/service/impl/SysAiBlockHitLogServiceImpl.java`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/service/impl/SysAiBlockWordServiceImpl.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/controller/SysAiBlockWordController.java`
+- 新增: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/controller/SysAiBlockHitLogController.java`
+- 修改: `swiftboot-backend/swiftboot-admin/src/main/java/com/swiftboot/admin/controller/SysAiController.java`
+- 新增: `swiftboot-backend/sql/upgrade_ai_block_words.sql`
+- 新增: `swiftboot-backend/sql/upgrade_ai_block_words_v1_1.sql`
+- 新增: `swiftboot-backend/sql/upgrade_ai_block_hit_log.sql`
+- 修改: `swiftboot-backend/sql/swiftboot.sql`, `swiftboot-backend/sql/add_menus.sql`
+- 新增: `swiftboot-ui/src/api/system/blockWords.ts`, `swiftboot-ui/src/api/monitor/ai-block-hit.ts`
+- 新增: `swiftboot-ui/src/views/monitor/ai-block-hit/index.vue`
+- 修改: `swiftboot-ui/src/views/tool-config-page.vue`, `swiftboot-ui/src/views/ai-admin-pre-rule-panel.vue`
+- 修改: `swiftboot-ui/src/router/modules/monitor.ts`
+- 新增: `swiftboot-ui/src/styles/config-center.scss`
+- 执行: 本地 MySQL 已直接创建/升级屏蔽词、字典联动与命中日志相关表、菜单、权限和默认数据
+- 验证: 多次执行 `mvn -pl swiftboot-admin -am -DskipTests compile`、`npx.cmd vite build` 均通过
+
+---

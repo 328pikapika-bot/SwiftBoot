@@ -24,6 +24,10 @@ SELECT 203, 2, '基础资源', 'C', 'server', 'monitor/server/index', 'monitor:s
 WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 203);
 
 INSERT INTO `sys_menu`
+SELECT 204, 2, '屏蔽词命中日志', 'C', 'ai-block-hit', 'monitor/ai-block-hit/index', 'monitor:ai-block-hit:list', 'shield', 5, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), 'AI屏蔽词命中日志菜单'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 204);
+
+INSERT INTO `sys_menu`
 SELECT 105, 1, '岗位管理', 'C', 'post', 'system/post/index', 'system:post:list', 'briefcase', 5, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '岗位管理菜单'
 WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 105);
 
@@ -125,6 +129,10 @@ WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 2023);
 INSERT INTO `sys_menu`
 SELECT 2031, 203, '资源监控查询', 'F', '', '', 'monitor:server:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), ''
 WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 2031);
+
+INSERT INTO `sys_menu`
+SELECT 2041, 204, '命中日志查询', 'F', '', '', 'monitor:ai-block-hit:list', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), ''
+WHERE NOT EXISTS (SELECT 1 FROM `sys_menu` WHERE `id` = 2041);
 
 INSERT INTO `sys_menu`
 SELECT 1101, 110, '配置查询', 'F', '', '', 'tool:config:list', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), ''

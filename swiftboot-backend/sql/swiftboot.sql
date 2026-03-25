@@ -333,6 +333,7 @@ INSERT INTO `sys_menu` VALUES (200, 2, '操作日志', 'C', 'operlog', 'monitor/
 INSERT INTO `sys_menu` VALUES (201, 2, '登录日志', 'C', 'loginlog', 'monitor/loginlog/index', 'monitor:loginlog:list', 'logininfor', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '登录日志菜单');
 INSERT INTO `sys_menu` VALUES (203, 2, '基础资源', 'C', 'server', 'monitor/server/index', 'monitor:server:list', 'histogram', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '基础资源监控菜单');
 INSERT INTO `sys_menu` VALUES (202, 2, 'AI看板', 'C', 'ai-dashboard', 'monitor/ai-session/index', 'monitor:ai-session:list', 'insights', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), 'AI会话分析看板');
+INSERT INTO `sys_menu` VALUES (204, 2, '屏蔽词命中日志', 'C', 'ai-block-hit', 'monitor/ai-block-hit/index', 'monitor:ai-block-hit:list', 'shield', 5, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), 'AI屏蔽词命中日志菜单');
 
 -- 开发工具
 INSERT INTO `sys_menu` VALUES (3, 0, '开发工具', 'M', 'develop', NULL, NULL, 'build', 4, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '开发工具目录');
@@ -427,6 +428,7 @@ INSERT INTO `sys_menu` VALUES (2021, 202, 'AI会话查询', 'F', '', '', 'monito
 INSERT INTO `sys_menu` VALUES (2022, 202, 'AI会话删除', 'F', '', '', 'monitor:ai-session:remove', '', 2, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 INSERT INTO `sys_menu` VALUES (2023, 202, 'AI会话清空', 'F', '', '', 'monitor:ai-session:clean', '', 3, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 INSERT INTO `sys_menu` VALUES (2031, 203, '资源监控查询', 'F', '', '', 'monitor:server:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
+INSERT INTO `sys_menu` VALUES (2041, 204, '命中日志查询', 'F', '', '', 'monitor:ai-block-hit:list', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');
 
 -- 代码生成按钮
 INSERT INTO `sys_menu` VALUES (3001, 300, '生成查询', 'F', '', '', 'tool:gen:query', '', 1, 0, 0, 0, 'admin', NOW(), 'admin', NOW(), '');

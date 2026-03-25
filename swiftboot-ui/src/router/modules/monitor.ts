@@ -46,6 +46,15 @@ const monitorRoutes: RouteRecordRaw[] = [
           title: '基础资源',
           icon: 'Coin'
         }
+      },
+      {
+        path: 'ai-block-hit',
+        name: 'MonitorAiBlockHit',
+        component: () => import('@/views/monitor/ai-block-hit/index.vue'),
+        meta: {
+          title: '屏蔽词命中日志',
+          icon: 'Warning'
+        }
       }
     ]
   }

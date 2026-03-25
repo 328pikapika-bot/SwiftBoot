@@ -10,6 +10,7 @@ import cn.hutool.json.JSONUtil;
 import com.swiftboot.admin.domain.entity.SysAiSession;
 import com.swiftboot.admin.domain.entity.SysOperLog;
 import com.swiftboot.admin.event.OperLogEvent;
+import com.swiftboot.admin.service.SysAiBlockWordService;
 import com.swiftboot.admin.service.SysAdminPreRuleConfigService;
 import com.swiftboot.admin.service.SysAiSessionService;
 import com.swiftboot.admin.service.SysOperLogService;
@@ -83,6 +84,9 @@ public class SysAiController {
 
     @Resource
     private SysOperLogService operLogService;
+
+    @Resource
+    private SysAiBlockWordService aiBlockWordService;
 
     @Resource
     private SysAdminPreRuleConfigService adminPreRuleConfigService;
@@ -1253,6 +1257,16 @@ public class SysAiController {
         if (content == null || content.trim().isEmpty()) {
             try {
                 emitter.send(new JSONObject().set("content", "内容不能为空").toString());
+            } catch (Exception ignored) {
+            }
+            emitter.complete();
+            return emitter;
+        }
+
+        String blockMessage = aiBlockWordService.checkBlocked(content);
+        if (StrUtil.isNotBlank(blockMessage)) {
+            try {
+                emitter.send(new JSONObject().set("content", blockMessage).toString());
             } catch (Exception ignored) {
             }
             emitter.complete();
