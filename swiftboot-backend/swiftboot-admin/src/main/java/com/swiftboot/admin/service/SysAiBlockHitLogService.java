@@ -14,4 +14,6 @@ public interface SysAiBlockHitLogService {
     Page<SysAiBlockHitLog> selectPage(SysAiBlockHitLog query, PageQuery pageQuery);
 
     Map<String, Object> getStats();
+
+    void recordHit(SysAiBlockHitLog log);
 }

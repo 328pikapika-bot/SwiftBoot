@@ -14,9 +14,9 @@ import com.swiftboot.admin.domain.vo.SysAiBlockCategoryVO;
 import com.swiftboot.admin.domain.vo.SysAiBlockOverviewVO;
 import com.swiftboot.admin.domain.vo.SysAiBlockWordVO;
 import com.swiftboot.admin.mapper.SysAiBlockCategoryMapper;
-import com.swiftboot.admin.mapper.SysAiBlockHitLogMapper;
 import com.swiftboot.admin.mapper.SysAiBlockWordMapper;
 import com.swiftboot.admin.mapper.SysDictDataMapper;
+import com.swiftboot.admin.service.SysAiBlockHitLogService;
 import com.swiftboot.admin.service.SysAiBlockWordService;
 import com.swiftboot.common.core.exception.BusinessException;
 import com.swiftboot.common.security.domain.LoginUser;
@@ -26,11 +26,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -55,8 +55,8 @@ public class SysAiBlockWordServiceImpl implements SysAiBlockWordService {
 
     private final SysAiBlockCategoryMapper categoryMapper;
     private final SysAiBlockWordMapper wordMapper;
-    private final SysAiBlockHitLogMapper blockHitLogMapper;
     private final SysDictDataMapper dictDataMapper;
+    private final SysAiBlockHitLogService blockHitLogService;
     private final StringRedisTemplate stringRedisTemplate;
 
     private volatile CachedBlockWordData cachedData = new CachedBlockWordData();
@@ -220,6 +220,7 @@ public class SysAiBlockWordServiceImpl implements SysAiBlockWordService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public String checkBlocked(String content) {
         if (StrUtil.isBlank(content)) {
             return null;
@@ -384,7 +385,7 @@ public class SysAiBlockWordServiceImpl implements SysAiBlockWordService {
             logEntity.setWordText(word.wordText());
             logEntity.setQuestionContent(StrUtil.maxLength(questionContent, 500));
             logEntity.setRemark("屏蔽词命中日志");
-            blockHitLogMapper.insert(logEntity);
+            blockHitLogService.recordHit(logEntity);
         } catch (Exception ex) {
             log.warn("Failed to save block hit log", ex);
         }

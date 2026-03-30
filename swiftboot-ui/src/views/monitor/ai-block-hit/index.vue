@@ -38,7 +38,14 @@
 
     <el-card shadow="never" class="table-card">
       <div class="toolbar">
-        <el-input v-model="query.categoryName" clearable placeholder="分类" style="width: 180px" />
+        <el-select v-model="query.categoryName" clearable placeholder="分类" style="width: 180px">
+          <el-option
+            v-for="item in categoryOptions"
+            :key="item.id"
+            :label="item.label"
+            :value="item.label"
+          />
+        </el-select>
         <el-input v-model="query.wordText" clearable placeholder="命中词" style="width: 180px" />
         <el-input v-model="query.username" clearable placeholder="用户名" style="width: 180px" />
         <el-input v-model="query.questionContent" clearable placeholder="问题内容" style="width: 260px" />
@@ -115,6 +122,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { getDicts } from '@/api/system/dict/data'
 import { getAiBlockHitStats, listAiBlockHitLogs, type AiBlockHitLog, type AiBlockHitStats } from '@/api/monitor/ai-block-hit'
 
 const loading = ref(false)
@@ -123,6 +131,7 @@ const rows = ref<AiBlockHitLog[]>([])
 const stats = reactive<Partial<AiBlockHitStats>>({})
 const detailVisible = ref(false)
 const currentDetail = ref<AiBlockHitLog | null>(null)
+const categoryOptions = ref<Array<{ id: number; label: string }>>([])
 
 const query = reactive({
   pageNum: 1,
@@ -162,9 +171,21 @@ const loadStats = async () => {
   Object.assign(stats, res.data || {})
 }
 
+const loadCategoryOptions = async () => {
+  try {
+    const res: any = await getDicts('ai_block_category')
+    categoryOptions.value = (res.data || []).map((item: any) => ({
+      id: item.id,
+      label: item.dictLabel
+    }))
+  } catch {
+    categoryOptions.value = []
+  }
+}
+
 const loadList = async () => {
   const res: any = await listAiBlockHitLogs({ ...query })
-  rows.value = res.data?.rows || []
+  rows.value = res.data?.list || []
   total.value = res.data?.total || 0
 }
 
@@ -203,6 +224,7 @@ const openDetail = (row: AiBlockHitLog) => {
 }
 
 onMounted(() => {
+  loadCategoryOptions()
   loadData()
 })
 </script>

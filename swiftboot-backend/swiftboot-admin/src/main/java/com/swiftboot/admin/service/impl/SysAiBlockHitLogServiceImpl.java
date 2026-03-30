@@ -8,6 +8,8 @@ import com.swiftboot.admin.service.SysAiBlockHitLogService;
 import com.swiftboot.common.core.domain.PageQuery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -93,5 +95,11 @@ public class SysAiBlockHitLogServiceImpl implements SysAiBlockHitLogService {
         stats.put("trend", trend);
         stats.put("latestHitAt", recentLogs.stream().map(SysAiBlockHitLog::getCreateTime).filter(Objects::nonNull).findFirst().orElse(null));
         return stats;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public void recordHit(SysAiBlockHitLog log) {
+        blockHitLogMapper.insert(log);
     }
 }
